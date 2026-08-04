@@ -105,9 +105,14 @@ pub fn probe_first_texture_meta(wad: &Wad) -> Result<Option<TextureMeta>, GfxErr
     let Some(def) = set.textures().first() else {
         return Ok(None);
     };
+    // Treat non-representable (negative/corrupt) dimensions as "no usable
+    // texture" rather than reporting a misleading 0×0.
+    let (Ok(width), Ok(height)) = (u16::try_from(def.width), u16::try_from(def.height)) else {
+        return Ok(None);
+    };
     Ok(Some(TextureMeta {
         name: def.name.clone(),
-        width: u16::try_from(def.width).unwrap_or(0),
-        height: u16::try_from(def.height).unwrap_or(0),
+        width,
+        height,
     }))
 }
