@@ -26,11 +26,13 @@ document.getElementById("file").addEventListener("change", async (e) => {
         canvas.width = tex.width;
         canvas.height = tex.height;
         const ctx = canvas.getContext("2d");
-        ctx.putImageData(
-          new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height),
-          0,
-          0,
-        );
+        if (ctx) {
+          ctx.putImageData(
+            new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height),
+            0,
+            0,
+          );
+        }
       }
     }
   } catch (err) {

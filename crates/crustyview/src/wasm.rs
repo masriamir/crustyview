@@ -16,8 +16,8 @@ use wasm_bindgen::prelude::*;
 /// [`probe_first_map`](crate::probe::probe_first_map)'s swallow-to-`None`
 /// behavior.
 #[wasm_bindgen]
-pub fn analyze(bytes: &[u8]) -> Result<String, JsError> {
-    let wad = Wad::from_bytes(bytes.to_vec()).map_err(js)?;
+pub fn analyze(bytes: Vec<u8>) -> Result<String, JsError> {
+    let wad = Wad::from_bytes(bytes).map_err(js)?;
     let summary = crate::summary::summarize_wad(&wad);
     let map = crate::probe::probe_first_map(&wad);
     let texture = crate::probe::probe_first_texture_meta(&wad).map_err(js)?;
@@ -35,8 +35,8 @@ pub fn analyze(bytes: &[u8]) -> Result<String, JsError> {
 ///
 /// Returns a `JsError` if the bytes are not a valid WAD or compositing fails.
 #[wasm_bindgen]
-pub fn first_texture_rgba(bytes: &[u8]) -> Result<Vec<u8>, JsError> {
-    let wad = Wad::from_bytes(bytes.to_vec()).map_err(js)?;
+pub fn first_texture_rgba(bytes: Vec<u8>) -> Result<Vec<u8>, JsError> {
+    let wad = Wad::from_bytes(bytes).map_err(js)?;
     Ok(crate::probe::probe_first_texture(&wad)
         .map_err(js)?
         .map(|t| t.rgba)
