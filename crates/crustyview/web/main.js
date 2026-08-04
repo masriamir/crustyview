@@ -16,6 +16,10 @@ document.getElementById("file").addEventListener("change", async (e) => {
 
     const tex = report.texture;
     const canvas = document.getElementById("tex");
+    // Reset the canvas each load so a WAD with no drawable texture doesn't
+    // leave the previous WAD's image on screen.
+    const resetCtx = canvas.getContext("2d");
+    if (resetCtx) resetCtx.clearRect(0, 0, canvas.width, canvas.height);
     if (tex && tex.width > 0 && tex.height > 0) {
       const rgba = first_texture_rgba(buf);
       // Texture dimensions come from the TextureDef, but the RGBA buffer is
