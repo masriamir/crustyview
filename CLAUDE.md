@@ -42,7 +42,12 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   personal plan **cannot** use rulesets/branch protection to request Copilot (or enforce
   required checks) — the workflow substitutes for that. Retire it when the repo goes public
   and a ruleset can request Copilot automatically.
-- Bot login: `copilot-pull-request-reviewer` (shows as reviewer **Copilot**).
+- Copilot has **three intentionally-different identifiers** — mixing them up breaks scripts:
+  - `copilot-pull-request-reviewer` — the review **author** login (match on this when polling `reviews`).
+  - `Copilot` — what `requested_reviewers` returns as `.users[].login` (the display login; the
+    workflow's idempotency check greps for this).
+  - `copilot-pull-request-reviewer[bot]` — the REST **request** slug; the `[bot]` suffix is required
+    *only* by the reviewer-request API call below.
 - Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`.
 - Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
   as needed. CI command: `just ci` (mirrors the crustyview CI checks). Owner/repo:
