@@ -18,14 +18,20 @@ document.getElementById("file").addEventListener("change", async (e) => {
     const canvas = document.getElementById("tex");
     if (tex && tex.width > 0 && tex.height > 0) {
       const rgba = first_texture_rgba(buf);
-      canvas.width = tex.width;
-      canvas.height = tex.height;
-      const ctx = canvas.getContext("2d");
-      ctx.putImageData(
-        new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height),
-        0,
-        0,
-      );
+      // Texture dimensions come from the TextureDef, but the RGBA buffer is
+      // empty when compositing can't run (e.g. textures present but no PLAYPAL).
+      // Only draw when the buffer matches width*height*4; otherwise skip the
+      // canvas so a length mismatch can't throw and clobber the summary output.
+      if (rgba.length === tex.width * tex.height * 4) {
+        canvas.width = tex.width;
+        canvas.height = tex.height;
+        const ctx = canvas.getContext("2d");
+        ctx.putImageData(
+          new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height),
+          0,
+          0,
+        );
+      }
     }
   } catch (err) {
     document.getElementById("out").textContent =
