@@ -6,7 +6,7 @@
   same `analyze`/`first_texture_rgba` wasm-bindgen exports the browser page uses,
   against real IWADs on disk (never committed). The browser `--target web` build
   was also sanity-built; visual canvas confirmation is left to the user per the
-  Step 3 checklist in `crates/crustyview/web/README.md`.
+  build/serve instructions in `crates/crustyview/web/README.md`.
 
 ## WADs tested
 
