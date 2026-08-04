@@ -29,11 +29,15 @@ pub fn analyze(bytes: Vec<u8>) -> Result<String, JsError> {
     Ok(report.to_string())
 }
 
-/// Return the first texture's RGBA pixels (empty when there is no texture).
+/// Return the first texture's RGBA pixels, or an empty buffer when there is no
+/// texture set, no textures, or no `PLAYPAL` to composite against. An empty
+/// buffer therefore does not necessarily mean "no textures" — callers must not
+/// conflate the two.
 ///
 /// # Errors
 ///
-/// Returns a `JsError` if the bytes are not a valid WAD or compositing fails.
+/// Returns a `JsError` if the bytes are not a valid WAD, or if parsing the
+/// texture set or compositing the pixels fails.
 #[wasm_bindgen]
 pub fn first_texture_rgba(bytes: Vec<u8>) -> Result<Vec<u8>, JsError> {
     let wad = Wad::from_bytes(bytes).map_err(js)?;
