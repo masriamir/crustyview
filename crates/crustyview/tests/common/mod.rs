@@ -12,6 +12,7 @@ pub fn build_wad(magic: [u8; 4], lumps: &[(&str, &[u8])]) -> Vec<u8> {
         dir.extend_from_slice(&size.to_le_bytes());
         let mut name8 = [0u8; 8];
         let nb = name.as_bytes();
+        assert!(nb.len() <= 8, "lump name {name:?} exceeds 8 bytes");
         name8[..nb.len()].copy_from_slice(nb);
         dir.extend_from_slice(&name8);
         data.extend_from_slice(bytes);
