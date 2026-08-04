@@ -21,26 +21,33 @@ document.getElementById("file").addEventListener("change", async (e) => {
     const resetCtx = canvas.getContext("2d");
     if (resetCtx) resetCtx.clearRect(0, 0, canvas.width, canvas.height);
     if (tex && tex.width > 0 && tex.height > 0) {
-      const rgba = first_texture_rgba(buf);
-      // Texture dimensions come from the TextureDef, but the RGBA buffer is
-      // empty when compositing can't run (e.g. textures present but no PLAYPAL).
-      // Only draw when the buffer matches width*height*4; otherwise skip the
-      // canvas so a length mismatch can't throw and clobber the summary output.
-      if (rgba.length === tex.width * tex.height * 4) {
-        canvas.width = tex.width;
-        canvas.height = tex.height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.putImageData(
-            new ImageData(
-              new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.length),
-              tex.width,
-              tex.height,
-            ),
-            0,
-            0,
-          );
+      // Texture rendering is best-effort and isolated: first_texture_rgba can
+      // throw (a wasm Err maps to a JS exception), so keep it out of the outer
+      // try/catch — a compositing failure must only skip drawing, never replace
+      // the already-rendered summary output.
+      try {
+        const rgba = first_texture_rgba(buf);
+        // Texture dimensions come from the TextureDef, but the RGBA buffer is
+        // empty when compositing can't run (e.g. textures present but no PLAYPAL).
+        // Only draw when the buffer matches width*height*4; otherwise skip.
+        if (rgba.length === tex.width * tex.height * 4) {
+          canvas.width = tex.width;
+          canvas.height = tex.height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.putImageData(
+              new ImageData(
+                new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.length),
+                tex.width,
+                tex.height,
+              ),
+              0,
+              0,
+            );
+          }
         }
+      } catch (texErr) {
+        console.warn("texture render failed; summary preserved:", texErr);
       }
     }
   } catch (err) {
