@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+# wasm build output
+crates/crustyview/web/pkg/
+# local WAD blobs — never commit
+*.wad
+*.WAD
+.DS_Store

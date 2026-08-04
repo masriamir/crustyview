@@ -1,0 +1,1 @@
+//! WAD summarization (native-testable).
