@@ -57,3 +57,95 @@ fn probe_first_map_returns_assembled_counts() {
     assert_eq!(probe.name, "E1M1");
     assert_eq!(probe.vertices, 2);
 }
+
+#[test]
+fn probe_first_texture_meta_reads_first_texture() {
+    let texture1 = common::build_texture1("TEX1", 8, 8);
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+
+    let meta = probe_first_texture_meta(&wad)
+        .unwrap()
+        .expect("texture meta should be present");
+    assert_eq!(meta.name, "TEX1");
+    assert_eq!(meta.width, 8);
+    assert_eq!(meta.height, 8);
+}
+
+#[test]
+fn probe_first_texture_composites_blank() {
+    // A single full-canvas patch keeps compositing trivial while still
+    // satisfying the strict-mode Medusa check (every column must have a
+    // contributing patch), unlike a zero-patch texture.
+    let texture1 = common::build_texture1_with_patch("TEX1", 8, 8, 0);
+    let pnames = common::build_pnames(&["PAT1"]);
+    let patch = common::build_patch_full(8, 8, 1);
+    let playpal = common::build_playpal_zero();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[
+            ("TEXTURE1", &texture1),
+            ("PNAMES", &pnames),
+            ("PAT1", &patch),
+            ("PLAYPAL", &playpal),
+        ],
+    ))
+    .unwrap();
+
+    let probe = probe_first_texture(&wad)
+        .unwrap()
+        .expect("texture probe should be present");
+    assert_eq!(probe.name, "TEX1");
+    assert_eq!(probe.width, 8);
+    assert_eq!(probe.height, 8);
+    assert_eq!(probe.rgba.len(), 8 * 8 * 4);
+}
+
+#[test]
+fn probe_first_texture_and_meta_none_when_texture_set_is_empty() {
+    // TEXTURE1 present (so `wad.texture_set()` returns `Some`) but with zero
+    // texture definitions: covers each function's `textures().is_empty()` /
+    // `textures().first()` early-return guard.
+    let texture1 = common::build_texture1_empty();
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+
+    assert!(probe_first_texture(&wad).unwrap().is_none());
+    assert!(probe_first_texture_meta(&wad).unwrap().is_none());
+}
+
+#[test]
+fn probe_first_texture_none_when_playpal_missing() {
+    // A real texture but no PLAYPAL lump: covers `probe_first_texture`'s
+    // playpal guard (`wad.playpal()?` returning `None`).
+    let texture1 = common::build_texture1("TEX1", 8, 8);
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+
+    assert!(probe_first_texture(&wad).unwrap().is_none());
+}
+
+#[test]
+fn probe_first_texture_meta_none_on_negative_dims() {
+    let texture1 = common::build_texture1("TEX1", -1, 8);
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+
+    assert!(probe_first_texture_meta(&wad).unwrap().is_none());
+}
