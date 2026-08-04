@@ -10,4 +10,4 @@ Please use GitHub Security Advisories or a private maintainer contact path inste
 
 ## Security posture
 
-The core library confines `unsafe` code to the optional `mmap` module (behind the `mmap` feature flag) by convention — `#![deny(unsafe_code)]` is set crate-wide with a scoped `#[allow(unsafe_code)]` in `mmap.rs` only. This is a policy boundary, not a compile-time hard guarantee; a future `#![forbid(unsafe_code)]` migration is tracked in ADR-0005. All parsing and validation logic is free of `unsafe`.
+The core library confines `unsafe` code to the optional `mmap` module (behind the `mmap` feature flag) by convention — `#![deny(unsafe_code)]` is set crate-wide with a scoped `#[allow(unsafe_code)]` in `mmap.rs` only. This is a policy boundary, not a compile-time hard guarantee; a future `#![forbid(unsafe_code)]` migration may be considered later. All parsing and validation logic is free of `unsafe`.
