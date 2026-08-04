@@ -5,3 +5,6 @@
 
 pub mod probe;
 pub mod summary;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm;
