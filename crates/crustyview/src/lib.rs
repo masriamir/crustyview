@@ -3,4 +3,5 @@
 //! `summary` and `probe` are native-testable; the wasm-bindgen glue is compiled
 //! only for the `wasm32` target.
 
+pub mod probe;
 pub mod summary;
