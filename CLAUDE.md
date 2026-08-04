@@ -36,6 +36,20 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.
 - CI runs the sweep automatically (`sweep-freedoom` job) against fetched Freedoom;
   commercial IWADs stay local-only.
+## Copilot review loop
+- Every non-draft PR is auto-requested for **Copilot** review by
+  `.github/workflows/copilot-review.yml`. This exists because a private repo on a free
+  personal plan **cannot** use rulesets/branch protection to request Copilot (or enforce
+  required checks) — the workflow substitutes for that. Retire it when the repo goes public
+  and a ruleset can request Copilot automatically.
+- Bot login: `copilot-pull-request-reviewer` (shows as reviewer **Copilot**).
+- Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`.
+- Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
+  as needed. CI command: `just ci` (mirrors the crustyview CI checks). Owner/repo:
+  `masriamir/crustyview`.
+- A PR is ready for human review only when **all** Copilot threads are resolved **and** all
+  CI checks pass (`gh pr checks`). Branch protection can't enforce this while private+free,
+  so it is a process discipline: never merge over an unresolved thread or a red check.
 
 ## Out of scope (bootstrap)
 - UI-framework choice (egui/bevy vs TS+wasm) — to be settled in a follow-up ADR
