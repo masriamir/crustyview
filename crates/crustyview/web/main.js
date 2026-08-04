@@ -32,7 +32,11 @@ document.getElementById("file").addEventListener("change", async (e) => {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.putImageData(
-            new ImageData(new Uint8ClampedArray(rgba), tex.width, tex.height),
+            new ImageData(
+              new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.length),
+              tex.width,
+              tex.height,
+            ),
             0,
             0,
           );
