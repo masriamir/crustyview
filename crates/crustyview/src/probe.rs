@@ -81,3 +81,33 @@ pub fn probe_first_texture(wad: &Wad) -> Result<Option<TextureProbe>, GfxError> 
         rgba: image.pixels,
     }))
 }
+
+/// First texture's name and dimensions, without compositing pixels.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TextureMeta {
+    /// The texture's name.
+    pub name: String,
+    /// Canvas width in pixels.
+    pub width: u16,
+    /// Canvas height in pixels.
+    pub height: u16,
+}
+
+/// Name + dimensions of the first texture, read from its `TextureDef` (no compositing).
+///
+/// # Errors
+///
+/// Returns [`GfxError`] if parsing the texture set fails.
+pub fn probe_first_texture_meta(wad: &Wad) -> Result<Option<TextureMeta>, GfxError> {
+    let Some(set) = wad.texture_set()? else {
+        return Ok(None);
+    };
+    let Some(def) = set.textures().first() else {
+        return Ok(None);
+    };
+    Ok(Some(TextureMeta {
+        name: def.name.clone(),
+        width: u16::try_from(def.width).unwrap_or(0),
+        height: u16::try_from(def.height).unwrap_or(0),
+    }))
+}

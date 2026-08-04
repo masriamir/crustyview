@@ -4,7 +4,7 @@
 mod common;
 
 use common::build_wad;
-use crustyview::probe::{probe_first_map, probe_first_texture};
+use crustyview::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
 use crustywad::Wad;
 
 fn empty_pwad() -> Wad {
@@ -24,6 +24,11 @@ fn no_map_group_probes_to_none() {
 #[test]
 fn no_textures_probes_to_none() {
     assert!(probe_first_texture(&empty_pwad()).unwrap().is_none());
+}
+
+#[test]
+fn no_textures_probes_meta_to_none() {
+    assert!(probe_first_texture_meta(&empty_pwad()).unwrap().is_none());
 }
 
 #[test]

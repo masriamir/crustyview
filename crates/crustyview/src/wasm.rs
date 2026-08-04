@@ -10,13 +10,17 @@ use wasm_bindgen::prelude::*;
 ///
 /// # Errors
 ///
-/// Returns a `JsError` if the bytes are not a valid WAD or a read path fails.
+/// Returns a `JsError` if the bytes are not a valid WAD or texture-set
+/// parsing fails. Map-assembly failures are not an error: they are
+/// reported as `map: null` in the JSON, matching
+/// [`probe_first_map`](crate::probe::probe_first_map)'s swallow-to-`None`
+/// behavior.
 #[wasm_bindgen]
 pub fn analyze(bytes: &[u8]) -> Result<String, JsError> {
-    let summary = crate::summary::summarize(bytes.to_vec()).map_err(js)?;
     let wad = Wad::from_bytes(bytes.to_vec()).map_err(js)?;
+    let summary = crate::summary::summarize_wad(&wad);
     let map = crate::probe::probe_first_map(&wad);
-    let texture = crate::probe::probe_first_texture(&wad).map_err(js)?;
+    let texture = crate::probe::probe_first_texture_meta(&wad).map_err(js)?;
     let report = serde_json::json!({
         "summary": summary,
         "map": map,
