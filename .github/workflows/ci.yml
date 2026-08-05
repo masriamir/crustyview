@@ -61,3 +61,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-deny
       - run: cargo deny check
+
+  sweep-freedoom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fetch Freedoom
+        run: ./scripts/fetch-freedoom.sh "$RUNNER_TEMP/freedoom"
+      - name: Sweep Freedoom
+        run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview --test wad_sweep --all-features -- --nocapture

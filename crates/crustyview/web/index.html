@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>crustyview — WASM spike</title>
+    <style>
+      /* Checkerboard backdrop so transparent/masked texture pixels (e.g. Hexen's
+         mostly-transparent first texture) are visible rather than blending into
+         a blank page. */
+      #tex {
+        border: 1px solid #888;
+        background-color: #fff;
+        background-image:
+          linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%),
+          linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%);
+        background-size: 16px 16px;
+        background-position:
+          0 0,
+          8px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>crustyview WASM spike</h1>
+    <label for="file">Load a WAD file:</label>
+    <input type="file" id="file" accept=".wad,.WAD" />
+    <pre id="out">Load a WAD…</pre>
+    <canvas id="tex" role="img" aria-label="Composited first-texture preview"></canvas>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
