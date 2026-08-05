@@ -33,3 +33,5 @@ choices don't need an ADR.
 
 - [ADR-0001](0001-consume-crustywad-via-pinned-wasm.md) — Consume `crustywad` as
   a pinned-release Rust→WASM dependency (spike: GO)
+- [ADR-0002](0002-hybrid-portable-core-svelte-shell.md) — Hybrid UI: a
+  portable Rust/`wgpu` core behind a Svelte + TypeScript web shell
