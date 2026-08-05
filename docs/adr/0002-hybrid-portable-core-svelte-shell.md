@@ -118,11 +118,11 @@ The WAD bytes cross the boundary **exactly once**. Thereafter TypeScript holds
 *handles*; heavy data stays in Rust.
 
 - **`WadDocument.load(bytes)`** parses the `Wad` once and holds it in wasm
-  memory. Cheap queries then return small JSON — `.summary()`, `.mapNames()`,
-  `.map2d(name)` (vertices, linedefs, things for the 2D view), `.textureNames()`
-  — plus `.textureRgba(name)`, which returns one composited texture's RGBA bytes
-  on demand for the texture browser (the bounded pixel carve-out noted in the
-  boundary rule below).
+  memory. Cheap queries then read from it without re-crossing the WAD:
+  `.summary()`, `.mapNames()`, `.map2d(name)` (vertices, linedefs, things for
+  the 2D view), and `.textureNames()` return small JSON; `.textureRgba(name)`
+  returns one composited texture's RGBA bytes on demand for the texture browser
+  (the bounded pixel carve-out noted in the boundary rule below).
 - **`Viewport.attach(doc, canvas)`** (async — `wgpu` web init is async) creates
   the `wgpu` surface on the canvas TypeScript handed it. `.loadMap(name)` builds
   the scene from the document's already-parsed `Map` and uploads to the GPU —
