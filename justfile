@@ -29,12 +29,12 @@ serve: wasm-build
 
 # Native sweep over a local WAD directory (absolute or relative): just sweep path
 sweep dir:
-    CRUSTYVIEW_WAD_DIR="$(cd {{dir}} && pwd)" cargo test -p crustyview --test wad_sweep -- --nocapture
+    CRUSTYVIEW_WAD_DIR="$(cd "{{dir}}" && pwd)" cargo test -p crustyview --test wad_sweep -- --nocapture
 
 # Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm path
 sweep-wasm dir:
-    abs="$(cd {{dir}} && pwd)" && cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs "$abs"
+    abs="$(cd "{{dir}}" && pwd)" && cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs "$abs"
 
 # Fetch Freedoom (GPL) WADs into a directory
 fetch-freedoom dir=".freedoom" version="0.13.0":
-    ./scripts/fetch-freedoom.sh {{dir}} {{version}}
+    ./scripts/fetch-freedoom.sh "{{dir}}" "{{version}}"

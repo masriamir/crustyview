@@ -63,9 +63,9 @@ pub fn probe_first_texture(wad: &Wad) -> Result<Option<TextureProbe>, GfxError> 
     let Some(set) = wad.texture_set()? else {
         return Ok(None);
     };
-    if set.textures().is_empty() {
+    let Some(name) = set.textures().first().map(|t| t.name.clone()) else {
         return Ok(None);
-    }
+    };
     let Some(playpal) = wad.playpal()? else {
         return Ok(None);
     };
@@ -73,7 +73,6 @@ pub fn probe_first_texture(wad: &Wad) -> Result<Option<TextureProbe>, GfxError> 
         return Ok(None);
     };
     let (image, _warnings) = set.compose_rgba(0, &ParseOptions::default(), palette)?;
-    let name = set.textures()[0].name.clone();
     Ok(Some(TextureProbe {
         name,
         width: image.width,

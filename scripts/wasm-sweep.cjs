@@ -29,7 +29,8 @@ console.log(pad("WAD", 24) + pad("kind", 6) + pad("maps", 5) + pad("game", 8) +
   pad("texture", 22) + pad("rgba", 8) + "opaque%");
 let failures = 0;
 for (const f of files) {
-  const buf = new Uint8Array(fs.readFileSync(path.join(dir, f)));
+  const raw = fs.readFileSync(path.join(dir, f));
+  const buf = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
   let row = pad(f, 24);
   try {
     const rep = JSON.parse(m.analyze(buf));
