@@ -1,0 +1,35 @@
+name: Copilot Review
+
+# Private repositories on a free personal plan cannot use rulesets or branch
+# protection to auto-request Copilot review, so this workflow requests it on
+# every non-draft PR instead. Remove/disable once the repo is public and a
+# ruleset requests Copilot automatically.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-copilot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Request Copilot review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Idempotent: skip if Copilot is already a requested reviewer.
+          # The requested_reviewers response reports the login as `Copilot`; match
+          # `copilot` case-insensitively so either that or a `copilot-...[bot]`
+          # form is recognized.
+          if gh api "repos/$REPO/pulls/$PR/requested_reviewers" \
+               --jq '.users[].login' | grep -qiF 'copilot'; then
+            echo "Copilot review already requested."
+            exit 0
+          fi
+          gh api --method POST "repos/$REPO/pulls/$PR/requested_reviewers" \
+            -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
