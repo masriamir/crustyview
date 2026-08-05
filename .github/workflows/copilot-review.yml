@@ -23,8 +23,11 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           # Idempotent: skip if Copilot is already a requested reviewer.
+          # The requested_reviewers response reports the login as `Copilot`; match
+          # `copilot` case-insensitively so either that or a `copilot-...[bot]`
+          # form is recognized.
           if gh api "repos/$REPO/pulls/$PR/requested_reviewers" \
-               --jq '.users[].login' | grep -qx 'Copilot'; then
+               --jq '.users[].login' | grep -qiF 'copilot'; then
             echo "Copilot review already requested."
             exit 0
           fi
