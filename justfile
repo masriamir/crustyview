@@ -27,13 +27,13 @@ wasm-build:
 serve: wasm-build
     python3 -m http.server -d crates/crustyview/web 8080
 
-# Native sweep over a local WAD directory: just sweep /abs/path
+# Native sweep over a local WAD directory (absolute or relative): just sweep path
 sweep dir:
-    CRUSTYVIEW_WAD_DIR={{dir}} cargo test -p crustyview --test wad_sweep -- --nocapture
+    CRUSTYVIEW_WAD_DIR="$(cd {{dir}} && pwd)" cargo test -p crustyview --test wad_sweep -- --nocapture
 
-# Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm /abs/path
+# Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm path
 sweep-wasm dir:
-    cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs {{dir}}
+    abs="$(cd {{dir}} && pwd)" && cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs "$abs"
 
 # Fetch Freedoom (GPL) WADs into a directory
 fetch-freedoom dir=".freedoom" version="0.13.0":
