@@ -3,7 +3,7 @@
 //! Set `CRUSTYVIEW_WAD_DIR` to an **absolute** path to a directory of `*.wad`
 //! files (cargo runs tests with CWD = the package root, so a relative path will
 //! not resolve). The test skips (passes) when the variable is unset — commercial
-//! IWADs are never committed. `just sweep dir=/abs/path` runs it locally; CI runs
+//! IWADs are never committed. `just sweep /abs/path` runs it locally; CI runs
 //! it against fetched Freedoom.
 //!
 //! It guards the read-path robustness the viewer depends on: every WAD loads and a
