@@ -10,7 +10,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 url="https://github.com/freedoom/freedoom/releases/download/v${version}/freedoom-${version}.zip"
 echo "Fetching $url"
-curl -fsSL "$url" -o "$tmp/freedoom.zip"
+curl -fsSL --retry 3 --retry-delay 2 --retry-connrefused "$url" -o "$tmp/freedoom.zip"
 unzip -j -o "$tmp/freedoom.zip" "freedoom-${version}/freedoom1.wad" "freedoom-${version}/freedoom2.wad" -d "$target"
 echo "Freedoom WADs in $target:"
 ls -1 "$target"/*.wad
