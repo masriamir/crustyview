@@ -17,6 +17,13 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
 - `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
 
+## Decisions
+- Architectural / hard-to-reverse decisions are recorded as ADRs in
+  [`docs/adr/`](../docs/adr/) — lightweight (structure mirrors crustywad, without the
+  library-publishing ceremony). See [`docs/adr/README.md`](../docs/adr/README.md) for the
+  process; [ADR-0001](../docs/adr/0001-consume-crustywad-via-pinned-wasm.md) records the
+  pinned-release WASM-consumer decision.
+
 ## Testing
 - `crates/crustyview/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
   `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
@@ -31,5 +38,6 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   commercial IWADs stay local-only.
 
 ## Out of scope (bootstrap)
-- UI-framework choice (egui/bevy vs TS+wasm) — decided in a post-spike design.
+- UI-framework choice (egui/bevy vs TS+wasm) — to be settled in a follow-up ADR
+  (see [ADR-0001](../docs/adr/0001-consume-crustywad-via-pinned-wasm.md) §Consequences).
 - Renderer / 3D viewport, full stats dashboard, publishing.
