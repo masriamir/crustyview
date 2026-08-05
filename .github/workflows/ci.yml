@@ -70,4 +70,4 @@ jobs:
       - name: Fetch Freedoom
         run: ./scripts/fetch-freedoom.sh "$RUNNER_TEMP/freedoom"
       - name: Sweep Freedoom
-        run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview --test wad_sweep -- --nocapture
+        run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview --test wad_sweep --all-features -- --nocapture
