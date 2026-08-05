@@ -1,10 +1,11 @@
 //! Fixture-gated sweep over a local WAD collection.
 //!
-//! Set `CRUSTYVIEW_WAD_DIR` to an **absolute** path to a directory of `*.wad`
-//! files (cargo runs tests with CWD = the package root, so a relative path will
-//! not resolve). The test skips (passes) when the variable is unset — commercial
-//! IWADs are never committed. `just sweep /abs/path` runs it locally; CI runs
-//! it against fetched Freedoom.
+//! Set `CRUSTYVIEW_WAD_DIR` to a directory of `*.wad` files — prefer an
+//! **absolute** path, since cargo runs tests with CWD = the package root, so a
+//! relative value resolves against that (rarely what you intend). The test skips
+//! (passes) when the variable is unset — commercial IWADs are never committed.
+//! `just sweep /abs/path` runs it locally (the recipe absolutizes the path for
+//! you); CI runs it against fetched Freedoom.
 //!
 //! It guards the read-path robustness the viewer depends on: every WAD loads and a
 //! summary + map are obtainable for each, with the probes never panicking. A
@@ -59,7 +60,7 @@ fn sweep_wad_collection() {
         let full_s = match &full {
             Ok(Some(t)) => format!("{}px", t.rgba.len() / 4),
             Ok(None) => "none".to_owned(),
-            Err(_) => "err".to_owned(),
+            Err(e) => format!("err({e})"),
         };
         eprintln!(
             "  {name:<24} kind={} lumps={} maps={} first={:?} game={:?} map={} meta={meta_s} full={full_s}",

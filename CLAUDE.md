@@ -19,8 +19,9 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 
 ## Testing
 - `crates/crustyview/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
-  `CRUSTYVIEW_WAD_DIR` (must be an **absolute** path — cargo runs tests with CWD
-  set to the package root, so a relative path never resolves). It skips (passes)
+  `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
+  set to the package root, so a relative value resolves against that, rarely what
+  you intend; the `just sweep` recipe absolutizes it for you). It skips (passes)
   when the variable is unset, since commercial IWADs are never committed.
 - `just sweep /abs/path` runs the native sweep; `just sweep-wasm /abs/path`
   runs the headless wasm sweep, driving the real `analyze`/`first_texture_rgba`
