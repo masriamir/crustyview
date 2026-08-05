@@ -17,6 +17,18 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
 - `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
 
+## Testing
+- `crates/crustyview/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
+  `CRUSTYVIEW_WAD_DIR` (must be an **absolute** path — cargo runs tests with CWD
+  set to the package root, so a relative path never resolves). It skips (passes)
+  when the variable is unset, since commercial IWADs are never committed.
+- `just sweep dir=/abs/path` runs the native sweep; `just sweep-wasm dir=/abs/path`
+  runs the headless wasm sweep, driving the real `analyze`/`first_texture_rgba`
+  wasm exports via `scripts/wasm-sweep.cjs` (builds the nodejs bundle first).
+- `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.
+- CI runs the sweep automatically (`sweep-freedoom` job) against fetched Freedoom;
+  commercial IWADs stay local-only.
+
 ## Out of scope (bootstrap)
 - UI-framework choice (egui/bevy vs TS+wasm) — decided in a post-spike design.
 - Renderer / 3D viewport, full stats dashboard, publishing.
