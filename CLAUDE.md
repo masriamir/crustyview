@@ -22,7 +22,7 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   `CRUSTYVIEW_WAD_DIR` (must be an **absolute** path — cargo runs tests with CWD
   set to the package root, so a relative path never resolves). It skips (passes)
   when the variable is unset, since commercial IWADs are never committed.
-- `just sweep dir=/abs/path` runs the native sweep; `just sweep-wasm dir=/abs/path`
+- `just sweep /abs/path` runs the native sweep; `just sweep-wasm /abs/path`
   runs the headless wasm sweep, driving the real `analyze`/`first_texture_rgba`
   wasm exports via `scripts/wasm-sweep.cjs` (builds the nodejs bundle first).
 - `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.

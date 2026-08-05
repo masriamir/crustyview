@@ -27,11 +27,11 @@ wasm-build:
 serve: wasm-build
     python3 -m http.server -d crates/crustyview/web 8080
 
-# Native sweep over a local WAD directory: just sweep dir=/abs/path
+# Native sweep over a local WAD directory: just sweep /abs/path
 sweep dir:
     CRUSTYVIEW_WAD_DIR={{dir}} cargo test -p crustyview --test wad_sweep -- --nocapture
 
-# Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm dir=/abs/path
+# Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm /abs/path
 sweep-wasm dir:
     cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs {{dir}}
 
