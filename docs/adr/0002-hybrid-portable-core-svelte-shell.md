@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-08-05
 - **Deciders:** Amir Masri (with collaborative design)
-- **Tracking issue / PR:** PR #6 (`docs/adr-0002-ui-architecture`)
+- **Tracking issue / PR:** #12 · PR #6 (`docs/adr-0002-ui-architecture`)
 
 ## Context and problem statement
 
