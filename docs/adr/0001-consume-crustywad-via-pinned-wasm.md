@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-05
 - **Deciders:** Amir Masri (with collaborative design)
-- **Tracking issue / PR:** PR #4 (`feature/wasm-spike`)
+- **Tracking issue / PR:** #10 · PR #4 (`feature/wasm-spike`)
 
 ## Context and problem statement
 

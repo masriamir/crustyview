@@ -16,13 +16,44 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 ## Workflow
 - Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
 - `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
+- Every change is tracked by a GitHub **issue** on the board (see Project tracking); branch
+  by issue number where one exists (`<type>/<###>-<slug>`).
+
+## Project tracking
+
+Work is tracked on the shared **[Crustywad GitHub Project #5](https://github.com/users/masriamir/projects/5)** — crustyview issues live on the same board as crustywad. **Every change** — feature, bug, chore, docs, spike — gets a GitHub issue, added to the board with three planning fields:
+
+- **Status:** `Backlog` → `Ready` → `In progress` → `In review` → `Done`. Most transitions are agent-driven (below); `Done` is board-automated on merge/close.
+- **Horizon:** `Now` / `Next` / `Later` — planning intent for unmilestoned items.
+- **Milestone** (per-repo, scope-named, never version numbers): `Viewer shell`, `2D map`, `3D viewport`. Record shipped versions in the description at closeout. GitHub never auto-closes milestones — when a milestone's issues are all closed, propose closing it rather than closing it unilaterally.
+
+**Epics** (`epic` label) use native GitHub sub-issues for progress rollup: **#7 viewer shell & UI**, **#8 3D renderer**. Attach each new feature issue as a sub-issue of its epic. An epic moves to `In progress` when its first sub-issue starts and to `Done` (board-automated) only when all its sub-issues close; set the epic's aggregate Status by hand, since GitHub doesn't roll Status up.
+
+**Labels** mirror crustywad's general-purpose taxonomy (`epic`, `spike`, `testing`, `chore`, `maintenance`, `security`, `performance`, `release`, plus triage labels) with two crustyview domain labels: `renderer` (wgpu/3D viewport) and `web-ui` (Svelte/TS shell).
+
+### Issue status transitions (agent-driven)
+
+Move the board yourself and **announce each change** (don't ask first) — board edits are internal and reversible:
+
+| Transition | Trigger |
+|---|---|
+| `Backlog → Ready` | the user says they want to start an issue |
+| `Ready → In progress` | you begin planning it — before any branch or code |
+| `In progress → In review` | the PR opens |
+| `In review → Done` | PR merges/closes — **board-automated**, don't set it by hand |
+
+The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with crustywad — Project #5's fields are project-level, identical for crustyview items.
 
 ## Decisions
 - Architectural / hard-to-reverse decisions are recorded as ADRs in
   [`docs/adr/`](../docs/adr/) — lightweight (structure mirrors crustywad, without the
   library-publishing ceremony). See [`docs/adr/README.md`](../docs/adr/README.md) for the
   process; [ADR-0001](../docs/adr/0001-consume-crustywad-via-pinned-wasm.md) records the
-  pinned-release WASM-consumer decision.
+  pinned-release WASM-consumer decision, and
+  [ADR-0002](../docs/adr/0002-hybrid-portable-core-svelte-shell.md) records the hybrid UI
+  architecture — a portable Rust/`wgpu` core (`crustyview-core`) behind a Svelte + TypeScript
+  shell (`crustyview-web`), with `crustyview-native` proving portability; wgpu = 3D only,
+  everything 2D/DOM in TypeScript.
 
 ## Testing
 - `crates/crustyview/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
@@ -56,7 +87,8 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   CI checks pass (`gh pr checks`). Branch protection can't enforce this while private+free,
   so it is a process discipline: never merge over an unresolved thread or a red check.
 
-## Out of scope (bootstrap)
-- UI-framework choice (egui/bevy vs TS+wasm) — to be settled in a follow-up ADR
-  (see [ADR-0001](../docs/adr/0001-consume-crustywad-via-pinned-wasm.md) §Consequences).
-- Renderer / 3D viewport, full stats dashboard, publishing.
+## Not yet built (tracked on the board)
+- The Svelte + TypeScript shell, full stats dashboard, 2D map, and the wgpu 3D viewport —
+  **decided** (ADR-0002), staged across epics #7/#8 and milestones `Viewer shell` / `2D map`
+  / `3D viewport`.
+- Publishing / hosted deployment.
