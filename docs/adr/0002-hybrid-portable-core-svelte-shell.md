@@ -118,22 +118,29 @@ The WAD bytes cross the boundary **exactly once**. Thereafter TypeScript holds
 *handles*; heavy data stays in Rust.
 
 - **`WadDocument.load(bytes)`** parses the `Wad` once and holds it in wasm
-  memory. Cheap queries then return small JSON: `.summary()`, `.mapNames()`,
-  `.map2d(name)` (vertices, linedefs, things for the 2D view),
-  `.textureNames()`, `.textureRgba(name)`.
+  memory. Cheap queries then return small JSON — `.summary()`, `.mapNames()`,
+  `.map2d(name)` (vertices, linedefs, things for the 2D view), `.textureNames()`
+  — plus `.textureRgba(name)`, which returns one composited texture's RGBA bytes
+  on demand for the texture browser (the bounded pixel carve-out noted in the
+  boundary rule below).
 - **`Viewport.attach(doc, canvas)`** (async — `wgpu` web init is async) creates
   the `wgpu` surface on the canvas TypeScript handed it. `.loadMap(name)` builds
   the scene from the document's already-parsed `Map` and uploads to the GPU —
   **no geometry crosses JS**. Plus `.resize(w, h)` and `.dispose()`.
 
-**Boundary rule:** small derived JSON crosses to the DOM panels; the `Wad`,
-`Map`, `SceneData`, and pixels stay in Rust and go straight to the GPU.
-TypeScript owns the canvas *element*; Rust owns its *pixels*.
+**Boundary rule:** the bulk, per-frame data — the `Wad`, the `Map`, the
+`SceneData`, and the 3D viewport's framebuffer — stays in Rust and goes straight
+to the GPU; it never crosses into JavaScript. What crosses is small and
+on-demand: derived JSON for the DOM panels (summary, `map2d`), plus one
+composited **texture-preview RGBA at a time** for the texture browser — a
+deliberate, bounded carve-out that is consistent with "2D/DOM = TypeScript" and
+is nothing like shipping the whole scene across every frame. For the 3D
+viewport, TypeScript owns the canvas *element* and Rust owns its *pixels*.
 
 ```mermaid
 flowchart LR
   file["WAD bytes"] ==>|"crosses JS→wasm ONCE"| wad
-  subgraph rust["Rust / WASM — heavy data never re-crosses"]
+  subgraph rust["Rust / WASM — bulk / per-frame data never re-crosses"]
     wad["Wad"] --> map["Map"] --> scene["SceneData"] --> gpu["GPU buffers → pixels"]
   end
   wad -. "small JSON" .-> stats["Stats panel"]
@@ -230,8 +237,10 @@ The crisp line: **`wgpu` = 3D only; everything 2D and DOM = TypeScript.**
 - Good, because the `scene` builder — the crown jewel — is unit-testable
   **native, with no GPU and no browser**, and the existing WAD-sweep harness
   extends to assert it never panics across the collection.
-- Good, because heavy geometry and pixels never re-cross the wasm↔JS boundary;
-  only small derived JSON does.
+- Good, because the bulk, per-frame data (map geometry and the viewport
+  framebuffer) never re-crosses the wasm↔JS boundary; only small, on-demand
+  payloads do — derived JSON for the panels, and one texture-preview RGBA at a
+  time for the browser.
 - Good, because the shell uses the friendly web ecosystem and the early wins
   (stats, 2D map) ship before any renderer exists.
 - Bad, because the project now spans two languages and a JS build pipeline
