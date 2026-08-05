@@ -19,7 +19,13 @@ try {
     "\nBuild it: (cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node)");
   process.exit(2);
 }
-const files = fs.readdirSync(dir).filter((f) => /\.wad$/i.test(f)).sort();
+let files;
+try {
+  files = fs.readdirSync(dir).filter((f) => /\.wad$/i.test(f)).sort();
+} catch (e) {
+  console.error("cannot read directory " + dir + ": " + e.message);
+  process.exit(2);
+}
 if (files.length === 0) {
   console.error("no *.wad files in " + dir);
   process.exit(2);
@@ -29,10 +35,10 @@ console.log(pad("WAD", 24) + pad("kind", 6) + pad("maps", 5) + pad("game", 8) +
   pad("texture", 22) + pad("rgba", 8) + "opaque%");
 let failures = 0;
 for (const f of files) {
-  const raw = fs.readFileSync(path.join(dir, f));
-  const buf = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
   let row = pad(f, 24);
   try {
+    const raw = fs.readFileSync(path.join(dir, f));
+    const buf = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
     const rep = JSON.parse(m.analyze(buf));
     const s = rep.summary;
     row += pad(s.kind, 6) + pad(s.map_count, 5) + pad(s.game, 8);
@@ -49,7 +55,7 @@ for (const f of files) {
     }
   } catch (e) {
     failures++;
-    row += "analyze THREW: " + e.message;
+    row += "FAILED (read/analyze): " + e.message;
   }
   console.log(row);
 }

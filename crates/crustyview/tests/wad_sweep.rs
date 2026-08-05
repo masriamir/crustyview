@@ -45,7 +45,17 @@ fn sweep_wad_collection() {
         let summary = summarize_wad(&wad);
         assert!(!summary.kind.is_empty(), "{name}: empty kind");
         assert!(summary.lump_count > 0, "{name}: zero lumps");
-        let map = probe_first_map(&wad); // Some/None both fine; must not panic.
+        // A WAD with detected map groups must assemble its first map, or the
+        // map-assembly path has regressed — this is the assertion the sweep exists
+        // for. (A WAD with no map groups legitimately probes to `None`.)
+        let map = probe_first_map(&wad);
+        if summary.map_count > 0 {
+            assert!(
+                map.is_some(),
+                "{name}: {} map group(s) detected but the first map did not assemble",
+                summary.map_count
+            );
+        }
 
         // Texture probes must not panic. An Err is allowed — the point is it never
         // prevents obtaining the summary/map above.
