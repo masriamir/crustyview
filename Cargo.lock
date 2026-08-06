@@ -92,6 +92,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crustyview-native"
+version = "0.1.0"
+dependencies = [
+ "crustyview-core",
+]
+
+[[package]]
 name = "crustyview-web"
 version = "0.1.0"
 dependencies = [
