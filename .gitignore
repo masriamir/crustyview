@@ -2,8 +2,8 @@
 **/*.rs.bk
 Cargo.lock.orig
 # wasm build output
-crates/crustyview/web/pkg/
-crates/crustyview/web/pkg-node/
+crates/crustyview-web/web/pkg/
+crates/crustyview-web/web/pkg-node/
 # local WAD blobs — never commit
 *.wad
 *.WAD

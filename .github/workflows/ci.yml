@@ -37,7 +37,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo build -p crustyview --target wasm32-unknown-unknown
+      - run: cargo build -p crustyview-web --target wasm32-unknown-unknown
 
   coverage:
     runs-on: ubuntu-latest
@@ -70,4 +70,4 @@ jobs:
       - name: Fetch Freedoom
         run: ./scripts/fetch-freedoom.sh "$RUNNER_TEMP/freedoom"
       - name: Sweep Freedoom
-        run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview --test wad_sweep --all-features -- --nocapture
+        run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview-core --test wad_sweep --all-features -- --nocapture
