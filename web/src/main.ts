@@ -5,9 +5,18 @@ import App from './App.svelte';
 import './app.css';
 
 async function bootstrap(): Promise<void> {
-  await init({ module_or_path: wasmUrl });
   const target = document.getElementById('app');
-  if (target) mount(App, { target });
+  if (!target) throw new Error('missing #app mount target');
+  await init({ module_or_path: wasmUrl });
+  mount(App, { target });
 }
 
-void bootstrap();
+bootstrap().catch((err: unknown) => {
+  // Surface a startup failure (e.g. wasm init) instead of blank-failing with an
+  // unhandled rejection.
+  console.error('crustyview failed to start:', err);
+  const target = document.getElementById('app');
+  if (target) {
+    target.textContent = `Failed to start: ${err instanceof Error ? err.message : String(err)}`;
+  }
+});
