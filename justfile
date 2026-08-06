@@ -28,13 +28,17 @@ ci:
     cargo build -p crustyview-web --target wasm32-unknown-unknown
     cargo deny check
 
-# Build the browser wasm bundle
-wasm-build:
-    cd crates/crustyview-web && wasm-pack build --target web --out-dir web/pkg
+# Build the browser wasm bundle into the Svelte app (web/src/wasm)
+web-wasm:
+    cd crates/crustyview-web && wasm-pack build --target web --out-dir ../../web/src/wasm
 
-# Build + serve the spike page at http://localhost:8080/
-serve: wasm-build
-    python3 -m http.server -d crates/crustyview-web/web 8080
+# Dev server for the Svelte app (builds wasm first; assumes `cd web && npm install` was run once)
+dev: web-wasm
+    cd web && npm run dev
+
+# Production build of the Svelte app (wasm + vite)
+build-web: web-wasm
+    cd web && npm ci && npm run build
 
 # Native sweep over a local WAD directory (absolute or relative): just sweep path
 sweep dir:

@@ -11,4 +11,6 @@ crustywad and fixed there; crustyview bumps the dependency when a release lands.
 - `crustyview-web` — the wasm-bindgen `WadDocument` shim for the browser.
 - `crustyview-native` — a portability-proving skeleton binary.
 
+The browser app lives in top-level `web/` (Svelte + Vite + TypeScript); run it with `just dev`.
+
 Status: bootstrap + WASM go/no-go spike.
