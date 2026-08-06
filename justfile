@@ -26,6 +26,7 @@ ci:
     cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
     cargo test --workspace --all-features
     cargo build -p crustyview-web --target wasm32-unknown-unknown
+    cargo deny check
 
 # Build the browser wasm bundle
 wasm-build:

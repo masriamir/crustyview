@@ -8,10 +8,10 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - Urgent fixes only: uncomment the `[patch.crates-io]` git-main override in the root `Cargo.toml`.
 
 ## Layout
-- `crates/crustyview/src/summary.rs` — native-testable summarization.
-- `crates/crustyview/src/probe.rs`   — native-testable map/texture probes.
-- `crates/crustyview/src/wasm.rs`     — wasm-bindgen glue (wasm32-only).
-- `crates/crustyview/web/`            — minimal HTML/JS host page.
+- `crates/crustyview-core/src/{summary,probe}.rs` — native-testable summarization + map/texture probes (no web deps).
+- `crates/crustyview-web/src/wad_document.rs` — the `WadDocument` wasm-bindgen handle (wasm32-only); `src/lib.rs` re-exports it.
+- `crates/crustyview-native/src/main.rs` — the portability-proving skeleton binary.
+- `crates/crustyview-web/web/` — the browser host page.
 
 ## Workflow
 - Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
@@ -56,14 +56,15 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   everything 2D/DOM in TypeScript.
 
 ## Testing
-- `crates/crustyview/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
+- `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
   `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
   set to the package root, so a relative value resolves against that, rarely what
   you intend; the `just sweep` recipe absolutizes it for you). It skips (passes)
   when the variable is unset, since commercial IWADs are never committed.
-- `just sweep /abs/path` runs the native sweep; `just sweep-wasm /abs/path`
-  runs the headless wasm sweep, driving the real `analyze`/`first_texture_rgba`
-  wasm exports via `scripts/wasm-sweep.cjs` (builds the nodejs bundle first).
+- `just sweep /abs/path` runs the native sweep (`cargo test -p crustyview-core --test
+  wad_sweep`); `just sweep-wasm /abs/path` runs the headless wasm sweep, driving the
+  real `WadDocument` wasm exports via `scripts/wasm-sweep.cjs` (builds the
+  `crustyview-web` nodejs bundle first with `--target nodejs`).
 - `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.
 - CI runs the sweep automatically (`sweep-freedoom` job) against fetched Freedoom;
   commercial IWADs stay local-only.
