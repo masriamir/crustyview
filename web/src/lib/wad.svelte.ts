@@ -9,6 +9,7 @@ class WadStore {
   mapNames = $state<string[]>([]);
   textureMeta = $state<TextureMeta | null>(null);
   error = $state<string | null>(null);
+  fileName = $state<string | null>(null);
   #doc: WadDocument | null = null;
   #loadSeq = 0;
 
@@ -47,6 +48,7 @@ class WadStore {
       this.#fail(e instanceof Error ? e.message : 'Could not read the WAD.');
       return;
     }
+    this.fileName = file.name;
     this.phase = 'loaded';
   }
 
@@ -65,6 +67,7 @@ class WadStore {
     this.mapNames = [];
     this.textureMeta = null;
     this.error = null;
+    this.fileName = null;
   }
 
   #fail(message: string): void {
@@ -74,6 +77,7 @@ class WadStore {
     this.summary = null;
     this.mapNames = [];
     this.textureMeta = null;
+    this.fileName = null;
   }
 
   #freeDoc(): void {

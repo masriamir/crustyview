@@ -17,7 +17,7 @@
     <p class="status">Loading…</p>
   {:else if wad.phase === 'loaded' && wad.summary}
     <div class="panels">
-      <StatsPanel summary={wad.summary} mapNames={wad.mapNames} />
+      <StatsPanel summary={wad.summary} mapNames={wad.mapNames} fileName={wad.fileName} />
       <TexturePreview meta={wad.textureMeta} rgba={() => wad.textureRgba()} />
     </div>
   {:else}

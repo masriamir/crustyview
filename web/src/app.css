@@ -15,6 +15,7 @@ dd { margin: 0; }
 .status { color: #888; }
 .error { color: #d33; font-weight: 600; }
 .name { font-family: ui-monospace, monospace; }
+.filename { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
 /* Checkerboard so transparent/masked texture pixels stay visible (ported from the old page). */
 .tex {
   border: 1px solid #888;
