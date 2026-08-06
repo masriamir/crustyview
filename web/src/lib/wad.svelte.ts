@@ -31,9 +31,17 @@ class WadStore {
       return;
     }
     this.#doc = doc;
-    this.summary = JSON.parse(doc.summary()) as WadSummary;
-    this.mapNames = doc.mapNames();
-    this.textureMeta = JSON.parse(doc.textureMeta()) as TextureMeta | null;
+    try {
+      this.summary = JSON.parse(doc.summary()) as WadSummary;
+      this.mapNames = doc.mapNames();
+      this.textureMeta = JSON.parse(doc.textureMeta()) as TextureMeta | null;
+    } catch (e) {
+      // The Rust side emits valid JSON, but a read/parse failure must still fail
+      // cleanly — free the handle and surface an error rather than stay stuck in
+      // `loading` with a retained WadDocument.
+      this.#fail(e instanceof Error ? e.message : 'Could not read the WAD.');
+      return;
+    }
     this.phase = 'loaded';
   }
 
