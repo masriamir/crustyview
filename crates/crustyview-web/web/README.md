@@ -4,7 +4,7 @@ Easiest: from the repo root, `just serve` builds the bundle and serves it, then
 open http://localhost:8080/ and load a WAD.
 
 Manual equivalent — run both commands from the crate directory
-(`crates/crustyview`), so that `-d web` resolves to this folder:
+(`crates/crustyview-web`), so that `-d web` resolves to this folder:
 
     wasm-pack build --target web --out-dir web/pkg
     python3 -m http.server -d web 8080

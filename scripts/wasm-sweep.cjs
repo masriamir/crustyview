@@ -1,6 +1,6 @@
-// Headless wasm sweep: drives the real analyze()/first_texture_rgba() exports
+// Headless wasm sweep: drives the real WadDocument handle
 // (the --target nodejs build) over a WAD directory, and fails if any throws.
-// Build the bundle first (from crates/crustyview):
+// Build the bundle first (from crates/crustyview-web):
 //   wasm-pack build --target nodejs --out-dir web/pkg-node
 // Usage: node scripts/wasm-sweep.cjs <wad-dir>   (or set CRUSTYVIEW_WAD_DIR)
 const fs = require("fs");
@@ -10,13 +10,13 @@ if (!dir) {
   console.error("usage: node scripts/wasm-sweep.cjs <wad-dir> (or set CRUSTYVIEW_WAD_DIR)");
   process.exit(2);
 }
-const pkg = path.resolve(__dirname, "../crates/crustyview/web/pkg-node/crustyview.js");
+const pkg = path.resolve(__dirname, "../crates/crustyview-web/web/pkg-node/crustyview_web.js");
 let m;
 try {
   m = require(pkg);
 } catch (e) {
   console.error("missing nodejs bundle at " + pkg +
-    "\nBuild it: (cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node)");
+    "\nBuild it: (cd crates/crustyview-web && wasm-pack build --target nodejs --out-dir web/pkg-node)");
   process.exit(2);
 }
 let files;
@@ -39,27 +39,27 @@ for (const f of files) {
   try {
     const raw = fs.readFileSync(path.join(dir, f));
     const buf = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-    const rep = JSON.parse(m.analyze(buf));
-    const s = rep.summary;
-    row += pad(s.kind, 6) + pad(s.map_count, 5) + pad(s.game, 8);
-    row += pad(rep.texture ? rep.texture.name + " " + rep.texture.width + "x" + rep.texture.height : "null", 22);
+    const doc = m.WadDocument.load(buf);
     try {
-      const rgba = m.first_texture_rgba(buf);
+      const s = JSON.parse(doc.summary());
+      const tex = JSON.parse(doc.textureMeta());
+      row += pad(s.kind, 6) + pad(s.map_count, 5) + pad(s.game, 8);
+      row += pad(tex ? tex.name + " " + tex.width + "x" + tex.height : "null", 22);
+      const rgba = doc.textureRgba();
       let op = 0;
       for (let i = 3; i < rgba.length; i += 4) if (rgba[i] > 0) op++;
       const tot = rgba.length / 4;
-      row += pad(rgba.length, 8) + (tot ? (100 * op / tot).toFixed(1) + "%" : "-");
-    } catch (e) {
-      failures++;
-      row += "first_texture_rgba THREW: " + e.message;
+      row += pad(rgba.length, 8) + (tot ? ((100 * op) / tot).toFixed(1) + "%" : "-");
+    } finally {
+      doc.free();
     }
   } catch (e) {
     failures++;
-    row += "FAILED (read/analyze): " + e.message;
+    row += "FAILED (load/summary/texture): " + e.message;
   }
   console.log(row);
 }
 console.log("\n" + (failures
-  ? failures + " WAD(s) FAILED (analyze/first_texture_rgba threw)"
+  ? failures + " WAD(s) FAILED (WadDocument threw)"
   : "All " + files.length + " WAD(s) loaded without throwing."));
 process.exit(failures ? 1 : 0);

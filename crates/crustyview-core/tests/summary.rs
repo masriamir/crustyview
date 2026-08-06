@@ -1,9 +1,9 @@
-//! Integration tests for [`crustyview::summary::summarize`].
+//! Integration tests for [`crustyview_core::summary::summarize`].
 
 mod common;
 
 use common::build_wad;
-use crustyview::summary::{summarize, summarize_wad};
+use crustyview_core::summary::{summarize, summarize_wad};
 use crustywad::Wad;
 
 #[test]

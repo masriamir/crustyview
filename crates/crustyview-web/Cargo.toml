@@ -1,5 +1,5 @@
 [package]
-name = "crustyview"
+name = "crustyview-web"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -10,12 +10,15 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+crustyview-core = { path = "../crustyview-core", version = "0.1.0" }
 crustywad = "0.9"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [lints]
 workspace = true

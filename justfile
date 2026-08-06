@@ -13,27 +13,36 @@ test:
 lint:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo clippy -p crustyview --target wasm32-unknown-unknown -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
 
 # Auto-format
 fmt:
     cargo fmt --all
 
+# Full local CI: mirrors the GitHub CI jobs (native + wasm)
+ci:
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo test --workspace --all-features
+    cargo build -p crustyview-web --target wasm32-unknown-unknown
+    cargo deny check
+
 # Build the browser wasm bundle
 wasm-build:
-    cd crates/crustyview && wasm-pack build --target web --out-dir web/pkg
+    cd crates/crustyview-web && wasm-pack build --target web --out-dir web/pkg
 
 # Build + serve the spike page at http://localhost:8080/
 serve: wasm-build
-    python3 -m http.server -d crates/crustyview/web 8080
+    python3 -m http.server -d crates/crustyview-web/web 8080
 
 # Native sweep over a local WAD directory (absolute or relative): just sweep path
 sweep dir:
-    CRUSTYVIEW_WAD_DIR="$(cd "{{dir}}" && pwd)" cargo test -p crustyview --test wad_sweep -- --nocapture
+    CRUSTYVIEW_WAD_DIR="$(cd "{{dir}}" && pwd)" cargo test -p crustyview-core --test wad_sweep -- --nocapture
 
-# Headless wasm sweep (drives analyze/first_texture_rgba): just sweep-wasm path
+# Headless wasm sweep (drives WadDocument): just sweep-wasm path
 sweep-wasm dir:
-    abs="$(cd "{{dir}}" && pwd)" && cd crates/crustyview && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs "$abs"
+    abs="$(cd "{{dir}}" && pwd)" && cd crates/crustyview-web && wasm-pack build --target nodejs --out-dir web/pkg-node && node ../../scripts/wasm-sweep.cjs "$abs"
 
 # Fetch Freedoom (GPL) WADs into a directory
 fetch-freedoom dir=".freedoom" version="0.13.0":

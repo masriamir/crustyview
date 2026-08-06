@@ -1,10 +1,10 @@
-//! Integration tests for [`crustyview::probe::probe_first_map`] and
-//! [`crustyview::probe::probe_first_texture`].
+//! Integration tests for [`crustyview_core::probe::probe_first_map`] and
+//! [`crustyview_core::probe::probe_first_texture`].
 
 mod common;
 
 use common::build_wad;
-use crustyview::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
+use crustyview_core::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
 use crustywad::Wad;
 
 fn empty_pwad() -> Wad {
