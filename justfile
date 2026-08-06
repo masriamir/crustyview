@@ -19,6 +19,14 @@ lint:
 fmt:
     cargo fmt --all
 
+# Full local CI: mirrors the GitHub CI jobs (native + wasm)
+ci:
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo test --workspace --all-features
+    cargo build -p crustyview-web --target wasm32-unknown-unknown
+
 # Build the browser wasm bundle
 wasm-build:
     cd crates/crustyview-web && wasm-pack build --target web --out-dir web/pkg

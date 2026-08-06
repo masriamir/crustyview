@@ -8,3 +8,5 @@ crates/crustyview-web/web/pkg-node/
 *.wad
 *.WAD
 .DS_Store
+# AI planning artifacts — never committed
+docs/superpowers/
