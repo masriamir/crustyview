@@ -10,7 +10,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-crustyview-core = { path = "../crustyview-core" }
+crustyview-core = { path = "../crustyview-core", version = "0.1.0" }
 crustywad = "0.9"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
