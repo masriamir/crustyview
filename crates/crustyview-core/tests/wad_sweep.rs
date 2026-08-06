@@ -12,8 +12,8 @@
 //! texture-probe `Err` (e.g. Strife's sentinel negative patch counts) is allowed
 //! and must not prevent obtaining the summary/map.
 
-use crustyview::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
-use crustyview::summary::summarize_wad;
+use crustyview_core::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
+use crustyview_core::summary::summarize_wad;
 use crustywad::Wad;
 use std::path::PathBuf;
 

@@ -18,11 +18,11 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub fn analyze(bytes: Vec<u8>) -> Result<String, JsError> {
     let wad = Wad::from_bytes(bytes).map_err(js)?;
-    let summary = crate::summary::summarize_wad(&wad);
-    let map = crate::probe::probe_first_map(&wad);
+    let summary = crustyview_core::summary::summarize_wad(&wad);
+    let map = crustyview_core::probe::probe_first_map(&wad);
     // Best-effort, like the map probe: a texture-set parse error must not abort
     // the whole analysis — report `texture: null` and still return summary + map.
-    let texture = crate::probe::probe_first_texture_meta(&wad).unwrap_or(None);
+    let texture = crustyview_core::probe::probe_first_texture_meta(&wad).unwrap_or(None);
     let report = serde_json::json!({
         "summary": summary,
         "map": map,
@@ -44,7 +44,7 @@ pub fn analyze(bytes: Vec<u8>) -> Result<String, JsError> {
 #[wasm_bindgen]
 pub fn first_texture_rgba(bytes: Vec<u8>) -> Result<Vec<u8>, JsError> {
     let wad = Wad::from_bytes(bytes).map_err(js)?;
-    Ok(crate::probe::probe_first_texture(&wad)
+    Ok(crustyview_core::probe::probe_first_texture(&wad)
         .ok()
         .flatten()
         .map(|t| t.rgba)

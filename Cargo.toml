@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/crustyview"]
+members = ["crates/crustyview-core", "crates/crustyview"]
 resolver = "3"
 
 [workspace.package]
