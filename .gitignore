@@ -10,3 +10,7 @@ crates/crustyview-web/web/pkg-node/
 .DS_Store
 # AI planning artifacts — never committed
 docs/superpowers/
+# web app
+web/node_modules/
+web/dist/
+web/src/wasm/

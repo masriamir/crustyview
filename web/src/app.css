@@ -1,0 +1,29 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
+header { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 1.5rem; }
+.drop { flex: 1; min-width: 16rem; border: 2px dashed #888; border-radius: 8px; padding: 1rem; text-align: center; cursor: pointer; }
+.drop.dragging { border-color: #4a90d9; background: color-mix(in srgb, #4a90d9 8%, transparent); }
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+@media (max-width: 40rem) { .panels { grid-template-columns: 1fr; } }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; }
+dt { font-weight: 600; }
+dd { margin: 0; }
+.maps { columns: 3; padding-left: 1rem; font-family: ui-monospace, monospace; font-size: 0.9rem; }
+.status { color: #888; }
+.error { color: #d33; font-weight: 600; }
+.name { font-family: ui-monospace, monospace; }
+.filename { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+/* Checkerboard so transparent/masked texture pixels stay visible (ported from the old page). */
+.tex {
+  border: 1px solid #888;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%),
+    linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  max-width: 100%;
+}

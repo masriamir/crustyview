@@ -49,6 +49,29 @@ jobs:
       - uses: taiki-e/install-action@wasm-pack
       - run: wasm-pack test --node crates/crustyview-web
 
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@wasm-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build wasm into the app
+        run: cd crates/crustyview-web && wasm-pack build --target web --out-dir ../../web/src/wasm
+      - name: Install, check, test, build
+        working-directory: web
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+
   coverage:
     runs-on: ubuntu-latest
     steps:

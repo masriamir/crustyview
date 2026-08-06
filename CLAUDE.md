@@ -11,7 +11,8 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - `crates/crustyview-core/src/{summary,probe}.rs` — native-testable summarization + map/texture probes (no web deps).
 - `crates/crustyview-web/src/wad_document.rs` — the `WadDocument` wasm-bindgen handle (wasm32-only); `src/lib.rs` re-exports it.
 - `crates/crustyview-native/src/main.rs` — the portability-proving skeleton binary.
-- `crates/crustyview-web/web/` — the browser host page.
+- `web/` — the top-level Svelte + Vite + TypeScript browser host app (`just dev`); it consumes
+  `crustyview-web`'s wasm-bindgen `--target web` output (built into `web/src/wasm`, gitignored).
 
 ## Workflow
 - Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
