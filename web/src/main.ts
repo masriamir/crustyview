@@ -5,7 +5,7 @@ import App from './App.svelte';
 import './app.css';
 
 async function bootstrap(): Promise<void> {
-  await init(wasmUrl);
+  await init({ module_or_path: wasmUrl });
   const target = document.getElementById('app');
   if (target) mount(App, { target });
 }

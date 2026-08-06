@@ -22,5 +22,5 @@
   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } }}
 >
   <p>Drop a WAD here, or click to browse.</p>
-  <input bind:this={input} type="file" accept=".wad,.WAD" hidden onchange={(e) => pick(e.currentTarget.files)} />
+  <input bind:this={input} type="file" accept=".wad,.WAD" hidden onchange={(e) => { pick(e.currentTarget.files); e.currentTarget.value = ''; }} />
 </div>

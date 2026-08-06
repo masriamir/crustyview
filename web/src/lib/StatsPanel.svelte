@@ -16,7 +16,7 @@
   {#if mapNames.length > 0}
     <h3>Maps ({mapNames.length})</h3>
     <ul class="maps">
-      {#each mapNames as name (name)}<li>{name}</li>{/each}
+      {#each mapNames as name}<li>{name}</li>{/each}
     </ul>
   {/if}
 </section>
