@@ -10,17 +10,22 @@ class WadStore {
   textureMeta = $state<TextureMeta | null>(null);
   error = $state<string | null>(null);
   #doc: WadDocument | null = null;
+  #loadSeq = 0;
 
   async load(file: File): Promise<void> {
+    const seq = ++this.#loadSeq;
     this.phase = 'loading';
     this.error = null;
     let bytes: Uint8Array;
     try {
       bytes = new Uint8Array(await file.arrayBuffer());
     } catch {
-      this.#fail('Could not read the file.');
+      if (seq === this.#loadSeq) this.#fail('Could not read the file.');
       return;
     }
+    // A newer load() started while we awaited the bytes — let it own the state
+    // (don't clobber it or free its handle). Everything below here is synchronous.
+    if (seq !== this.#loadSeq) return;
     // Free any previously-held WAD before replacing it.
     this.#freeDoc();
     let doc: WadDocument;
