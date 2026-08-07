@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-08-06
 - **Deciders:** Amir Masri (with collaborative design)
-- **Tracking issue / PR:** #18 (`docs/18-adr-0003-viewer-ui-ux`)
+- **Tracking issue / PR:** #18 · PR #20 (`docs/18-adr-0003-viewer-ui-ux`)
 
 ## Context and problem statement
 
