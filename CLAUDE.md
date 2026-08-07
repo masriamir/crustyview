@@ -55,6 +55,10 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   architecture — a portable Rust/`wgpu` core (`crustyview-core`) behind a Svelte + TypeScript
   shell (`crustyview-web`), with `crustyview-native` proving portability; wgpu = 3D only,
   everything 2D/DOM in TypeScript.
+  [ADR-0003](../docs/adr/0003-viewer-ui-ux-sidebar-shell.md) records the viewer UI/UX —
+  a sidebar shell (header · tree · main view · status bar) with state-driven navigation
+  (no URL router), domain stores (`wad`/`nav`/`theme`), tokened light/dark theming, and a
+  first-class compact layout (bottom nav + push navigation below 48rem).
 
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
@@ -90,7 +94,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   so it is a process discipline: never merge over an unresolved thread or a red check.
 
 ## Not yet built (tracked on the board)
-- The Svelte + TypeScript shell, full stats dashboard, 2D map, and the wgpu 3D viewport —
-  **decided** (ADR-0002), staged across epics #7/#8 and milestones `Viewer shell` / `2D map`
-  / `3D viewport`.
+- The virtualized texture and lump browsers (need the `textureRgba(name)` contract change
+  and a lump-directory query), the 2D map (`map2d` query + canvas view), and the wgpu 3D
+  viewport — decided (ADR-0002/ADR-0003), staged across epics #7/#8 and milestones
+  `Viewer shell` / `2D map` / `3D viewport`.
 - Publishing / hosted deployment.
