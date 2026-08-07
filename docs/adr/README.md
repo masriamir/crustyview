@@ -35,3 +35,5 @@ choices don't need an ADR.
   a pinned-release Rust→WASM dependency (spike: GO)
 - [ADR-0002](0002-hybrid-portable-core-svelte-shell.md) — Hybrid UI: a
   portable Rust/`wgpu` core behind a Svelte + TypeScript web shell
+- [ADR-0003](0003-viewer-ui-ux-sidebar-shell.md) — Viewer UI/UX: sidebar
+  shell, state-driven navigation, tokened light/dark theming, mobile-capable
