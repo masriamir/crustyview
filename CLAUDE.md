@@ -8,7 +8,7 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - Urgent fixes only: uncomment the `[patch.crates-io]` git-main override in the root `Cargo.toml`.
 
 ## Layout
-- `crates/crustyview-core/src/{summary,probe,error}.rs` — native-testable summarization, map/texture probes, and user-facing load-error messages (no web deps).
+- `crates/crustyview-core/src/{summary,probe,error,map2d}.rs` — native-testable summarization, probes, load-error messages, and 2D map flattening (no web deps).
 - `crates/crustyview-web/src/wad_document.rs` — the `WadDocument` wasm-bindgen handle (wasm32-only); `src/lib.rs` re-exports it.
 - `crates/crustyview-native/src/main.rs` — the portability-proving skeleton binary.
 - `web/` — the top-level Svelte + Vite + TypeScript browser host app (`just dev`); it consumes
@@ -99,7 +99,6 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 
 ## Not yet built (tracked on the board)
 - The virtualized texture and lump browsers (need the `textureRgba(name)` contract change
-  and a lump-directory query), the 2D map (`map2d` query + canvas view), and the wgpu 3D
-  viewport — decided (ADR-0002/ADR-0003), staged across epics #7/#8 and milestones
-  `Viewer shell` / `2D map` / `3D viewport`.
+  and a lump-directory query) and the wgpu 3D viewport — decided (ADR-0002/ADR-0003), staged
+  across epics #7/#8 and milestones `Viewer shell` / `2D map` / `3D viewport`.
 - Publishing / hosted deployment.
