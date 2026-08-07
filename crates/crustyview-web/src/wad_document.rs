@@ -3,7 +3,7 @@
 //! The parsed `Wad` stays in wasm memory; only small JSON strings and byte
 //! buffers cross to JavaScript (the ADR-0002 boundary rule).
 
-use crustyview_core::{error, probe, summary};
+use crustyview_core::{error, map2d, probe, summary};
 use crustywad::Wad;
 use wasm_bindgen::prelude::*;
 
@@ -39,6 +39,17 @@ impl WadDocument {
     #[wasm_bindgen(js_name = mapNames)]
     pub fn map_names(&self) -> Vec<String> {
         self.wad.map_groups().into_iter().map(|g| g.name).collect()
+    }
+
+    /// JSON [`Map2d`](crustyview_core::map2d::Map2d) for the named map, or
+    /// the string `"null"` when the map is missing or fails to assemble.
+    #[must_use]
+    #[wasm_bindgen(js_name = map2d)]
+    pub fn map2d(&self, name: &str) -> String {
+        match map2d::map2d(&self.wad, name) {
+            Some(m) => serde_json::to_string(&m).unwrap_or_else(|_| "null".to_owned()),
+            None => "null".to_owned(),
+        }
     }
 
     /// JSON [`TextureMeta`](crustyview_core::probe::TextureMeta) for the first

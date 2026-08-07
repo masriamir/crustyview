@@ -50,6 +50,15 @@ for (const f of files) {
       for (let i = 3; i < rgba.length; i += 4) if (rgba[i] > 0) op++;
       const tot = rgba.length / 4;
       row += pad(rgba.length, 8) + (tot ? ((100 * op) / tot).toFixed(1) + "%" : "-");
+
+      for (const name of doc.mapNames()) {
+        const json = doc.map2d(name);
+        try {
+          JSON.parse(json);
+        } catch (e) {
+          throw new Error("map2d(" + name + ") returned unparseable JSON: " + e.message);
+        }
+      }
     } finally {
       doc.free();
     }
