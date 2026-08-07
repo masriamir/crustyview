@@ -23,12 +23,14 @@
         type="button"
         class="disclosure"
         {disabled}
-        aria-expanded={mapsExpanded}
+        aria-expanded={wad.mapNames.length > 0 ? mapsExpanded : undefined}
         aria-controls={wad.mapNames.length > 0 ? 'sidebar-map-entries' : undefined}
         onclick={() => (mapsExpanded = !mapsExpanded)}
       >
         Maps
-        <span class="chevron" aria-hidden="true">{mapsExpanded ? '▾' : '▸'}</span>
+        {#if wad.mapNames.length > 0}
+          <span class="chevron" aria-hidden="true">{mapsExpanded ? '▾' : '▸'}</span>
+        {/if}
       </button>
       {#if wad.mapNames.length > 0}
         <ul class="map-entries" id="sidebar-map-entries" hidden={!mapsExpanded}>
