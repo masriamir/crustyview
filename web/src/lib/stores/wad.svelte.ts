@@ -1,5 +1,5 @@
 import { WadDocument } from '../../wasm/crustyview_web.js';
-import type { TextureMeta, WadSummary } from '../format';
+import type { Map2d, TextureMeta, WadSummary } from '../format';
 
 type Phase = 'empty' | 'loading' | 'loaded' | 'error';
 
@@ -12,6 +12,7 @@ export class WadStore {
   fileName = $state<string | null>(null);
   #doc: WadDocument | null = null;
   #loadSeq = 0;
+  #map2dCache = new Map<string, Map2d | null>();
 
   async load(file: File): Promise<void> {
     const seq = ++this.#loadSeq;
@@ -29,6 +30,7 @@ export class WadStore {
     if (seq !== this.#loadSeq) return;
     // Free any previously-held WAD before replacing it.
     this.#freeDoc();
+    this.#map2dCache.clear();
     let doc: WadDocument;
     try {
       doc = WadDocument.load(bytes);
@@ -60,8 +62,22 @@ export class WadStore {
     return rgba.length === width * height * 4 ? rgba : null;
   }
 
+  /** Flattened 2D geometry for a map, cached per name; null when unavailable. */
+  map2d(name: string): Map2d | null {
+    if (!this.#doc) return null;
+    if (!this.#map2dCache.has(name)) {
+      try {
+        this.#map2dCache.set(name, JSON.parse(this.#doc.map2d(name)) as Map2d | null);
+      } catch {
+        this.#map2dCache.set(name, null);
+      }
+    }
+    return this.#map2dCache.get(name) ?? null;
+  }
+
   reset(): void {
     this.#freeDoc();
+    this.#map2dCache.clear();
     this.phase = 'empty';
     this.summary = null;
     this.mapNames = [];
@@ -72,6 +88,7 @@ export class WadStore {
 
   #fail(message: string): void {
     this.#freeDoc();
+    this.#map2dCache.clear();
     this.phase = 'error';
     this.error = message;
     this.summary = null;
