@@ -104,3 +104,39 @@ jobs:
         run: ./scripts/fetch-freedoom.sh "$RUNNER_TEMP/freedoom"
       - name: Sweep Freedoom
         run: CRUSTYVIEW_WAD_DIR="$RUNNER_TEMP/freedoom" cargo test -p crustyview-core --test wad_sweep --all-features -- --nocapture
+
+  web-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@wasm-pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Fetch Freedoom
+        run: ./scripts/fetch-freedoom.sh .freedoom
+      - name: Build wasm into the app
+        run: cd crates/crustyview-web && wasm-pack build --target web --out-dir ../../web/src/wasm
+      - name: Install and build the app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Install Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E smoke
+        working-directory: web
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7

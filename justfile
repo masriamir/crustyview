@@ -51,3 +51,11 @@ sweep-wasm dir:
 # Fetch Freedoom (GPL) WADs into a directory
 fetch-freedoom dir=".freedoom" version="0.13.0":
     ./scripts/fetch-freedoom.sh "{{dir}}" "{{version}}"
+
+# Playwright E2E smoke (fixtures: `just fetch-freedoom` once; browser: `just e2e-install` once)
+e2e: build-web
+    cd web && npx playwright test
+
+# One-time: install the Playwright Chromium browser
+e2e-install:
+    cd web && npx playwright install chromium

@@ -73,6 +73,10 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 - `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.
 - CI runs the sweep automatically (`sweep-freedoom` job) against fetched Freedoom;
   commercial IWADs stay local-only.
+- **E2E smoke:** Playwright specs in `web/e2e/` drive the built app in headless Chromium at
+  desktop and mobile viewports (`just e2e`; one-time `just e2e-install` + `just fetch-freedoom`).
+  Specs skip when the `.freedoom/` fixtures are absent. CI runs them in the `web-e2e` job
+  (fetches Freedoom itself); the job is a smoke signal, not a merge gate.
 ## Copilot review loop
 - Every non-draft PR is auto-requested for **Copilot** review by
   `.github/workflows/copilot-review.yml`. This exists because a private repo on a free
