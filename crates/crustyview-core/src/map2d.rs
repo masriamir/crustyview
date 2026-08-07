@@ -278,4 +278,63 @@ mod tests {
         assert!(json.contains("\"type_id\""));
         assert!(json.contains("\"one_sided\""));
     }
+
+    /// Build a PWAD with an empty map: all five lumps present but zero-length.
+    /// Tests the zero-area bounds fallback when no geometry exists.
+    fn empty_pwad() -> Wad {
+        fn name8(n: &str) -> [u8; 8] {
+            let mut b = [0u8; 8];
+            b[..n.len()].copy_from_slice(n.as_bytes());
+            b
+        }
+        // Empty lump payloads
+        let vertexes: Vec<u8> = Vec::new();
+        let linedefs: Vec<u8> = Vec::new();
+        let sidedefs: Vec<u8> = Vec::new();
+        let sectors: Vec<u8> = Vec::new();
+        let things: Vec<u8> = Vec::new();
+
+        // Assemble the PWAD: header + lumps + directory.
+        let lumps: [(&str, &[u8]); 6] = [
+            ("MAP01", &[]),
+            ("THINGS", &things),
+            ("LINEDEFS", &linedefs),
+            ("SIDEDEFS", &sidedefs),
+            ("VERTEXES", &vertexes),
+            ("SECTORS", &sectors),
+        ];
+        let mut body = Vec::new();
+        let mut directory = Vec::new();
+        for (name, data) in lumps {
+            let filepos = 12 + body.len();
+            body.extend_from_slice(data);
+            directory.extend_from_slice(&i32::try_from(filepos).unwrap().to_le_bytes());
+            directory.extend_from_slice(&i32::try_from(data.len()).unwrap().to_le_bytes());
+            directory.extend_from_slice(&name8(name));
+        }
+        let mut bytes = b"PWAD".to_vec();
+        bytes.extend_from_slice(&6i32.to_le_bytes());
+        bytes.extend_from_slice(&i32::try_from(12 + body.len()).unwrap().to_le_bytes());
+        bytes.extend_from_slice(&body);
+        bytes.extend_from_slice(&directory);
+        Wad::from_bytes(bytes).expect("empty PWAD parses")
+    }
+
+    #[test]
+    fn empty_map_yields_zero_bounds() {
+        let m = map2d(&empty_pwad(), "MAP01").expect("assembles empty map");
+        assert_eq!(m.name, "MAP01");
+        assert_eq!(m.lines.len(), 0, "empty map has no lines");
+        assert_eq!(m.things.len(), 0, "empty map has no things");
+        assert_eq!(
+            (
+                m.bounds.min_x,
+                m.bounds.min_y,
+                m.bounds.max_x,
+                m.bounds.max_y
+            ),
+            (0.0, 0.0, 0.0, 0.0),
+            "empty map yields zero-area bounds at origin"
+        );
+    }
 }
