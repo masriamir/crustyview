@@ -309,6 +309,13 @@
     width: 100%;
     height: 100%;
   }
+  /* The canvas fills its container exactly and `.map2d` clips overflow, so the
+     global focus ring (drawn outside the border box) would be invisible. Pull it
+     inside instead — a keyboard tab stop must show where focus is. */
+  canvas:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
   .empty {
     position: absolute;
     inset: 0;
