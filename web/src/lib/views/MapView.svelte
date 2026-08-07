@@ -1,5 +1,6 @@
 <script lang="ts">
   import SegmentedControl from '../ui/SegmentedControl.svelte';
+  import Map2d from './map2d/Map2d.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
 
   interface Props {
@@ -42,7 +43,7 @@
     />
   </div>
   {#if nav.mapMode === '2d'}
-    <div class="placeholder"><p>The 2D top-down view of {name} arrives with phase 1.</p></div>
+    <Map2d {name} />
   {:else}
     <div class="placeholder"><p>The 3D viewport arrives with phase 3.</p></div>
   {/if}
