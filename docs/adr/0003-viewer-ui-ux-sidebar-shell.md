@@ -1,6 +1,6 @@
 # ADR-0003: Viewer UI/UX — sidebar shell, state-driven navigation, tokened theming
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-06
 - **Deciders:** Amir Masri (with collaborative design)
 - **Tracking issue / PR:** #18 · PR #20 (`docs/18-adr-0003-viewer-ui-ux`)
