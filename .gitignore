@@ -14,3 +14,8 @@ docs/superpowers/
 web/node_modules/
 web/dist/
 web/src/wasm/
+
+# playwright e2e
+web/playwright-report/
+web/test-results/
+/.freedoom/
