@@ -1,6 +1,6 @@
 # ADR-0002: Hybrid UI architecture — a portable Rust/wgpu core behind a Svelte web shell
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-05
 - **Deciders:** Amir Masri (with collaborative design)
 - **Tracking issue / PR:** #12 · PR #6 (`docs/adr-0002-ui-architecture`)
