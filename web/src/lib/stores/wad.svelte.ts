@@ -3,7 +3,7 @@ import type { TextureMeta, WadSummary } from '../format';
 
 type Phase = 'empty' | 'loading' | 'loaded' | 'error';
 
-class WadStore {
+export class WadStore {
   phase = $state<Phase>('empty');
   summary = $state<WadSummary | null>(null);
   mapNames = $state<string[]>([]);
