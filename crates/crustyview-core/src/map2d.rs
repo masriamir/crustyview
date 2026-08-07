@@ -133,7 +133,12 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
         max_x: xs.fold(f64::NEG_INFINITY, f64::max),
         max_y: ys.fold(f64::NEG_INFINITY, f64::max),
     };
-    let bounds = if bounds.min_x.is_finite() {
+    // All four must be finite: an empty map leaves the folds at ±infinity,
+    // and a pathological (UDMF) coordinate can poison any single side.
+    let finite = [bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y]
+        .iter()
+        .all(|v| v.is_finite());
+    let bounds = if finite {
         bounds
     } else {
         Bounds {
