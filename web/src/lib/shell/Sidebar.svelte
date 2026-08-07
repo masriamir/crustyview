@@ -38,6 +38,7 @@
             <li>
               <button
                 type="button"
+                {disabled}
                 aria-current={nav.section === 'maps' && nav.selectedMap === name
                   ? 'page'
                   : undefined}
