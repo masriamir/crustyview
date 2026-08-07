@@ -1,8 +1,13 @@
 <script lang="ts">
   import { wad } from './lib/stores/wad.svelte';
+  import { theme } from './lib/stores/theme.svelte';
   import FileDrop from './lib/FileDrop.svelte';
   import StatsPanel from './lib/StatsPanel.svelte';
   import TexturePreview from './lib/TexturePreview.svelte';
+
+  $effect(() => {
+    document.documentElement.dataset.theme = theme.resolved;
+  });
 </script>
 
 <main>

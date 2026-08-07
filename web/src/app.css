@@ -1,6 +1,60 @@
-:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-* { box-sizing: border-box; }
-body { margin: 0; }
+/* ---- Design tokens (ADR-0003) — components consume tokens only. ---- */
+:root {
+  color-scheme: light;
+  --bg: #f5f4f1;
+  --bg-raised: #ffffff;
+  --text: #1d1c1a;
+  --text-muted: #6b675f;
+  --border: #d8d5cf;
+  --accent: #bf3a1e; /* PLAYPAL red-orange range */
+  --accent-contrast: #ffffff;
+  --danger: #c22a1e;
+  --checker-a: #ffffff;
+  --checker-b: #cccccc;
+  --font-ui: system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 6px;
+  --transition: 150ms ease;
+  --touch-target: 44px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #17181a;
+  --bg-raised: #212327;
+  --text: #e8e6e3;
+  --text-muted: #9a968f;
+  --border: #3a3d42;
+  --accent: #ff6a33;
+  --accent-contrast: #1d1c1a;
+  --danger: #ff5f4d;
+  --checker-a: #2a2d31;
+  --checker-b: #43474d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition: 0ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- legacy POC styles (removed during shell assembly) --- */
 main { max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
 header { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
 h1 { margin: 0; font-size: 1.5rem; }
