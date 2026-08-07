@@ -4,11 +4,13 @@
 </script>
 
 <div class="status-bar" role="status">
-  {#if wad.summary}
+  {#if wad.phase === 'loaded' && wad.summary}
     <span>{wad.summary.kind}</span>
     <span>{wad.summary.lump_count} lumps</span>
     <span>{wad.summary.map_count} maps</span>
     {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
+  {:else if wad.phase === 'loading'}
+    <span>Loading…</span>
   {:else}
     <span>No WAD loaded</span>
   {/if}

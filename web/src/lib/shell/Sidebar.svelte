@@ -4,6 +4,7 @@
 
   let mapsExpanded = $state(true);
   const disabled = $derived(wad.phase !== 'loaded');
+  const hasMaps = $derived(wad.phase === 'loaded' && wad.mapNames.length > 0);
 </script>
 
 <nav class="sidebar" aria-label="Sections">
@@ -23,16 +24,16 @@
         type="button"
         class="disclosure"
         {disabled}
-        aria-expanded={wad.mapNames.length > 0 ? mapsExpanded : undefined}
-        aria-controls={wad.mapNames.length > 0 ? 'sidebar-map-entries' : undefined}
+        aria-expanded={hasMaps ? mapsExpanded : undefined}
+        aria-controls={hasMaps ? 'sidebar-map-entries' : undefined}
         onclick={() => (mapsExpanded = !mapsExpanded)}
       >
         Maps
-        {#if wad.mapNames.length > 0}
+        {#if hasMaps}
           <span class="chevron" aria-hidden="true">{mapsExpanded ? '▾' : '▸'}</span>
         {/if}
       </button>
-      {#if wad.mapNames.length > 0}
+      {#if hasMaps}
         <ul class="map-entries" id="sidebar-map-entries" hidden={!mapsExpanded}>
           {#each wad.mapNames as name (name)}
             <li>

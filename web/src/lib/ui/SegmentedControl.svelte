@@ -26,9 +26,9 @@
         if (!opt.disabled && opt.value !== value) onchange(opt.value);
       }}
     >
-      {opt.label}{#if opt.disabled && opt.disabledReason}<span class="visually-hidden">
-          — {opt.disabledReason}</span
-        >{/if}
+      {opt.label}{#if opt.disabled && opt.disabledReason}
+        <span class="visually-hidden">— {opt.disabledReason}</span>
+      {/if}
     </button>
   {/each}
 </div>

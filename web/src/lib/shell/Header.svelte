@@ -8,7 +8,7 @@
 
 <header class="header">
   <h1>crustyview</h1>
-  {#if wad.fileName}<span class="file">{wad.fileName}</span>{/if}
+  {#if wad.phase === 'loaded' && wad.fileName}<span class="file">{wad.fileName}</span>{/if}
   <span class="spacer"></span>
   <button type="button" class="open" onclick={() => input.click()}>Open</button>
   <input
