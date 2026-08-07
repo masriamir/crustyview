@@ -10,7 +10,10 @@
     <span>{wad.summary.lump_count} lumps</span>
     <span>{wad.summary.map_count} maps</span>
     {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
-    {#if mapCursor.pos}<span>({mapCursor.pos.x}, {mapCursor.pos.y})</span>{/if}
+    <!-- `aria-hidden`: this bar is a polite live region, and the coordinates change
+         on every hover move — announcing them would talk over everything else. They
+         are a visual readout for a pointer-only interaction, so nothing is lost. -->
+    {#if mapCursor.pos}<span aria-hidden="true">({mapCursor.pos.x}, {mapCursor.pos.y})</span>{/if}
   {:else if wad.phase === 'loading'}
     <span>Loading…</span>
   {:else}

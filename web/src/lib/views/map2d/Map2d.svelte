@@ -321,7 +321,11 @@
 
   function handlePointerDown(e: PointerEvent): void {
     const el = canvas;
-    if (!el) return;
+    // Primary button only. A right-click would otherwise capture the pointer and
+    // join the active set, and the native context menu can swallow the matching
+    // `pointerup` — leaving bare mouse moves panning the map. Touch and pen
+    // contact both report button 0, so this does not cost us pinch.
+    if (!el || e.button !== 0) return;
     // Keep receiving moves once the drag leaves the canvas, and take focus so the
     // keyboard controls work without a separate tab stop hunt.
     el.setPointerCapture(e.pointerId);
@@ -481,6 +485,7 @@
       onpointermove={handlePointerMove}
       onpointerup={handlePointerUp}
       onpointercancel={handlePointerUp}
+      onlostpointercapture={handlePointerUp}
       onpointerleave={() => mapCursor.clear()}
       ondblclick={refit}
       onkeydown={handleKeyDown}
