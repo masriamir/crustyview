@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mapCursor } from '../stores/mapCursor.svelte';
   import { nav } from '../stores/nav.svelte';
   import { wad } from '../stores/wad.svelte';
 </script>
@@ -9,6 +10,7 @@
     <span>{wad.summary.lump_count} lumps</span>
     <span>{wad.summary.map_count} maps</span>
     {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
+    {#if mapCursor.pos}<span>({mapCursor.pos.x}, {mapCursor.pos.y})</span>{/if}
   {:else if wad.phase === 'loading'}
     <span>Loading…</span>
   {:else}
