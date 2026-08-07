@@ -2,7 +2,18 @@
 #![cfg(target_arch = "wasm32")]
 
 use crustyview_web::WadDocument;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_test::wasm_bindgen_test;
+
+/// The `message` of the `Error` a failed [`WadDocument::load`] rejects with.
+fn load_error_message(bytes: &[u8]) -> String {
+    let Err(err) = WadDocument::load(bytes.to_vec()) else {
+        panic!("load must fail")
+    };
+    let js: wasm_bindgen::JsValue = err.into();
+    let error: js_sys::Error = js.dyn_into().expect("a JS Error");
+    String::from(error.message())
+}
 
 /// A 12-byte empty PWAD: magic `PWAD`, `numlumps = 0`, `infotableofs = 12`.
 fn empty_pwad() -> Vec<u8> {
@@ -31,5 +42,15 @@ fn loads_and_summarizes_empty_pwad() {
 
 #[wasm_bindgen_test]
 fn rejects_non_wad_bytes() {
-    assert!(WadDocument::load(b"not a wad".to_vec()).is_err());
+    assert!(WadDocument::load(b"NOPE12345678".to_vec()).is_err());
+    assert!(load_error_message(b"NOPE12345678").contains("invalid WAD magic"));
+}
+
+#[wasm_bindgen_test]
+fn sub_header_bytes_reject_with_clean_message() {
+    let message = load_error_message(b"tiny");
+    assert_eq!(
+        message,
+        "failed to parse WAD header: unexpected end of input"
+    );
 }

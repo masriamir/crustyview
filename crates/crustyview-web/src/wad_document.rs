@@ -3,7 +3,7 @@
 //! The parsed `Wad` stays in wasm memory; only small JSON strings and byte
 //! buffers cross to JavaScript (the ADR-0002 boundary rule).
 
-use crustyview_core::{probe, summary};
+use crustyview_core::{error, probe, summary};
 use crustywad::Wad;
 use wasm_bindgen::prelude::*;
 
@@ -21,7 +21,8 @@ impl WadDocument {
     ///
     /// Returns a `JsError` when `bytes` are not a valid WAD.
     pub fn load(bytes: Vec<u8>) -> Result<WadDocument, JsError> {
-        let wad = Wad::from_bytes(bytes).map_err(|e| JsError::new(&e.to_string()))?;
+        let wad =
+            Wad::from_bytes(bytes).map_err(|e| JsError::new(&error::load_error_message(&e)))?;
         Ok(WadDocument { wad })
     }
 
