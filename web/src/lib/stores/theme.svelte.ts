@@ -25,7 +25,7 @@ export class ThemeStore {
     if (stored === 'light' || stored === 'dark') this.preference = stored;
     const query = window.matchMedia?.('(prefers-color-scheme: dark)');
     this.#systemDark = query?.matches ?? false;
-    query?.addEventListener('change', (e) => {
+    query?.addEventListener?.('change', (e) => {
       this.#systemDark = e.matches;
     });
   }
