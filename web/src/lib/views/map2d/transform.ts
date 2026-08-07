@@ -25,7 +25,7 @@ export function fitTransform(
   const w = bounds.max_x - bounds.min_x;
   const h = bounds.max_y - bounds.min_y;
   const scale =
-    w > 0 && h > 0
+    w > 0 && h > 0 && width > 2 * margin && height > 2 * margin
       ? Math.min((width - 2 * margin) / w, (height - 2 * margin) / h)
       : 1;
   const cx = (bounds.min_x + bounds.max_x) / 2;

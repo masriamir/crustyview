@@ -17,6 +17,11 @@ describe('fitTransform', () => {
     expect(t.scale).toBe(1);
     expect(mapToScreen(t, 5, 5)).toEqual({ x: 50, y: 50 });
   });
+  it('viewport smaller than the margins falls back to scale 1 centered', () => {
+    const t = fitTransform(bounds, 0, 0, 24);
+    expect(t.scale).toBe(1);
+    expect(mapToScreen(t, 100, 50)).toEqual({ x: 0, y: 0 }); // bounds center at viewport center
+  });
 });
 
 describe('round-trip', () => {
