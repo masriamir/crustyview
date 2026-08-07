@@ -1,5 +1,5 @@
-import { WadDocument } from '../wasm/crustyview_web.js';
-import type { TextureMeta, WadSummary } from './format';
+import { WadDocument } from '../../wasm/crustyview_web.js';
+import type { TextureMeta, WadSummary } from '../format';
 
 type Phase = 'empty' | 'loading' | 'loaded' | 'error';
 
