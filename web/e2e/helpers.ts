@@ -59,3 +59,32 @@ export async function expectTextureCanvasPainted(page: Page): Promise<void> {
     )
     .toBe(true);
 }
+
+/**
+ * Assert the 2D map view's canvas has painted more than its background fill.
+ * The map always fills the backing buffer with a solid color first, so
+ * "painted" here means at least two distinct pixel colors — a single-color
+ * buffer (the any-nonzero check `expectTextureCanvasPainted` uses would still
+ * pass on a solid non-black fill) would be a false positive for this canvas.
+ */
+export async function expectMapCanvasPainted(page: Page): Promise<void> {
+  const canvas = page.getByRole('img', { name: /2D map of/ });
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const c = element as HTMLCanvasElement;
+        const ctx = c.getContext('2d');
+        if (!ctx || c.width === 0 || c.height === 0) return false;
+        const { data } = ctx.getImageData(0, 0, c.width, c.height);
+        const [r0, g0, b0, a0] = data;
+        for (let i = 4; i < data.length; i += 4) {
+          if (data[i] !== r0 || data[i + 1] !== g0 || data[i + 2] !== b0 || data[i + 3] !== a0) {
+            return true;
+          }
+        }
+        return false;
+      }),
+    )
+    .toBe(true);
+}
