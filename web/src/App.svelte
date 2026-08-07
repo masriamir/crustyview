@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { wad } from './lib/wad.svelte';
+  import { wad } from './lib/stores/wad.svelte';
   import FileDrop from './lib/FileDrop.svelte';
   import StatsPanel from './lib/StatsPanel.svelte';
   import TexturePreview from './lib/TexturePreview.svelte';
