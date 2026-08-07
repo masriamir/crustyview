@@ -48,6 +48,14 @@ test.describe('mobile shell smoke', () => {
   });
 
   test('2D map view renders full-screen and survives a drag pan', async ({ page }) => {
+    // Playwright does not fail a test on an uncaught page exception by
+    // default, and a mid-handler throw in the pointer handlers wouldn't
+    // necessarily un-paint the canvas (the last fully-drawn frame stays put)
+    // — so "must not throw" needs its own explicit assertion, not just the
+    // paint check below. Attached before any interaction for full coverage.
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err));
+
     await gotoApp(page);
     await loadWad(page, 'freedoom1.wad');
 
@@ -70,5 +78,6 @@ test.describe('mobile shell smoke', () => {
     await page.mouse.up();
 
     await expectMapCanvasPainted(page);
+    expect(pageErrors).toEqual([]);
   });
 });
