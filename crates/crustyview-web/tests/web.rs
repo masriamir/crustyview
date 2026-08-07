@@ -5,7 +5,7 @@ use crustyview_web::WadDocument;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::wasm_bindgen_test;
 
-/// The `message` of the `Error` a failed [`WadDocument::load`] rejects with.
+/// The `message` of the `Error` a failed [`WadDocument::load`] throws.
 fn load_error_message(bytes: &[u8]) -> String {
     let Err(err) = WadDocument::load(bytes.to_vec()) else {
         panic!("load must fail")
