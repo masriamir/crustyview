@@ -54,3 +54,9 @@ fn sub_header_bytes_reject_with_clean_message() {
         "failed to parse WAD header: unexpected end of input"
     );
 }
+
+#[wasm_bindgen_test]
+fn map2d_of_missing_map_is_null() {
+    let doc = WadDocument::load(empty_pwad()).expect("valid WAD");
+    assert_eq!(doc.map2d("MAP01"), "null");
+}

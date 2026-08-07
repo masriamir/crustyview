@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { expectTextureCanvasPainted, gotoApp, haveFixtures, loadWad } from './helpers';
+import {
+  expectMapCanvasPainted,
+  expectTextureCanvasPainted,
+  gotoApp,
+  haveFixtures,
+  loadWad,
+} from './helpers';
 
 test.describe('mobile shell smoke', () => {
   test.skip(!haveFixtures, 'Freedoom fixtures missing — run `just fetch-freedoom` first');
@@ -39,5 +45,39 @@ test.describe('mobile shell smoke', () => {
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     expect(overflow).toBe(false);
+  });
+
+  test('2D map view renders full-screen and survives a drag pan', async ({ page }) => {
+    // Playwright does not fail a test on an uncaught page exception by
+    // default, and a mid-handler throw in the pointer handlers wouldn't
+    // necessarily un-paint the canvas (the last fully-drawn frame stays put)
+    // — so "must not throw" needs its own explicit assertion, not just the
+    // paint check below. Attached before any interaction for full coverage.
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err));
+
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+
+    await page.locator('nav.bottom-nav').getByRole('button', { name: 'Maps' }).click();
+    await page.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Map E1M1' })).toBeVisible();
+    await expectMapCanvasPainted(page);
+
+    const canvas = page.getByRole('img', { name: /2D map of/ });
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('map canvas has no layout box');
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+
+    // A touch-context pointer drag (down, move, up) must not throw, and the
+    // canvas must still be painted afterward (not blanked by the pan).
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx - 40, cy - 40, { steps: 5 });
+    await page.mouse.up();
+
+    await expectMapCanvasPainted(page);
+    expect(pageErrors).toEqual([]);
   });
 });

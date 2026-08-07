@@ -90,6 +90,7 @@ dependencies = [
  "binrw",
  "crustywad",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

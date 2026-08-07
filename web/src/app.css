@@ -11,6 +11,14 @@
   --danger: #c22a1e;
   --checker-a: #ffffff;
   --checker-b: #cccccc;
+  /* 2D automap (theme style) — warm dark ink on paper-light ground. */
+  --map2d-bg: #fbfaf7;
+  --map2d-grid: #e3e0d9;
+  --map2d-wall: #bf3a1e; /* the shell accent carries the solid walls */
+  --map2d-two-sided: #8f8a80;
+  --map2d-secret: #a8760a;
+  --map2d-thing: #6b675f;
+  --map2d-player: #1f7a4d;
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 6px;
@@ -30,6 +38,13 @@
   --danger: #ff5f4d;
   --checker-a: #2a2d31;
   --checker-b: #43474d;
+  --map2d-bg: #101114;
+  --map2d-grid: #292c31;
+  --map2d-wall: #ff6a33;
+  --map2d-two-sided: #7f837f;
+  --map2d-secret: #ffc848;
+  --map2d-thing: #9a968f;
+  --map2d-player: #4fd28a;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -6,5 +6,6 @@
 //! (`crustyview-native`). See ADR-0002.
 
 pub mod error;
+pub mod map2d;
 pub mod probe;
 pub mod summary;

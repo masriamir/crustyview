@@ -12,9 +12,11 @@
 //! texture-probe `Err` (e.g. Strife's sentinel negative patch counts) is allowed
 //! and must not prevent obtaining the summary/map.
 
+use crustyview_core::map2d::map2d;
 use crustyview_core::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
 use crustyview_core::summary::summarize_wad;
 use crustywad::Wad;
+use crustywad::map::Map;
 use std::path::PathBuf;
 
 #[test]
@@ -54,6 +56,36 @@ fn sweep_wad_collection() {
                 map.is_some(),
                 "{name}: {} map group(s) detected but the first map did not assemble",
                 summary.map_count
+            );
+        }
+
+        // map2d must flatten every group whose Map::assemble succeeds — same
+        // tolerance the sweep already applies to assembly failures elsewhere.
+        for group in wad.map_groups() {
+            if Map::assemble(&wad, &group).is_err() {
+                continue;
+            }
+            let flattened = map2d(&wad, &group.name);
+            let m = flattened.unwrap_or_else(|| {
+                panic!(
+                    "{name}: map group {:?} assembled but map2d returned None",
+                    group.name
+                )
+            });
+            assert!(
+                m.bounds.min_x <= m.bounds.max_x && m.bounds.min_y <= m.bounds.max_y,
+                "{name}: map group {:?} has inverted bounds {:?}",
+                group.name,
+                m.bounds
+            );
+            assert!(
+                m.bounds.min_x.is_finite()
+                    && m.bounds.min_y.is_finite()
+                    && m.bounds.max_x.is_finite()
+                    && m.bounds.max_y.is_finite(),
+                "{name}: map group {:?} has non-finite bounds {:?}",
+                group.name,
+                m.bounds
             );
         }
 

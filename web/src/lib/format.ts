@@ -14,6 +14,14 @@ export interface TextureMeta {
   height: number;
 }
 
+/** JSON shape returned by `WadDocument.map2d(name)` (or `null`). */
+export interface Map2d {
+  name: string;
+  bounds: { min_x: number; min_y: number; max_x: number; max_y: number };
+  lines: { x1: number; y1: number; x2: number; y2: number; kind: 'one_sided' | 'two_sided' | 'secret' }[];
+  things: { x: number; y: number; angle: number; type_id: number }[];
+}
+
 /** A label/value pair for the stats panel. */
 export interface StatRow {
   label: string;
