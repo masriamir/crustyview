@@ -63,5 +63,8 @@
     .file {
       display: none;
     }
+    .open {
+      min-height: var(--touch-target);
+    }
   }
 </style>

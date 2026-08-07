@@ -29,6 +29,7 @@
       }}
       ondragleave={() => (dragging = false)}
       ondrop={(e) => {
+        e.stopPropagation();
         e.preventDefault();
         dragging = false;
         pick(e.dataTransfer?.files);

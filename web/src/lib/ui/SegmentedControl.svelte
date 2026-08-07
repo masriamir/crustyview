@@ -60,4 +60,9 @@
     color: var(--text-muted);
     cursor: not-allowed;
   }
+  @media (max-width: 48rem) {
+    .segment {
+      min-height: var(--touch-target);
+    }
+  }
 </style>
