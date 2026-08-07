@@ -20,13 +20,15 @@
       type="button"
       class="segment"
       aria-pressed={opt.value === value}
-      disabled={opt.disabled}
+      aria-disabled={opt.disabled ? true : undefined}
       title={opt.disabled ? opt.disabledReason : undefined}
       onclick={() => {
-        if (opt.value !== value) onchange(opt.value);
+        if (!opt.disabled && opt.value !== value) onchange(opt.value);
       }}
     >
-      {opt.label}
+      {opt.label}{#if opt.disabled && opt.disabledReason}<span class="visually-hidden">
+          — {opt.disabledReason}</span
+        >{/if}
     </button>
   {/each}
 </div>
@@ -56,9 +58,17 @@
     background: var(--accent);
     color: var(--accent-contrast);
   }
-  .segment:disabled {
+  .segment[aria-disabled='true'] {
     color: var(--text-muted);
     cursor: not-allowed;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   @media (max-width: 48rem) {
     .segment {

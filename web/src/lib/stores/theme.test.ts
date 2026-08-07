@@ -28,6 +28,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('ThemeStore', () => {
@@ -95,5 +96,25 @@ describe('ThemeStore', () => {
     const theme = new ThemeStore();
     setDark(true);
     expect(theme.resolved).toBe('light');
+  });
+
+  it('falls back to the system preference when storage reads are blocked', () => {
+    stubMatchMedia(true);
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const theme = new ThemeStore();
+    expect(theme.preference).toBe('system');
+    expect(theme.resolved).toBe('dark');
+  });
+
+  it('toggle still applies for the session when storage writes are blocked', () => {
+    stubMatchMedia(false);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const theme = new ThemeStore();
+    theme.toggle();
+    expect(theme.resolved).toBe('dark');
   });
 });

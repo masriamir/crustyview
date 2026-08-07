@@ -16,7 +16,12 @@ export class ThemeStore {
   #systemDark = $state(false);
 
   constructor() {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // Blocked storage (private mode, storage disabled) — follow the system.
+    }
     if (stored === 'light' || stored === 'dark') this.preference = stored;
     const query = window.matchMedia?.('(prefers-color-scheme: dark)');
     this.#systemDark = query?.matches ?? false;
@@ -34,7 +39,11 @@ export class ThemeStore {
   toggle(): void {
     const next: ResolvedTheme = this.resolved === 'dark' ? 'light' : 'dark';
     this.preference = next;
-    localStorage.setItem(STORAGE_KEY, next);
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // Blocked storage — the override still applies for this session.
+    }
   }
 }
 
