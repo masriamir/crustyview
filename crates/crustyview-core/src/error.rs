@@ -90,6 +90,11 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_drops_a_bare_escape_without_csi() {
+        assert_eq!(sanitize("a\u{1b}z"), "az");
+    }
+
+    #[test]
     fn sanitize_leaves_clean_messages_unchanged() {
         assert_eq!(
             sanitize("invalid WAD magic `NOPE`"),
