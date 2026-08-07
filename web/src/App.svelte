@@ -4,6 +4,7 @@
   import FileDrop from './lib/FileDrop.svelte';
   import StatsPanel from './lib/StatsPanel.svelte';
   import TexturePreview from './lib/TexturePreview.svelte';
+  import ThemeToggle from './lib/ui/ThemeToggle.svelte';
 
   $effect(() => {
     document.documentElement.dataset.theme = theme.resolved;
@@ -14,6 +15,7 @@
   <header>
     <h1>crustyview</h1>
     <FileDrop onfile={(f) => wad.load(f)} />
+    <ThemeToggle />
   </header>
 
   {#if wad.phase === 'error'}
