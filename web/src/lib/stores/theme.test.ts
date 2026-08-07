@@ -80,4 +80,20 @@ describe('ThemeStore', () => {
     expect(theme.resolved).toBe('light');
     expect(localStorage.getItem('crustyview-theme')).toBe('light');
   });
+
+  it('toggle overrides to dark from a light system', () => {
+    stubMatchMedia(false);
+    const theme = new ThemeStore();
+    theme.toggle();
+    expect(theme.resolved).toBe('dark');
+    expect(localStorage.getItem('crustyview-theme')).toBe('dark');
+  });
+
+  it('ignores system changes while explicitly overridden', () => {
+    const setDark = stubMatchMedia(false);
+    localStorage.setItem('crustyview-theme', 'light');
+    const theme = new ThemeStore();
+    setDark(true);
+    expect(theme.resolved).toBe('light');
+  });
 });
