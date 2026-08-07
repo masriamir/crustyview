@@ -23,27 +23,53 @@ pub fn load_error_message(err: &ParseError) -> String {
     }
 }
 
-/// First line only, ANSI escape sequences removed, trimmed.
+/// First line only, ANSI escape sequences and control characters removed,
+/// trimmed.
 fn sanitize(message: &str) -> String {
     let first_line = message.lines().next().unwrap_or_default();
     let mut out = String::with_capacity(first_line.len());
     let mut chars = first_line.chars().peekable();
     while let Some(c) = chars.next() {
-        if c != '\u{1b}' {
+        if c == '\u{1b}' {
+            skip_escape_sequence(&mut chars);
+        } else if !c.is_control() {
             out.push(c);
-            continue;
         }
-        // Skip a CSI sequence: ESC '[' parameters, then one final byte in @..~.
-        if chars.peek() == Some(&'[') {
-            chars.next();
-            for after in chars.by_ref() {
-                if ('\u{40}'..='\u{7e}').contains(&after) {
+    }
+    out.trim().to_owned()
+}
+
+/// Consume the remainder of an ANSI escape sequence whose ESC was just read:
+/// CSI (`[` up to a final byte in `@`..`~`), OSC (`]` up to `BEL` or the
+/// `ESC \` string terminator), an nF sequence (intermediate bytes in
+/// space..`/` then one final byte), or a single-character escape.
+fn skip_escape_sequence(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+    match chars.next() {
+        Some('[') => {
+            for c in chars.by_ref() {
+                if ('\u{40}'..='\u{7e}').contains(&c) {
                     break;
                 }
             }
         }
+        Some(']') => {
+            while let Some(c) = chars.next() {
+                if c == '\u{7}' || (c == '\u{1b}' && chars.next_if_eq(&'\\').is_some()) {
+                    break;
+                }
+            }
+        }
+        Some(c) if ('\u{20}'..='\u{2f}').contains(&c) => {
+            for c in chars.by_ref() {
+                if !('\u{20}'..='\u{2f}').contains(&c) {
+                    break;
+                }
+            }
+        }
+        // A single-character escape (or a trailing bare ESC): nothing more to
+        // consume beyond the character just read.
+        _ => {}
     }
-    out.trim().to_owned()
 }
 
 #[cfg(test)]
@@ -90,8 +116,32 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_drops_a_bare_escape_without_csi() {
-        assert_eq!(sanitize("a\u{1b}z"), "az");
+    fn sanitize_drops_a_trailing_escape() {
+        assert_eq!(sanitize("az\u{1b}"), "az");
+    }
+
+    #[test]
+    fn sanitize_strips_osc_sequences() {
+        assert_eq!(sanitize("a\u{1b}]0;title\u{7}z"), "az"); // BEL-terminated
+        assert_eq!(sanitize("a\u{1b}]0;title\u{1b}\\z"), "az"); // ST-terminated
+    }
+
+    #[test]
+    fn sanitize_strips_charset_and_single_char_escapes() {
+        assert_eq!(sanitize("a\u{1b}(Bz"), "az"); // nF charset selection
+        assert_eq!(sanitize("a\u{1b}Mz"), "az"); // single-character escape
+    }
+
+    #[test]
+    fn sanitize_drops_stray_control_characters() {
+        assert_eq!(sanitize("a\u{7}z"), "az");
+    }
+
+    #[test]
+    fn sanitize_survives_unterminated_sequences() {
+        assert_eq!(sanitize("a\u{1b}]0;title"), "a"); // OSC, no terminator
+        assert_eq!(sanitize("a\u{1b}( "), "a"); // nF, no final byte
+        assert_eq!(sanitize("a\u{1b}[31"), "a"); // CSI, no final byte
     }
 
     #[test]
