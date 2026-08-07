@@ -35,6 +35,15 @@ export async function loadJunk(page: Page): Promise<void> {
   });
 }
 
+/** Feed a payload shorter than the 12-byte WAD header through the header Open input. */
+export async function loadTinyJunk(page: Page): Promise<void> {
+  await page.locator('header input[type="file"]').setInputFiles({
+    name: 'tiny.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('tiny'),
+  });
+}
+
 /** Assert the Textures view's first-texture canvas has non-blank pixels. */
 export async function expectTextureCanvasPainted(page: Page): Promise<void> {
   const canvas = page.getByRole('img', { name: 'Composited first-texture preview' });

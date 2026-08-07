@@ -10,5 +10,9 @@ publish = false
 crustywad = "0.9"
 serde = { version = "1", features = ["derive"] }
 
+[dev-dependencies]
+# Same major as crustywad's binrw, to construct ParseError sources in tests.
+binrw = "0.15"
+
 [lints]
 workspace = true

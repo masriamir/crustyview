@@ -4,6 +4,7 @@ import {
   gotoApp,
   haveFixtures,
   loadJunk,
+  loadTinyJunk,
   loadWad,
 } from './helpers';
 
@@ -58,6 +59,17 @@ test.describe('desktop shell smoke', () => {
     await expect(page.getByRole('region', { name: 'Overview' })).toBeVisible();
     await expect(sidebar.getByRole('button', { name: 'MAP01', exact: true })).toBeVisible();
   });
+});
+
+test('sub-header-size file shows a clean error message', async ({ page }) => {
+  await gotoApp(page);
+  await loadTinyJunk(page);
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('failed to parse WAD header');
+  const text = (await alert.textContent()) ?? '';
+  expect(text).not.toContain('\u001b'); // no raw ANSI escapes
+  expect(text).not.toContain('Backtrace');
+  expect(text).not.toContain('.cargo/registry');
 });
 
 test('theme toggle persists across reload', async ({ page }) => {
