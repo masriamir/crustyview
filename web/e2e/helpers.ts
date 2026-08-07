@@ -9,7 +9,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /** Repo-root fixture directory populated by `just fetch-freedoom`. */
 export const FIXTURES = path.resolve(here, '../../.freedoom');
 
-export const haveFixtures = fs.existsSync(path.join(FIXTURES, 'freedoom1.wad'));
+export const haveFixtures = ['freedoom1.wad', 'freedoom2.wad'].every((wad) =>
+  fs.existsSync(path.join(FIXTURES, wad)),
+);
 
 /** Navigate to the app and wait for the wasm bootstrap to mount the shell. */
 export async function gotoApp(page: Page): Promise<void> {
