@@ -60,7 +60,7 @@ fn is_damaging_sector_special(special: i32, format: MapFormat) -> bool {
         && (DAMAGING_SECTOR_SPECIALS.contains(&special) || special & BOOM_DAMAGE_MASK != 0)
 }
 
-/// `skip_serializing_if` predicate: omit `"teleport": false` from the payload.
+/// `skip_serializing_if` predicate: omit `false` line marks from the payload.
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn is_false(b: &bool) -> bool {
     !*b
