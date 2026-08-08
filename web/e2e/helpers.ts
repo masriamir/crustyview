@@ -88,3 +88,10 @@ export async function expectMapCanvasPainted(page: Page): Promise<void> {
     )
     .toBe(true);
 }
+
+/** Full-canvas pixel snapshot of the 2D map, for before/after comparisons. */
+export async function mapCanvasDataUrl(page: Page): Promise<string> {
+  return page
+    .getByRole('img', { name: /2D map of/ })
+    .evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+}
