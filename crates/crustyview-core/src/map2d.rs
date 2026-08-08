@@ -4,7 +4,7 @@
 //! (ADR-0002 staging): everything the canvas needs, nothing it doesn't.
 
 use crustywad::Wad;
-use crustywad::map::{Map, MapFormat};
+use crustywad::map::{Map, MapFormat, SidedefIdx};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -27,7 +27,40 @@ fn is_teleport_special(special: i32, format: MapFormat) -> bool {
     format == MapFormat::Doom && TELEPORT_SPECIALS.contains(&special)
 }
 
-/// `skip_serializing_if` predicate: omit `"teleport": false` from the payload.
+/// Vanilla damaging-floor sector specials: 4/11/16 (−20%), 5 (−10%), 7 (−5%).
+const DAMAGING_SECTOR_SPECIALS: [i32; 5] = [4, 5, 7, 11, 16];
+
+/// The vanilla secret sector special — the intermission "secrets" tally.
+const SECRET_SECTOR_SPECIAL: i32 = 9;
+
+/// Boom generalized sector-special bits: damage level in bits 5–6, secret in
+/// bit 7. The bit tests need no `>= 32` guard — vanilla specials (0–31) can't
+/// set them — and run on the widened value directly: the masks only inspect
+/// low bits, so a corrupt negative special can't sign-extend into a false
+/// positive. Friction/wind (bits 8/9) are not map2d's concern.
+const BOOM_DAMAGE_MASK: i32 = 0x0060;
+const BOOM_SECRET_MASK: i32 = 0x0080;
+
+/// Whether `special` marks a secret sector in `format`'s special space —
+/// vanilla 9 or the Boom generalized secret bit. Distinct from the
+/// `ML_SECRET` *linedef* disguise flag ([`LineKind::Secret`]). Only
+/// meaningful in the Doom special number space; Hexen/UDMF/Doom64 sector
+/// specials differ and classify unmarked.
+fn is_secret_sector_special(special: i32, format: MapFormat) -> bool {
+    format == MapFormat::Doom
+        && (special == SECRET_SECTOR_SPECIAL || special & BOOM_SECRET_MASK != 0)
+}
+
+/// Whether `special` marks a damaging floor in `format`'s special space —
+/// vanilla 4/5/7/11/16 or Boom generalized damage bits. Damage strength
+/// collapses into one mark. Doom-space only, like
+/// [`is_secret_sector_special`].
+fn is_damaging_sector_special(special: i32, format: MapFormat) -> bool {
+    format == MapFormat::Doom
+        && (DAMAGING_SECTOR_SPECIALS.contains(&special) || special & BOOM_DAMAGE_MASK != 0)
+}
+
+/// `skip_serializing_if` predicate: omit `false` line marks from the payload.
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn is_false(b: &bool) -> bool {
     !*b
@@ -62,6 +95,15 @@ pub struct Line2d {
     /// crosses or uses it. Omitted from JSON when false.
     #[serde(skip_serializing_if = "is_false")]
     pub teleport: bool,
+    /// Secret-sector boundary — a bordering sector classifies as secret.
+    /// Orthogonal to `kind`: [`LineKind::Secret`] is the `ML_SECRET` linedef
+    /// disguise, this is the sector special. Omitted from JSON when false.
+    #[serde(skip_serializing_if = "is_false")]
+    pub secret_sector: bool,
+    /// Damaging-sector boundary — a bordering sector classifies as damaging.
+    /// Omitted from JSON when false.
+    #[serde(skip_serializing_if = "is_false")]
+    pub damaging_sector: bool,
 }
 
 /// One thing marker in map units. `type_id` crosses from day one so
@@ -102,6 +144,11 @@ pub struct Map2d {
     pub lines: Vec<Line2d>,
     /// Thing markers.
     pub things: Vec<Thing2d>,
+    /// Count of sectors classifying as secret — the map's intermission
+    /// "secrets" tally, surfaced on the filter chip.
+    pub secret_sectors: usize,
+    /// Count of sectors classifying as damaging.
+    pub damaging_sectors: usize,
 }
 
 /// Flatten the named map group for 2D drawing.
@@ -114,6 +161,31 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
     let group = wad.map_groups().into_iter().find(|g| g.name == name)?;
     let map = Map::assemble(wad, &group).ok()?;
     let format = map.format();
+    // Classify every sector once; each line then looks up its two sides.
+    let sector_marks: Vec<(bool, bool)> = map
+        .sectors()
+        .iter()
+        .map(|s| {
+            (
+                is_secret_sector_special(s.special, format),
+                is_damaging_sector_special(s.special, format),
+            )
+        })
+        .collect();
+    let secret_sectors = sector_marks.iter().filter(|(secret, _)| *secret).count();
+    let damaging_sectors = sector_marks
+        .iter()
+        .filter(|(_, damaging)| *damaging)
+        .count();
+    let sidedefs = map.sidedefs();
+    // A dangling sidedef/sector reference classifies unmarked — bad geometry
+    // degrades, never fails, matching the vertex handling below.
+    let side_marks = |side: Option<SidedefIdx>| {
+        side.and_then(|idx| sidedefs.get(idx.0))
+            .and_then(|sd| sector_marks.get(sd.sector.0))
+            .copied()
+            .unwrap_or((false, false))
+    };
     let vertices = map.vertices();
     let lines: Vec<Line2d> = map
         .linedefs()
@@ -128,6 +200,8 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
             } else {
                 LineKind::OneSided
             };
+            let (right_secret, right_damaging) = side_marks(l.right);
+            let (left_secret, left_damaging) = side_marks(l.left);
             Some(Line2d {
                 x1: a.x,
                 y1: a.y,
@@ -135,6 +209,8 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
                 y2: b.y,
                 kind,
                 teleport: is_teleport_special(l.special.special, format),
+                secret_sector: right_secret || left_secret,
+                damaging_sector: right_damaging || left_damaging,
             })
         })
         .collect();
@@ -182,6 +258,8 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
         bounds,
         lines,
         things,
+        secret_sectors,
+        damaging_sectors,
     })
 }
 
@@ -190,8 +268,10 @@ mod tests {
     use super::*;
 
     /// Build a minimal single-map PWAD from raw lumps: a right triangle of 3
-    /// vertices, 3 linedefs (one two-sided, one secret-flagged), 1 sector,
-    /// 2 sidedefs, and 2 things (P1 start + an imp).
+    /// vertices, 8 linedefs (one two-sided, one secret-flagged, two teleport
+    /// sources, three bordering marked sectors), 4 sectors (plain, secret 9,
+    /// damaging 5, Boom secret+damage 0xE0), 5 sidedefs, and 2 things
+    /// (P1 start + an imp).
     fn tiny_pwad() -> Wad {
         fn name8(n: &str) -> [u8; 8] {
             let mut b = [0u8; 8];
@@ -210,6 +290,9 @@ mod tests {
             [2u16, 0, 0x0020, 0, 0, 0, 0xFFFF],  // secret-flagged
             [0u16, 1, 0x0000, 39, 1, 0, 0xFFFF], // teleport source (W1 teleport, special 39)
             [1u16, 2, 0x0020, 97, 1, 0, 0xFFFF], // secret + teleport source (WR teleport, special 97)
+            [0u16, 1, 0x0000, 0, 0, 2, 0xFFFF],  // one-sided into the secret sector (1)
+            [1u16, 2, 0x0004, 0, 0, 0, 3],       // two-sided; damaging sector (2) on the left only
+            [2u16, 0, 0x0000, 0, 0, 4, 0xFFFF],  // one-sided into the Boom secret+damage sector (3)
         ]
         .iter()
         .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
@@ -225,16 +308,21 @@ mod tests {
             b.extend_from_slice(&sector.to_le_bytes());
             b
         };
-        let sidedefs: Vec<u8> = [sidedef(0), sidedef(0)].concat();
+        let sidedefs: Vec<u8> =
+            [sidedef(0), sidedef(0), sidedef(1), sidedef(2), sidedef(3)].concat();
         // SECTORS: floor h, ceil h (i16), floor/ceil flat names, light, special, tag (u16 × 3)
-        let mut sectors = Vec::new();
-        sectors.extend_from_slice(&0i16.to_le_bytes());
-        sectors.extend_from_slice(&128i16.to_le_bytes());
-        sectors.extend_from_slice(&name8("FLOOR0_1"));
-        sectors.extend_from_slice(&name8("CEIL1_1"));
-        for v in [160u16, 0, 0] {
-            sectors.extend_from_slice(&v.to_le_bytes());
-        }
+        let sector = |special: u16| {
+            let mut b = Vec::new();
+            b.extend_from_slice(&0i16.to_le_bytes());
+            b.extend_from_slice(&128i16.to_le_bytes());
+            b.extend_from_slice(&name8("FLOOR0_1"));
+            b.extend_from_slice(&name8("CEIL1_1"));
+            for v in [160u16, special, 0] {
+                b.extend_from_slice(&v.to_le_bytes());
+            }
+            b
+        };
+        let sectors: Vec<u8> = [sector(0), sector(9), sector(5), sector(0xE0)].concat();
         // THINGS: x, y (i16), angle, type, flags (u16)
         let things: Vec<u8> = [
             [32i16 as u16, 32, 90, 1, 7], // player 1 start
@@ -274,7 +362,7 @@ mod tests {
     fn flattens_lines_with_kinds_and_bounds() {
         let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
         assert_eq!(m.name, "MAP01");
-        assert_eq!(m.lines.len(), 5);
+        assert_eq!(m.lines.len(), 8);
         assert_eq!(m.lines[0].kind, LineKind::OneSided);
         assert_eq!(m.lines[1].kind, LineKind::TwoSided);
         assert_eq!(m.lines[2].kind, LineKind::Secret);
@@ -372,6 +460,8 @@ mod tests {
             (0.0, 0.0, 0.0, 0.0),
             "empty map yields zero-area bounds at origin"
         );
+        assert_eq!(m.secret_sectors, 0);
+        assert_eq!(m.damaging_sectors, 0);
     }
 
     #[test]
@@ -401,6 +491,59 @@ mod tests {
     }
 
     #[test]
+    fn sector_specials_classify_by_format() {
+        assert!(is_secret_sector_special(9, MapFormat::Doom));
+        for special in [4, 5, 7, 11, 16] {
+            assert!(
+                is_damaging_sector_special(special, MapFormat::Doom),
+                "vanilla damaging special {special}"
+            );
+            assert!(
+                !is_secret_sector_special(special, MapFormat::Doom),
+                "damaging special {special} is not secret"
+            );
+        }
+        // Boom generalized bits: damage level in bits 5–6, secret in bit 7.
+        for special in [0x20, 0x40, 0x60, 0xE0] {
+            assert!(
+                is_damaging_sector_special(special, MapFormat::Doom),
+                "Boom damage bits in {special:#x}"
+            );
+        }
+        for special in [0x80, 0xE0] {
+            assert!(
+                is_secret_sector_special(special, MapFormat::Doom),
+                "Boom secret bit in {special:#x}"
+            );
+        }
+        assert!(
+            !is_damaging_sector_special(0x80, MapFormat::Doom),
+            "secret-only Boom special does not damage"
+        );
+        assert!(
+            !is_secret_sector_special(0x60, MapFormat::Doom),
+            "damage-only Boom special is not secret"
+        );
+        for special in [0, 1, 3, 8, 10, 17, 31] {
+            assert!(
+                !is_secret_sector_special(special, MapFormat::Doom),
+                "special {special} is not secret"
+            );
+            assert!(
+                !is_damaging_sector_special(special, MapFormat::Doom),
+                "special {special} is not damaging"
+            );
+        }
+        // Other formats have different sector-special number spaces.
+        for format in [MapFormat::Hexen, MapFormat::Udmf, MapFormat::Doom64] {
+            assert!(
+                !is_secret_sector_special(9, format) && !is_damaging_sector_special(5, format),
+                "{format:?} classifies unmarked"
+            );
+        }
+    }
+
+    #[test]
     fn marks_teleport_source_lines() {
         let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
         assert!(
@@ -423,5 +566,44 @@ mod tests {
         let json = serde_json::to_string(&m).unwrap();
         assert_eq!(json.matches("\"teleport\":true").count(), 2);
         assert!(!json.contains("\"teleport\":false"));
+    }
+
+    #[test]
+    fn marks_sector_boundary_lines() {
+        let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
+        assert!(
+            m.lines[..5]
+                .iter()
+                .all(|l| !l.secret_sector && !l.damaging_sector),
+            "lines bordering only the plain sector stay unmarked"
+        );
+        assert!(m.lines[5].secret_sector && !m.lines[5].damaging_sector);
+        assert!(
+            !m.lines[6].secret_sector && m.lines[6].damaging_sector,
+            "a left-side-only sector still marks the line"
+        );
+        assert!(
+            m.lines[7].secret_sector && m.lines[7].damaging_sector,
+            "Boom combined bits mark both"
+        );
+    }
+
+    #[test]
+    fn counts_classified_sectors() {
+        let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
+        assert_eq!(m.secret_sectors, 2, "vanilla 9 + Boom secret bit");
+        assert_eq!(m.damaging_sectors, 2, "vanilla 5 + Boom damage bits");
+    }
+
+    #[test]
+    fn sector_fields_skip_false_in_json() {
+        let m = map2d(&tiny_pwad(), "MAP01").unwrap();
+        let json = serde_json::to_string(&m).unwrap();
+        assert_eq!(json.matches("\"secret_sector\":true").count(), 2);
+        assert_eq!(json.matches("\"damaging_sector\":true").count(), 2);
+        assert!(!json.contains("\"secret_sector\":false"));
+        assert!(!json.contains("\"damaging_sector\":false"));
+        assert!(json.contains("\"secret_sectors\":2"));
+        assert!(json.contains("\"damaging_sectors\":2"));
     }
 }

@@ -162,6 +162,41 @@ test.describe('desktop shell smoke', () => {
     await chip.click();
     await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
   });
+
+  test('sector overlay chips toggle secret and damage boundaries', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const chips = page.getByRole('group', { name: 'Line overlay filters' });
+    await expect(chips).toBeVisible();
+    const secrets = chips.getByRole('button', { name: /^Secrets/ });
+    const damage = chips.getByRole('button', { name: /^Damage/ });
+    // Default OFF — revealing secrets is opt-in.
+    await expect(secrets).toHaveAttribute('aria-pressed', 'false');
+    await expect(damage).toHaveAttribute('aria-pressed', 'false');
+    await expect(secrets).toHaveText(/[1-9]/);
+    await expect(damage).toHaveText(/[1-9]/);
+
+    // Enabling an overlay changes the canvas; disabling restores the exact
+    // pixels (the draw is deterministic).
+    const before = await mapCanvasDataUrl(page);
+    await secrets.click();
+    await expect(secrets).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await secrets.click();
+    await expect(secrets).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+
+    await damage.click();
+    await expect(damage).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await damage.click();
+    await expect(damage).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {

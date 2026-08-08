@@ -25,6 +25,8 @@ describe('MapPrefsStore', () => {
       style: 'classic',
       hiddenThingCategories: [],
       showTeleportLines: true,
+      showSecretSectors: false,
+      showDamagingSectors: false,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);
@@ -110,5 +112,28 @@ describe('MapPrefsStore', () => {
     localStorage.setItem(KEY, JSON.stringify({ showTeleportLines: 'nope' }));
     const p = new MapPrefsStore();
     expect(p.showTeleportLines).toBe(true);
+  });
+
+  it('sector overlays default off; toggles flip, persist, and restore', () => {
+    const p = new MapPrefsStore();
+    expect(p.showSecretSectors).toBe(false);
+    expect(p.showDamagingSectors).toBe(false);
+    p.toggleSecretSectors();
+    p.toggleDamagingSectors();
+    expect(p.showSecretSectors).toBe(true);
+    expect(p.showDamagingSectors).toBe(true);
+    const q = new MapPrefsStore();
+    expect(q.showSecretSectors).toBe(true);
+    expect(q.showDamagingSectors).toBe(true);
+  });
+
+  it('non-boolean stored sector overlay prefs are ignored', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ showSecretSectors: 1, showDamagingSectors: 'yes' }),
+    );
+    const p = new MapPrefsStore();
+    expect(p.showSecretSectors).toBe(false);
+    expect(p.showDamagingSectors).toBe(false);
   });
 });

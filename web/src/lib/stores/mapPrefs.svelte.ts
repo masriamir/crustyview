@@ -11,6 +11,8 @@ interface StoredMapPrefs {
   style: MapStyle;
   hiddenThingCategories: string[];
   showTeleportLines: boolean;
+  showSecretSectors: boolean;
+  showDamagingSectors: boolean;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -19,6 +21,8 @@ const DEFAULTS: StoredMapPrefs = {
   style: 'theme',
   hiddenThingCategories: [],
   showTeleportLines: true,
+  showSecretSectors: false,
+  showDamagingSectors: false,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -33,6 +37,8 @@ export class MapPrefsStore {
   showGrid = $state(DEFAULTS.showGrid);
   style = $state<MapStyle>(DEFAULTS.style);
   showTeleportLines = $state(DEFAULTS.showTeleportLines);
+  showSecretSectors = $state(DEFAULTS.showSecretSectors);
+  showDamagingSectors = $state(DEFAULTS.showDamagingSectors);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
 
   constructor() {
@@ -55,6 +61,9 @@ export class MapPrefsStore {
     if (typeof v.showGrid === 'boolean') this.showGrid = v.showGrid;
     if (v.style === 'theme' || v.style === 'classic') this.style = v.style;
     if (typeof v.showTeleportLines === 'boolean') this.showTeleportLines = v.showTeleportLines;
+    if (typeof v.showSecretSectors === 'boolean') this.showSecretSectors = v.showSecretSectors;
+    if (typeof v.showDamagingSectors === 'boolean')
+      this.showDamagingSectors = v.showDamagingSectors;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -78,6 +87,16 @@ export class MapPrefsStore {
 
   toggleTeleportLines(): void {
     this.showTeleportLines = !this.showTeleportLines;
+    this.#persist();
+  }
+
+  toggleSecretSectors(): void {
+    this.showSecretSectors = !this.showSecretSectors;
+    this.#persist();
+  }
+
+  toggleDamagingSectors(): void {
+    this.showDamagingSectors = !this.showDamagingSectors;
     this.#persist();
   }
 
@@ -107,6 +126,8 @@ export class MapPrefsStore {
             (c) => c.id,
           ),
           showTeleportLines: this.showTeleportLines,
+          showSecretSectors: this.showSecretSectors,
+          showDamagingSectors: this.showDamagingSectors,
         } satisfies StoredMapPrefs),
       );
     } catch {
