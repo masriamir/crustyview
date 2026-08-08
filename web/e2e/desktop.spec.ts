@@ -7,6 +7,7 @@ import {
   loadJunk,
   loadTinyJunk,
   loadWad,
+  mapCanvasDataUrl,
 } from './helpers';
 
 test.describe('desktop shell smoke', () => {
@@ -105,6 +106,36 @@ test.describe('desktop shell smoke', () => {
     await page.mouse.move(box.x + 5, box.y + 5);
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.getByText(/\(-?\d+, -?\d+\)/)).toBeVisible();
+  });
+
+  test('thing category chips filter markers and act as a legend', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const chips = page.getByRole('group', { name: 'Thing category filters' });
+    await expect(chips).toBeVisible();
+    const monsters = chips.getByRole('button', { name: /^Monsters/ });
+    await expect(monsters).toHaveAttribute('aria-pressed', 'true');
+    await expect(monsters).toHaveText(/[1-9]/); // Freedoom E1M1 has monsters
+
+    // Hiding a populated category changes the canvas; restoring it restores
+    // the exact pixels (the draw is deterministic).
+    const before = await mapCanvasDataUrl(page);
+    await monsters.click();
+    await expect(monsters).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await monsters.click();
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+
+    // The master Things toggle owns the whole row.
+    const tools = page.getByRole('group', { name: '2D map view controls' });
+    await tools.getByRole('button', { name: 'Show things' }).click();
+    await expect(chips).not.toBeVisible();
+    await tools.getByRole('button', { name: 'Show things' }).click();
+    await expect(chips).toBeVisible();
   });
 });
 

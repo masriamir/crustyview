@@ -12,6 +12,13 @@
     zoomAt,
     type Transform,
   } from './transform';
+  import {
+    CATEGORIES,
+    CLASSIC_THING_COLORS,
+    categoryOf,
+    countByCategory,
+    type ThingCategory,
+  } from './things';
 
   interface Props {
     name: string;
@@ -27,7 +34,7 @@
     wall: string;
     twoSided: string;
     secret: string;
-    thing: string;
+    things: Record<ThingCategory, string>;
     player: string;
   }
 
@@ -41,7 +48,7 @@
     wall: '#ff3b30',
     twoSided: '#8e8e93',
     secret: '#ffd60a',
-    thing: '#c7c7cc',
+    things: CLASSIC_THING_COLORS,
     player: '#34c759',
   };
 
@@ -116,7 +123,9 @@
       wall: token(style, '--map2d-wall', CLASSIC.wall),
       twoSided: token(style, '--map2d-two-sided', CLASSIC.twoSided),
       secret: token(style, '--map2d-secret', CLASSIC.secret),
-      thing: token(style, '--map2d-thing', CLASSIC.thing),
+      things: Object.fromEntries(
+        CATEGORIES.map((c) => [c.id, token(style, `--map2d-thing-${c.id}`, CLASSIC_THING_COLORS[c.id])]),
+      ) as Record<ThingCategory, string>,
       player: token(style, '--map2d-player', CLASSIC.player),
     };
   }
@@ -197,16 +206,31 @@
     ctx: CanvasRenderingContext2D,
     map: Map2d,
     t: Transform,
-    color: string,
+    colors: Palette,
+    game: string | null,
   ): void {
-    const path = new Path2D();
+    // One path per visible category, mirroring drawLines' per-kind batching;
+    // hidden categories are skipped before any path work.
+    const paths = new Map<ThingCategory, Path2D>();
     const half = THING_PX / 2;
     for (const thing of map.things) {
+      const category = categoryOf(thing.type_id, game);
+      if (!mapPrefs.isCategoryShown(category)) continue;
+      let path = paths.get(category);
+      if (path === undefined) {
+        path = new Path2D();
+        paths.set(category, path);
+      }
       const at = mapToScreen(t, thing.x, thing.y);
       path.rect(at.x - half, at.y - half, THING_PX, THING_PX);
     }
-    ctx.fillStyle = color;
-    ctx.fill(path);
+    // Reverse chip order: the list's top categories paint last, on top.
+    for (let i = CATEGORIES.length - 1; i >= 0; i--) {
+      const path = paths.get(CATEGORIES[i].id);
+      if (path === undefined) continue;
+      ctx.fillStyle = colors.things[CATEGORIES[i].id];
+      ctx.fill(path);
+    }
   }
 
   /** The player-1 start, as an arrow pointing the way the player faces. */
@@ -250,7 +274,7 @@
     if (!map || !t) return;
     if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid);
     drawLines(ctx, map, t, colors);
-    if (mapPrefs.showThings) drawThings(ctx, map, t, colors.thing);
+    if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
     drawPlayerStart(ctx, map, t, colors.player);
   }
 
@@ -285,6 +309,13 @@
     const t = transform;
     if (!t || !(fitScale > 0)) return 1;
     return t.scale / fitScale;
+  }
+
+  /** Per-category thing totals for the chip row; null until the map is available. */
+  export function categoryCounts(): Record<ThingCategory, number> | null {
+    const map = data;
+    if (!map) return null;
+    return countByCategory(map.things, wad.summary?.game ?? null);
   }
 
   // Fit once per map, as soon as there's a real viewport. Later resizes keep the
@@ -457,6 +488,7 @@
     void width;
     void height;
     void mapPrefs.showThings;
+    for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
     void mapPrefs.showGrid;
     void mapPrefs.style;
     void theme.resolved;
