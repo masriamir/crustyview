@@ -405,6 +405,13 @@
     return count;
   }
 
+  /** Classified-sector counts for the overlay chips; null until the map is available. */
+  export function sectorCounts(): { secrets: number; damage: number } | null {
+    const map = data;
+    if (!map) return null;
+    return { secrets: map.secret_sectors, damage: map.damaging_sectors };
+  }
+
   // Fit once per map, as soon as there's a real viewport. Later resizes keep the
   // current view, so a layout shift won't throw away a pan/zoom the user chose;
   // Fit / double-click / `0` are the way back to the whole map.

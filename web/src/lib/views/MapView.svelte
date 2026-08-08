@@ -4,7 +4,11 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
-  import { CLASSIC_LINE_TELEPORT } from './map2d/lines';
+  import {
+    CLASSIC_LINE_SECTOR_DAMAGE,
+    CLASSIC_LINE_SECTOR_SECRET,
+    CLASSIC_LINE_TELEPORT,
+  } from './map2d/lines';
 
   interface Props {
     name: string;
@@ -21,6 +25,7 @@
   );
 
   const teleportLines = $derived(map2d?.teleportLineCount() ?? null);
+  const sectorCounts = $derived(map2d?.sectorCounts() ?? null);
 
   /** Swatch color per the active style, so the chips double as the legend. */
   function swatchColor(id: ThingCategory): string {
@@ -30,6 +35,18 @@
   /** Swatch for the teleport-lines chip, per the active style. */
   function teleportSwatchColor(): string {
     return mapPrefs.style === 'classic' ? CLASSIC_LINE_TELEPORT : 'var(--map2d-line-teleport)';
+  }
+
+  /** Swatches for the sector overlay chips, per the active style. */
+  function secretSwatchColor(): string {
+    return mapPrefs.style === 'classic'
+      ? CLASSIC_LINE_SECTOR_SECRET
+      : 'var(--map2d-line-sector-secret)';
+  }
+  function damageSwatchColor(): string {
+    return mapPrefs.style === 'classic'
+      ? CLASSIC_LINE_SECTOR_DAMAGE
+      : 'var(--map2d-line-sector-damage)';
   }
 
   const modeOptions: {
@@ -124,19 +141,47 @@
           {/each}
         </div>
       {/if}
-      {#if teleportLines !== null && teleportLines > 0}
+      {#if (teleportLines !== null && teleportLines > 0) || (sectorCounts !== null && (sectorCounts.secrets > 0 || sectorCounts.damage > 0))}
         <div class="chips" role="group" aria-label="Line overlay filters">
-          <button
-            type="button"
-            class="chip"
-            aria-pressed={mapPrefs.showTeleportLines}
-            onclick={() => mapPrefs.toggleTeleportLines()}
-          >
-            <span class="swatch" style:background={teleportSwatchColor()} aria-hidden="true"
-            ></span>
-            Teleport lines
-            <span class="count">{teleportLines}</span>
-          </button>
+          {#if teleportLines !== null && teleportLines > 0}
+            <button
+              type="button"
+              class="chip"
+              aria-pressed={mapPrefs.showTeleportLines}
+              onclick={() => mapPrefs.toggleTeleportLines()}
+            >
+              <span class="swatch" style:background={teleportSwatchColor()} aria-hidden="true"
+              ></span>
+              Teleport lines
+              <span class="count">{teleportLines}</span>
+            </button>
+          {/if}
+          {#if sectorCounts !== null && sectorCounts.secrets > 0}
+            <button
+              type="button"
+              class="chip"
+              aria-pressed={mapPrefs.showSecretSectors}
+              onclick={() => mapPrefs.toggleSecretSectors()}
+            >
+              <span class="swatch" style:background={secretSwatchColor()} aria-hidden="true"
+              ></span>
+              Secrets
+              <span class="count">{sectorCounts.secrets}</span>
+            </button>
+          {/if}
+          {#if sectorCounts !== null && sectorCounts.damage > 0}
+            <button
+              type="button"
+              class="chip"
+              aria-pressed={mapPrefs.showDamagingSectors}
+              onclick={() => mapPrefs.toggleDamagingSectors()}
+            >
+              <span class="swatch" style:background={damageSwatchColor()} aria-hidden="true"
+              ></span>
+              Damage
+              <span class="count">{sectorCounts.damage}</span>
+            </button>
+          {/if}
         </div>
       {/if}
     {/if}
