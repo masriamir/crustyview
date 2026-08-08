@@ -197,6 +197,48 @@ test.describe('desktop shell smoke', () => {
     await expect(damage).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
   });
+
+  test('player start toggle governs the arrow independently of Things', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const tools = page.getByRole('group', { name: '2D map view controls' });
+    const start = tools.getByRole('button', { name: 'Always show player start' });
+    await expect(start).toHaveAttribute('aria-pressed', 'true');
+
+    // With Things off, the arrow alone remains — and answers only to Start.
+    // Poll past the things-off redraw (rAF-scheduled) before trusting the canvas.
+    const withThings = await mapCanvasDataUrl(page);
+    await tools.getByRole('button', { name: 'Show things' }).click();
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(withThings);
+    const before = await mapCanvasDataUrl(page);
+    await start.click();
+    await expect(start).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await start.click();
+    await expect(start).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+
+    // The off state survives a reload. No URL router: reloading drops the
+    // loaded WAD, so re-load and re-navigate before asserting.
+    await start.click();
+    await expect(start).toHaveAttribute('aria-pressed', 'false');
+    await page.reload();
+    await loadWad(page, 'freedoom1.wad');
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: 'E1M1', exact: true })
+      .click();
+    await expectMapCanvasPainted(page);
+    await expect(
+      page
+        .getByRole('group', { name: '2D map view controls' })
+        .getByRole('button', { name: 'Always show player start' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {
