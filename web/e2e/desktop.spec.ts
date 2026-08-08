@@ -193,6 +193,9 @@ test.describe('desktop shell smoke', () => {
     await damage.click();
     await expect(damage).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await damage.click();
+    await expect(damage).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
   });
 });
 
