@@ -114,6 +114,7 @@
         <button
           type="button"
           class="tool"
+          title="Always show the player 1 start arrow — when off, it follows the Things toggle"
           aria-pressed={mapPrefs.alwaysShowPlayerStart}
           aria-label="Always show player start"
           onclick={() => mapPrefs.toggleAlwaysShowPlayerStart()}
