@@ -505,7 +505,7 @@
 </script>
 
 {#if data === null}
-  <p class="error">Could not assemble {name}.</p>
+  <p class="error" role="alert">Could not assemble {name}.</p>
 {:else}
   <div class="map2d" bind:this={container}>
     <!-- ARIA files `application` under structure, so Svelte's tables call it
@@ -534,7 +534,7 @@
       Drag or use the arrow keys to pan. Zoom with the scroll wheel, a pinch, or the plus
       and minus keys. Press 0 or double-click to fit the whole map.
     </p>
-    {#if isEmpty}<p class="empty">Empty map.</p>{/if}
+    {#if isEmpty}<p class="empty" role="status">Empty map.</p>{/if}
   </div>
 {/if}
 
