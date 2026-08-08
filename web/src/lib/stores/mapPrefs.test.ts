@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MapPrefsStore } from './mapPrefs.svelte';
+import { CATEGORIES } from '../views/map2d/things';
 
 const KEY = 'crustyview-map-prefs';
 
@@ -22,6 +23,7 @@ describe('MapPrefsStore', () => {
       showThings: true,
       showGrid: true,
       style: 'classic',
+      hiddenThingCategories: [],
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);
@@ -52,5 +54,39 @@ describe('MapPrefsStore', () => {
     const p = new MapPrefsStore();
     expect(() => p.toggleGrid()).not.toThrow();
     expect(p.showGrid).toBe(true);
+    expect(() => p.toggleCategory('monsters')).not.toThrow();
+    expect(p.isCategoryShown('monsters')).toBe(false);
+  });
+
+  it('category visibility defaults to all shown', () => {
+    const p = new MapPrefsStore();
+    for (const { id } of CATEGORIES) expect(p.isCategoryShown(id)).toBe(true);
+  });
+
+  it('toggleCategory hides, persists the hidden list, and restores', () => {
+    const p = new MapPrefsStore();
+    p.toggleCategory('monsters');
+    p.toggleCategory('keys');
+    expect(p.isCategoryShown('monsters')).toBe(false);
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as {
+      hiddenThingCategories: string[];
+    };
+    expect([...stored.hiddenThingCategories].sort()).toEqual(['keys', 'monsters']);
+    const q = new MapPrefsStore();
+    expect(q.isCategoryShown('monsters')).toBe(false);
+    expect(q.isCategoryShown('keys')).toBe(false);
+    expect(q.isCategoryShown('weapons')).toBe(true);
+  });
+
+  it('restore drops unknown category ids and ignores non-array values', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ hiddenThingCategories: ['monsters', 'gibberish', 7] }),
+    );
+    const p = new MapPrefsStore();
+    expect(p.isCategoryShown('monsters')).toBe(false);
+    localStorage.setItem(KEY, JSON.stringify({ hiddenThingCategories: 'monsters' }));
+    const q = new MapPrefsStore();
+    expect(q.isCategoryShown('monsters')).toBe(true);
   });
 });
