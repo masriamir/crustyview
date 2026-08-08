@@ -82,3 +82,16 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Screen-reader-only content — the standard clip pattern. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
