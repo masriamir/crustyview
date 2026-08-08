@@ -10,6 +10,7 @@ interface StoredMapPrefs {
   showGrid: boolean;
   style: MapStyle;
   hiddenThingCategories: string[];
+  showTeleportLines: boolean;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -17,6 +18,7 @@ const DEFAULTS: StoredMapPrefs = {
   showGrid: false,
   style: 'theme',
   hiddenThingCategories: [],
+  showTeleportLines: true,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -30,6 +32,7 @@ export class MapPrefsStore {
   showThings = $state(DEFAULTS.showThings);
   showGrid = $state(DEFAULTS.showGrid);
   style = $state<MapStyle>(DEFAULTS.style);
+  showTeleportLines = $state(DEFAULTS.showTeleportLines);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
 
   constructor() {
@@ -51,6 +54,7 @@ export class MapPrefsStore {
     if (typeof v.showThings === 'boolean') this.showThings = v.showThings;
     if (typeof v.showGrid === 'boolean') this.showGrid = v.showGrid;
     if (v.style === 'theme' || v.style === 'classic') this.style = v.style;
+    if (typeof v.showTeleportLines === 'boolean') this.showTeleportLines = v.showTeleportLines;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -69,6 +73,11 @@ export class MapPrefsStore {
 
   toggleGrid(): void {
     this.showGrid = !this.showGrid;
+    this.#persist();
+  }
+
+  toggleTeleportLines(): void {
+    this.showTeleportLines = !this.showTeleportLines;
     this.#persist();
   }
 
@@ -97,6 +106,7 @@ export class MapPrefsStore {
           hiddenThingCategories: CATEGORIES.filter((c) => !this.showCategories[c.id]).map(
             (c) => c.id,
           ),
+          showTeleportLines: this.showTeleportLines,
         } satisfies StoredMapPrefs),
       );
     } catch {

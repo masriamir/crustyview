@@ -18,7 +18,14 @@ export interface TextureMeta {
 export interface Map2d {
   name: string;
   bounds: { min_x: number; min_y: number; max_x: number; max_y: number };
-  lines: { x1: number; y1: number; x2: number; y2: number; kind: 'one_sided' | 'two_sided' | 'secret' }[];
+  lines: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    kind: 'one_sided' | 'two_sided' | 'secret';
+    teleport?: boolean;
+  }[];
   things: { x: number; y: number; angle: number; type_id: number }[];
 }
 

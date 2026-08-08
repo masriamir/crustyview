@@ -4,11 +4,34 @@
 //! (ADR-0002 staging): everything the canvas needs, nothing it doesn't.
 
 use crustywad::Wad;
-use crustywad::map::Map;
+use crustywad::map::{Map, MapFormat};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
 const ML_SECRET: u32 = 0x0020;
+
+/// Linedef action specials that make a line a teleport *source* — vanilla
+/// walk-over/monster teleports (39/97/125/126) plus Boom's switch (174/195),
+/// silent (207–210), line-to-line (243/244, 262–267), and silent monster-only
+/// (268/269) variants. Only meaningful in the Doom special number space;
+/// Hexen/UDMF spaces are #67.
+const TELEPORT_SPECIALS: [i32; 20] = [
+    39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267, 268,
+    269,
+];
+
+/// Whether `special` marks a teleport source in `format`'s special space.
+/// A dead teleporter (tag 0) still classifies — the special is what makes the
+/// line a source; whether it works in-game is not map2d's concern.
+fn is_teleport_special(special: i32, format: MapFormat) -> bool {
+    format == MapFormat::Doom && TELEPORT_SPECIALS.contains(&special)
+}
+
+/// `skip_serializing_if` predicate: omit `"teleport": false` from the payload.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_false(b: &bool) -> bool {
+    !*b
+}
 
 /// How a line should read on the automap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -35,6 +58,10 @@ pub struct Line2d {
     pub y2: f64,
     /// Line classification for rendering.
     pub kind: LineKind,
+    /// Teleport source mark — the line's action special teleports whatever
+    /// crosses or uses it. Omitted from JSON when false.
+    #[serde(skip_serializing_if = "is_false")]
+    pub teleport: bool,
 }
 
 /// One thing marker in map units. `type_id` crosses from day one so
@@ -86,6 +113,7 @@ pub struct Map2d {
 pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
     let group = wad.map_groups().into_iter().find(|g| g.name == name)?;
     let map = Map::assemble(wad, &group).ok()?;
+    let format = map.format();
     let vertices = map.vertices();
     let lines: Vec<Line2d> = map
         .linedefs()
@@ -106,6 +134,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
                 x2: b.x,
                 y2: b.y,
                 kind,
+                teleport: is_teleport_special(l.special.special, format),
             })
         })
         .collect();
@@ -176,9 +205,11 @@ mod tests {
             .collect();
         // LINEDEFS: start, end, flags, special, tag, right sidedef, left sidedef (7 × u16)
         let linedefs: Vec<u8> = [
-            [0u16, 1, 0x0000, 0, 0, 0, 0xFFFF], // one-sided
-            [1u16, 2, 0x0004, 0, 0, 0, 1],      // two-sided (ML_TWOSIDED set, both sides)
-            [2u16, 0, 0x0020, 0, 0, 0, 0xFFFF], // secret-flagged
+            [0u16, 1, 0x0000, 0, 0, 0, 0xFFFF],  // one-sided
+            [1u16, 2, 0x0004, 0, 0, 0, 1],       // two-sided (ML_TWOSIDED set, both sides)
+            [2u16, 0, 0x0020, 0, 0, 0, 0xFFFF],  // secret-flagged
+            [0u16, 1, 0x0000, 39, 1, 0, 0xFFFF], // teleport source (W1 teleport, special 39)
+            [1u16, 2, 0x0020, 97, 1, 0, 0xFFFF], // secret + teleport source (WR teleport, special 97)
         ]
         .iter()
         .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
@@ -243,7 +274,7 @@ mod tests {
     fn flattens_lines_with_kinds_and_bounds() {
         let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
         assert_eq!(m.name, "MAP01");
-        assert_eq!(m.lines.len(), 3);
+        assert_eq!(m.lines.len(), 5);
         assert_eq!(m.lines[0].kind, LineKind::OneSided);
         assert_eq!(m.lines[1].kind, LineKind::TwoSided);
         assert_eq!(m.lines[2].kind, LineKind::Secret);
@@ -341,5 +372,56 @@ mod tests {
             (0.0, 0.0, 0.0, 0.0),
             "empty map yields zero-area bounds at origin"
         );
+    }
+
+    #[test]
+    fn teleport_specials_classify_by_format() {
+        let listed = [
+            39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267,
+            268, 269,
+        ];
+        for special in listed {
+            assert!(
+                is_teleport_special(special, MapFormat::Doom),
+                "special {special} should classify on Doom-format maps"
+            );
+        }
+        for special in [0, 1, 40, 173, 196, 206, 211, 242, 245, 261, 270] {
+            assert!(
+                !is_teleport_special(special, MapFormat::Doom),
+                "special {special} is not a teleport"
+            );
+        }
+        for format in [MapFormat::Hexen, MapFormat::Udmf, MapFormat::Doom64] {
+            assert!(
+                !is_teleport_special(39, format) && !is_teleport_special(97, format),
+                "{format:?} has a different special number space"
+            );
+        }
+    }
+
+    #[test]
+    fn marks_teleport_source_lines() {
+        let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
+        assert!(
+            m.lines[..3].iter().all(|l| !l.teleport),
+            "plain lines stay unmarked"
+        );
+        assert!(m.lines[3].teleport);
+        assert_eq!(m.lines[3].kind, LineKind::OneSided);
+        assert!(m.lines[4].teleport);
+        assert_eq!(
+            m.lines[4].kind,
+            LineKind::Secret,
+            "secret survives the teleport mark"
+        );
+    }
+
+    #[test]
+    fn teleport_field_skips_false_in_json() {
+        let m = map2d(&tiny_pwad(), "MAP01").unwrap();
+        let json = serde_json::to_string(&m).unwrap();
+        assert_eq!(json.matches("\"teleport\":true").count(), 2);
+        assert!(!json.contains("\"teleport\":false"));
     }
 }

@@ -24,6 +24,7 @@ describe('MapPrefsStore', () => {
       showGrid: true,
       style: 'classic',
       hiddenThingCategories: [],
+      showTeleportLines: true,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);
@@ -90,5 +91,24 @@ describe('MapPrefsStore', () => {
     localStorage.setItem(KEY, JSON.stringify({ hiddenThingCategories: 'monsters' }));
     const q = new MapPrefsStore();
     expect(q.isCategoryShown('monsters')).toBe(true);
+  });
+
+  it('teleport lines default on; toggle flips, persists, and restores', () => {
+    const p = new MapPrefsStore();
+    expect(p.showTeleportLines).toBe(true);
+    p.toggleTeleportLines();
+    expect(p.showTeleportLines).toBe(false);
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as {
+      showTeleportLines: boolean;
+    };
+    expect(stored.showTeleportLines).toBe(false);
+    const q = new MapPrefsStore();
+    expect(q.showTeleportLines).toBe(false);
+  });
+
+  it('non-boolean stored showTeleportLines is ignored', () => {
+    localStorage.setItem(KEY, JSON.stringify({ showTeleportLines: 'nope' }));
+    const p = new MapPrefsStore();
+    expect(p.showTeleportLines).toBe(true);
   });
 });
