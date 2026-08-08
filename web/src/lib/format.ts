@@ -25,8 +25,12 @@ export interface Map2d {
     y2: number;
     kind: 'one_sided' | 'two_sided' | 'secret';
     teleport?: boolean;
+    secret_sector?: boolean;
+    damaging_sector?: boolean;
   }[];
   things: { x: number; y: number; angle: number; type_id: number }[];
+  secret_sectors: number;
+  damaging_sectors: number;
 }
 
 /** A label/value pair for the stats panel. */
