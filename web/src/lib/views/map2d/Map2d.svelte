@@ -25,6 +25,9 @@
   }
   let { name }: Props = $props();
 
+  /** aria-describedby target for the canvas operating instructions. */
+  const instructionsId = $props.id();
+
   type LineKind = Map2d['lines'][number]['kind'];
 
   /** Every color one draw needs, resolved once per draw. */
@@ -505,11 +508,16 @@
   <p class="error">Could not assemble {name}.</p>
 {:else}
   <div class="map2d" bind:this={container}>
+    <!-- ARIA files `application` under structure, so Svelte's tables call it
+         non-interactive; for this keyboard-operated canvas it is the correct
+         role (ARIA authoring practices), making the warning below noise. -->
     <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
     <canvas
       bind:this={canvas}
-      role="img"
-      aria-label={`2D map of ${name} — drag to pan, wheel or +/- to zoom, 0 to fit`}
+      role="application"
+      aria-roledescription="2D map"
+      aria-label={`2D map of ${name}`}
+      aria-describedby={instructionsId}
       tabindex="0"
       class:dragging
       onwheel={handleWheel}
@@ -522,6 +530,10 @@
       ondblclick={refit}
       onkeydown={handleKeyDown}
     ></canvas>
+    <p id={instructionsId} class="visually-hidden">
+      Drag or use the arrow keys to pan. Zoom with the scroll wheel, a pinch, or the plus
+      and minus keys. Press 0 or double-click to fit the whole map.
+    </p>
     {#if isEmpty}<p class="empty">Empty map.</p>{/if}
   </div>
 {/if}

@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -60,6 +60,11 @@ export async function expectTextureCanvasPainted(page: Page): Promise<void> {
     .toBe(true);
 }
 
+/** The 2D map canvas — an application-role widget (keyboard-operable), not an img. */
+export function mapCanvas(page: Page): Locator {
+  return page.getByRole('application', { name: /2D map of/ });
+}
+
 /**
  * Assert the 2D map view's canvas has painted more than its background fill.
  * The map always fills the backing buffer with a solid color first, so
@@ -68,7 +73,7 @@ export async function expectTextureCanvasPainted(page: Page): Promise<void> {
  * pass on a solid non-black fill) would be a false positive for this canvas.
  */
 export async function expectMapCanvasPainted(page: Page): Promise<void> {
-  const canvas = page.getByRole('img', { name: /2D map of/ });
+  const canvas = mapCanvas(page);
   await expect(canvas).toBeVisible();
   await expect
     .poll(() =>
@@ -91,7 +96,5 @@ export async function expectMapCanvasPainted(page: Page): Promise<void> {
 
 /** Full-canvas pixel snapshot of the 2D map, for before/after comparisons. */
 export async function mapCanvasDataUrl(page: Page): Promise<string> {
-  return page
-    .getByRole('img', { name: /2D map of/ })
-    .evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  return mapCanvas(page).evaluate((element) => (element as HTMLCanvasElement).toDataURL());
 }

@@ -5,6 +5,7 @@ import {
   gotoApp,
   haveFixtures,
   loadWad,
+  mapCanvas,
 } from './helpers';
 
 test.describe('mobile shell smoke', () => {
@@ -64,7 +65,7 @@ test.describe('mobile shell smoke', () => {
     await expect(page.getByRole('region', { name: 'Map E1M1' })).toBeVisible();
     await expectMapCanvasPainted(page);
 
-    const canvas = page.getByRole('img', { name: /2D map of/ });
+    const canvas = mapCanvas(page);
     const box = await canvas.boundingBox();
     if (!box) throw new Error('map canvas has no layout box');
     const cx = box.x + box.width / 2;
