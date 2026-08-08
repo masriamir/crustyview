@@ -81,10 +81,12 @@ describe('MapPrefsStore', () => {
   it('restore drops unknown category ids and ignores non-array values', () => {
     localStorage.setItem(
       KEY,
-      JSON.stringify({ hiddenThingCategories: ['monsters', 'gibberish', 7] }),
+      JSON.stringify({ hiddenThingCategories: ['monsters', 'gibberish', 7, 'toString'] }),
     );
     const p = new MapPrefsStore();
     expect(p.isCategoryShown('monsters')).toBe(false);
+    // Prototype-chain keys must not graft own properties onto the record.
+    expect(Object.keys(p.showCategories)).toEqual(CATEGORIES.map((c) => c.id));
     localStorage.setItem(KEY, JSON.stringify({ hiddenThingCategories: 'monsters' }));
     const q = new MapPrefsStore();
     expect(q.isCategoryShown('monsters')).toBe(true);

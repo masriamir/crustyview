@@ -53,7 +53,9 @@ export class MapPrefsStore {
     if (v.style === 'theme' || v.style === 'classic') this.style = v.style;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
-        if (typeof id === 'string' && id in this.showCategories) {
+        // Own-property check: `in` would also accept prototype keys ("toString"),
+        // letting crafted storage graft junk keys onto the record.
+        if (typeof id === 'string' && Object.hasOwn(this.showCategories, id)) {
           this.showCategories[id as ThingCategory] = false;
         }
       }
