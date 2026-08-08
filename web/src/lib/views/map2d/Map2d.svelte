@@ -19,6 +19,7 @@
     countByCategory,
     type ThingCategory,
   } from './things';
+  import { CLASSIC_LINE_TELEPORT } from './lines';
 
   interface Props {
     name: string;
@@ -37,6 +38,7 @@
     wall: string;
     twoSided: string;
     secret: string;
+    lineTeleport: string;
     things: Record<ThingCategory, string>;
     player: string;
   }
@@ -51,6 +53,7 @@
     wall: '#ff3b30',
     twoSided: '#8e8e93',
     secret: '#ffd60a',
+    lineTeleport: CLASSIC_LINE_TELEPORT,
     things: CLASSIC_THING_COLORS,
     player: '#34c759',
   };
@@ -65,6 +68,9 @@
   /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
   const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
   const KIND_WIDTH: Record<LineKind, number> = { two_sided: 1, one_sided: 2, secret: 1.5 };
+  /** Teleport overlay stroke: dashed so the base kind color shows through the gaps. */
+  const TELEPORT_DASH = [6, 4];
+  const TELEPORT_WIDTH = 2;
 
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
@@ -126,6 +132,7 @@
       wall: token(style, '--map2d-wall', CLASSIC.wall),
       twoSided: token(style, '--map2d-two-sided', CLASSIC.twoSided),
       secret: token(style, '--map2d-secret', CLASSIC.secret),
+      lineTeleport: token(style, '--map2d-line-teleport', CLASSIC.lineTeleport),
       things: Object.fromEntries(
         CATEGORIES.map((c) => [c.id, token(style, `--map2d-thing-${c.id}`, CLASSIC_THING_COLORS[c.id])]),
       ) as Record<ThingCategory, string>,
@@ -205,6 +212,31 @@
     }
   }
 
+  /** Dashed overlay on teleport source lines, above their base kind stroke. */
+  function drawTeleportLines(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    color: string,
+  ): void {
+    const path = new Path2D();
+    let any = false;
+    for (const line of map.lines) {
+      if (!line.teleport) continue;
+      any = true;
+      const from = mapToScreen(t, line.x1, line.y1);
+      const to = mapToScreen(t, line.x2, line.y2);
+      path.moveTo(from.x, from.y);
+      path.lineTo(to.x, to.y);
+    }
+    if (!any) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = TELEPORT_WIDTH;
+    ctx.setLineDash(TELEPORT_DASH);
+    ctx.stroke(path);
+    ctx.setLineDash([]);
+  }
+
   function drawThings(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
@@ -277,6 +309,7 @@
     if (!map || !t) return;
     if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid);
     drawLines(ctx, map, t, colors);
+    if (mapPrefs.showTeleportLines) drawTeleportLines(ctx, map, t, colors.lineTeleport);
     if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
     drawPlayerStart(ctx, map, t, colors.player);
   }
@@ -319,6 +352,15 @@
     const map = data;
     if (!map) return null;
     return countByCategory(map.things, wad.summary?.game ?? null);
+  }
+
+  /** Count of teleport source lines for the line-filter chip; null until the map is available. */
+  export function teleportLineCount(): number | null {
+    const map = data;
+    if (!map) return null;
+    let count = 0;
+    for (const line of map.lines) if (line.teleport) count += 1;
+    return count;
   }
 
   // Fit once per map, as soon as there's a real viewport. Later resizes keep the
@@ -492,6 +534,7 @@
     void height;
     void mapPrefs.showThings;
     for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
+    void mapPrefs.showTeleportLines;
     void mapPrefs.showGrid;
     void mapPrefs.style;
     void theme.resolved;
