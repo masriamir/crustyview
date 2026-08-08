@@ -40,12 +40,15 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
   other: '#c7c7cc',
 };
 
+/** The table's key space: every category except the `other` fallback. */
+type TableCategory = Exclude<ThingCategory, 'other'>;
+
 /**
  * Vanilla Doom/Doom2 doomednums (the two share one numbering space). Absent
  * ids — player/deathmatch starts (1–4, 11), teleport destinations (14), and
  * anything from another game — fall through to `other`.
  */
-const TABLE: Record<Exclude<ThingCategory, 'other'>, number[]> = {
+const TABLE: Record<TableCategory, number[]> = {
   monsters: [
     7, 9, 16, 58, 64, 65, 66, 67, 68, 69, 71, 72, 84, 88, 89, 3001, 3002, 3003, 3004, 3005, 3006,
   ],
@@ -62,7 +65,7 @@ const TABLE: Record<Exclude<ThingCategory, 'other'>, number[]> = {
 };
 
 const BY_ID = new Map<number, ThingCategory>();
-for (const [category, ids] of Object.entries(TABLE) as [ThingCategory, number[]][]) {
+for (const [category, ids] of Object.entries(TABLE) as [TableCategory, number[]][]) {
   for (const id of ids) BY_ID.set(id, category);
 }
 
