@@ -7,6 +7,7 @@ import {
   loadJunk,
   loadTinyJunk,
   loadWad,
+  mapCanvas,
   mapCanvasDataUrl,
 } from './helpers';
 
@@ -72,7 +73,8 @@ test.describe('desktop shell smoke', () => {
     await expect(page.getByRole('region', { name: 'Map E1M1' })).toBeVisible();
     await expectMapCanvasPainted(page);
 
-    const canvas = page.getByRole('img', { name: /2D map of/ });
+    const canvas = mapCanvas(page);
+    await expect(canvas).toHaveAccessibleDescription(/arrow keys to pan/);
     const box = await canvas.boundingBox();
     if (!box) throw new Error('map canvas has no layout box');
 
