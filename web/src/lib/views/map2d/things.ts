@@ -6,6 +6,7 @@ export type ThingCategory =
   | 'health'
   | 'powerups'
   | 'keys'
+  | 'teleports'
   | 'decorations'
   | 'other';
 
@@ -20,6 +21,7 @@ export const CATEGORIES: readonly { id: ThingCategory; label: string }[] = [
   { id: 'health', label: 'Health' },
   { id: 'powerups', label: 'Powerups' },
   { id: 'keys', label: 'Keys' },
+  { id: 'teleports', label: 'Teleports' },
   { id: 'decorations', label: 'Decorations' },
   { id: 'other', label: 'Other' },
 ];
@@ -36,6 +38,7 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
   health: '#63e6be',
   powerups: '#bf5af2',
   keys: '#64d2ff',
+  teleports: '#5e5ce6',
   decorations: '#8e8e93',
   other: '#c7c7cc',
 };
@@ -45,8 +48,8 @@ type TableCategory = Exclude<ThingCategory, 'other'>;
 
 /**
  * Vanilla Doom/Doom2 doomednums (the two share one numbering space). Absent
- * ids — player/deathmatch starts (1–4, 11), teleport destinations (14), and
- * anything from another game — fall through to `other`.
+ * ids — player/deathmatch starts (1–4, 11) and anything from another game —
+ * fall through to `other`.
  */
 const TABLE: Record<TableCategory, number[]> = {
   monsters: [
@@ -57,6 +60,7 @@ const TABLE: Record<TableCategory, number[]> = {
   health: [83, 2011, 2012, 2013, 2014, 2015, 2018, 2019],
   powerups: [2022, 2023, 2024, 2025, 2026, 2045],
   keys: [5, 6, 13, 38, 39, 40],
+  teleports: [14],
   decorations: [
     10, 12, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 59, 60, 61, 62, 63, 70,
