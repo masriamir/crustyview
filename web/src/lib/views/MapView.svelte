@@ -102,7 +102,9 @@
             <button
               type="button"
               class="chip"
-              aria-pressed={mapPrefs.isCategoryShown(category.id)}
+              aria-pressed={counts[category.id] === 0
+                ? undefined
+                : mapPrefs.isCategoryShown(category.id)}
               disabled={counts[category.id] === 0}
               onclick={() => mapPrefs.toggleCategory(category.id)}
             >
