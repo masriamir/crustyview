@@ -18,6 +18,8 @@
   --map2d-two-sided: #8f8a80;
   --map2d-secret: #a8760a;
   --map2d-line-teleport: #4a44b5;
+  --map2d-line-sector-secret: #b02890;
+  --map2d-line-sector-damage: #567d00;
   --map2d-thing-monsters: #b3264a;
   --map2d-thing-weapons: #b56a00;
   --map2d-thing-ammo: #8a7440;
@@ -53,6 +55,8 @@
   --map2d-two-sided: #7f837f;
   --map2d-secret: #ffc848;
   --map2d-line-teleport: #7d7aff;
+  --map2d-line-sector-secret: #ff6ee0;
+  --map2d-line-sector-damage: #a8d820;
   --map2d-thing-monsters: #ff5c7a;
   --map2d-thing-weapons: #ffa938;
   --map2d-thing-ammo: #cfb46e;

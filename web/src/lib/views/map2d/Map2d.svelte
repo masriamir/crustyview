@@ -19,7 +19,11 @@
     countByCategory,
     type ThingCategory,
   } from './things';
-  import { CLASSIC_LINE_TELEPORT } from './lines';
+  import {
+    CLASSIC_LINE_SECTOR_DAMAGE,
+    CLASSIC_LINE_SECTOR_SECRET,
+    CLASSIC_LINE_TELEPORT,
+  } from './lines';
 
   interface Props {
     name: string;
@@ -39,6 +43,8 @@
     twoSided: string;
     secret: string;
     lineTeleport: string;
+    lineSectorSecret: string;
+    lineSectorDamage: string;
     things: Record<ThingCategory, string>;
     player: string;
   }
@@ -54,6 +60,8 @@
     twoSided: '#8e8e93',
     secret: '#ffd60a',
     lineTeleport: CLASSIC_LINE_TELEPORT,
+    lineSectorSecret: CLASSIC_LINE_SECTOR_SECRET,
+    lineSectorDamage: CLASSIC_LINE_SECTOR_DAMAGE,
     things: CLASSIC_THING_COLORS,
     player: '#34c759',
   };
@@ -68,9 +76,14 @@
   /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
   const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
   const KIND_WIDTH: Record<LineKind, number> = { two_sided: 1, one_sided: 2, secret: 1.5 };
-  /** Teleport overlay stroke: dashed so the base kind color shows through the gaps. */
+  /** Dashed overlay strokes above the base kind colors. Teleport keeps its
+   *  own rhythm; the two sector overlays share [4,4] with the damage pass
+   *  phase-shifted, so a line bordering both a secret and a damaging sector
+   *  interleaves the two colors instead of one hiding the other. */
   const TELEPORT_DASH = [6, 4];
-  const TELEPORT_WIDTH = 2;
+  const SECTOR_DASH = [4, 4];
+  const OVERLAY_WIDTH = 2;
+  const DAMAGE_DASH_OFFSET = 4;
 
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
@@ -133,6 +146,8 @@
       twoSided: token(style, '--map2d-two-sided', CLASSIC.twoSided),
       secret: token(style, '--map2d-secret', CLASSIC.secret),
       lineTeleport: token(style, '--map2d-line-teleport', CLASSIC.lineTeleport),
+      lineSectorSecret: token(style, '--map2d-line-sector-secret', CLASSIC.lineSectorSecret),
+      lineSectorDamage: token(style, '--map2d-line-sector-damage', CLASSIC.lineSectorDamage),
       things: Object.fromEntries(
         CATEGORIES.map((c) => [c.id, token(style, `--map2d-thing-${c.id}`, CLASSIC_THING_COLORS[c.id])]),
       ) as Record<ThingCategory, string>,
@@ -212,17 +227,24 @@
     }
   }
 
-  /** Dashed overlay on teleport source lines, above their base kind stroke. */
-  function drawTeleportLines(
+  /** One dashed overlay pass above the base kind strokes. */
+  interface OverlayStroke {
+    color: string;
+    dash: number[];
+    dashOffset?: number;
+    marked: (line: Map2d['lines'][number]) => boolean;
+  }
+
+  function drawLineOverlay(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
     t: Transform,
-    color: string,
+    overlay: OverlayStroke,
   ): void {
     const path = new Path2D();
     let any = false;
     for (const line of map.lines) {
-      if (!line.teleport) continue;
+      if (!overlay.marked(line)) continue;
       any = true;
       const from = mapToScreen(t, line.x1, line.y1);
       const to = mapToScreen(t, line.x2, line.y2);
@@ -230,11 +252,13 @@
       path.lineTo(to.x, to.y);
     }
     if (!any) return;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = TELEPORT_WIDTH;
-    ctx.setLineDash(TELEPORT_DASH);
+    ctx.strokeStyle = overlay.color;
+    ctx.lineWidth = OVERLAY_WIDTH;
+    ctx.setLineDash(overlay.dash);
+    ctx.lineDashOffset = overlay.dashOffset ?? 0;
     ctx.stroke(path);
     ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
   }
 
   function drawThings(
@@ -309,7 +333,25 @@
     if (!map || !t) return;
     if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid);
     drawLines(ctx, map, t, colors);
-    if (mapPrefs.showTeleportLines) drawTeleportLines(ctx, map, t, colors.lineTeleport);
+    if (mapPrefs.showSecretSectors)
+      drawLineOverlay(ctx, map, t, {
+        color: colors.lineSectorSecret,
+        dash: SECTOR_DASH,
+        marked: (l) => l.secret_sector === true,
+      });
+    if (mapPrefs.showDamagingSectors)
+      drawLineOverlay(ctx, map, t, {
+        color: colors.lineSectorDamage,
+        dash: SECTOR_DASH,
+        dashOffset: DAMAGE_DASH_OFFSET,
+        marked: (l) => l.damaging_sector === true,
+      });
+    if (mapPrefs.showTeleportLines)
+      drawLineOverlay(ctx, map, t, {
+        color: colors.lineTeleport,
+        dash: TELEPORT_DASH,
+        marked: (l) => l.teleport === true,
+      });
     if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
     drawPlayerStart(ctx, map, t, colors.player);
   }
@@ -535,6 +577,8 @@
     void mapPrefs.showThings;
     for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
     void mapPrefs.showTeleportLines;
+    void mapPrefs.showSecretSectors;
+    void mapPrefs.showDamagingSectors;
     void mapPrefs.showGrid;
     void mapPrefs.style;
     void theme.resolved;
