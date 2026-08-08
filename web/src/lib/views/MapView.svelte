@@ -4,6 +4,7 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
+  import { CLASSIC_LINE_TELEPORT } from './map2d/lines';
 
   interface Props {
     name: string;
@@ -19,9 +20,16 @@
     counts === null ? 0 : Object.values(counts).reduce((a, b) => a + b, 0),
   );
 
+  const teleportLines = $derived(map2d?.teleportLineCount() ?? null);
+
   /** Swatch color per the active style, so the chips double as the legend. */
   function swatchColor(id: ThingCategory): string {
     return mapPrefs.style === 'classic' ? CLASSIC_THING_COLORS[id] : `var(--map2d-thing-${id})`;
+  }
+
+  /** Swatch for the teleport-lines chip, per the active style. */
+  function teleportSwatchColor(): string {
+    return mapPrefs.style === 'classic' ? CLASSIC_LINE_TELEPORT : 'var(--map2d-line-teleport)';
   }
 
   const modeOptions: {
@@ -114,6 +122,21 @@
               <span class="count">{counts[category.id]}</span>
             </button>
           {/each}
+        </div>
+      {/if}
+      {#if teleportLines !== null && teleportLines > 0}
+        <div class="chips" role="group" aria-label="Line overlay filters">
+          <button
+            type="button"
+            class="chip"
+            aria-pressed={mapPrefs.showTeleportLines}
+            onclick={() => mapPrefs.toggleTeleportLines()}
+          >
+            <span class="swatch" style:background={teleportSwatchColor()} aria-hidden="true"
+            ></span>
+            Teleport lines
+            <span class="count">{teleportLines}</span>
+          </button>
         </div>
       {/if}
     {/if}
