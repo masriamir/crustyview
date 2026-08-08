@@ -114,6 +114,15 @@
         <button
           type="button"
           class="tool"
+          aria-pressed={mapPrefs.alwaysShowPlayerStart}
+          aria-label="Always show player start"
+          onclick={() => mapPrefs.toggleAlwaysShowPlayerStart()}
+        >
+          Start
+        </button>
+        <button
+          type="button"
+          class="tool"
           aria-label="Fit the map to the view"
           onclick={() => map2d?.refit()}
         >
