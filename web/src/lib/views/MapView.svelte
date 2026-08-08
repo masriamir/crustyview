@@ -160,6 +160,7 @@
             <button
               type="button"
               class="chip"
+              title="Sectors marked secret — the intermission tally counts each one"
               aria-pressed={mapPrefs.showSecretSectors}
               onclick={() => mapPrefs.toggleSecretSectors()}
             >
