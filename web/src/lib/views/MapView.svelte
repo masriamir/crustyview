@@ -146,10 +146,11 @@
     align-items: center;
     gap: 0.5rem;
   }
-  /* Full 44px targets: these are the map's touch controls (ADR-0003). */
+  /* One height per bar: match the SegmentedControl's 36px on desktop. ADR-0003's
+     ≥44px touch floor is compact-scoped — restored in the 48rem media block. */
   .tool {
     min-width: var(--touch-target);
-    min-height: var(--touch-target);
+    min-height: calc(var(--touch-target) - 8px);
     padding: 0 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -182,7 +183,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    min-height: var(--touch-target);
+    min-height: calc(var(--touch-target) - 8px);
     padding: 0 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -238,6 +239,10 @@
   @media (max-width: 48rem) {
     .back {
       display: inline-flex;
+    }
+    .tool,
+    .chip {
+      min-height: var(--touch-target);
     }
   }
 </style>
