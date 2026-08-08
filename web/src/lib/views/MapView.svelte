@@ -3,6 +3,7 @@
   import Map2d from './map2d/Map2d.svelte';
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
+  import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
 
   interface Props {
     name: string;
@@ -12,6 +13,16 @@
   /** The mounted 2D map, for the view controls it exports (`refit`, `zoomFactor`). */
   let map2d = $state<Map2d>();
   const zoom = $derived(map2d?.zoomFactor() ?? 1);
+
+  const counts = $derived(map2d?.categoryCounts() ?? null);
+  const totalThings = $derived(
+    counts === null ? 0 : Object.values(counts).reduce((a, b) => a + b, 0),
+  );
+
+  /** Swatch color per the active style, so the chips double as the legend. */
+  function swatchColor(id: ThingCategory): string {
+    return mapPrefs.style === 'classic' ? CLASSIC_THING_COLORS[id] : `var(--map2d-thing-${id})`;
+  }
 
   const modeOptions: {
     value: MapMode;
@@ -85,6 +96,24 @@
         </button>
         <span class="zoom" title="Zoom, relative to the fitted view">×{zoom.toFixed(1)}</span>
       </div>
+      {#if mapPrefs.showThings && totalThings > 0 && counts !== null}
+        <div class="chips" role="group" aria-label="Thing category filters">
+          {#each CATEGORIES as category (category.id)}
+            <button
+              type="button"
+              class="chip"
+              aria-pressed={mapPrefs.isCategoryShown(category.id)}
+              disabled={counts[category.id] === 0}
+              onclick={() => mapPrefs.toggleCategory(category.id)}
+            >
+              <span class="swatch" style:background={swatchColor(category.id)} aria-hidden="true"
+              ></span>
+              {category.label}
+              <span class="count">{counts[category.id]}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
     {/if}
   </div>
   {#if nav.mapMode === '2d'}
@@ -142,6 +171,48 @@
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.85rem;
+  }
+  .chips {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: var(--touch-target);
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background var(--transition);
+  }
+  /* Off = filtered out: keep the swatch visible but mute the chip. */
+  .chip[aria-pressed='false'] {
+    color: var(--text-muted);
+    background: transparent;
+  }
+  .chip[aria-pressed='false'] .swatch {
+    opacity: 0.35;
+  }
+  .chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .swatch {
+    width: 0.75em;
+    height: 0.75em;
+    border-radius: 2px;
+  }
+  .count {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
   }
   .back {
     display: none;
