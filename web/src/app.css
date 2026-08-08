@@ -17,7 +17,14 @@
   --map2d-wall: #bf3a1e; /* the shell accent carries the solid walls */
   --map2d-two-sided: #8f8a80;
   --map2d-secret: #a8760a;
-  --map2d-thing: #6b675f;
+  --map2d-thing-monsters: #b3264a;
+  --map2d-thing-weapons: #b56a00;
+  --map2d-thing-ammo: #8a7440;
+  --map2d-thing-health: #177a5b;
+  --map2d-thing-powerups: #7d3fa8;
+  --map2d-thing-keys: #1d6f9e;
+  --map2d-thing-decorations: #8f8a80;
+  --map2d-thing-other: #6b675f;
   --map2d-player: #1f7a4d;
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -43,7 +50,14 @@
   --map2d-wall: #ff6a33;
   --map2d-two-sided: #7f837f;
   --map2d-secret: #ffc848;
-  --map2d-thing: #9a968f;
+  --map2d-thing-monsters: #ff5c7a;
+  --map2d-thing-weapons: #ffa938;
+  --map2d-thing-ammo: #cfb46e;
+  --map2d-thing-health: #57d9c2;
+  --map2d-thing-powerups: #c77dff;
+  --map2d-thing-keys: #5ac8fa;
+  --map2d-thing-decorations: #7f837f;
+  --map2d-thing-other: #9a968f;
   --map2d-player: #4fd28a;
 }
 
