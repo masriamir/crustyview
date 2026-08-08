@@ -139,6 +139,29 @@ test.describe('desktop shell smoke', () => {
     await tools.getByRole('button', { name: 'Show things' }).click();
     await expect(chips).toBeVisible();
   });
+
+  test('teleport line chip toggles the dashed overlay', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M2', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const chips = page.getByRole('group', { name: 'Line overlay filters' });
+    await expect(chips).toBeVisible();
+    const chip = chips.getByRole('button', { name: /^Teleport lines/ });
+    await expect(chip).toHaveAttribute('aria-pressed', 'true');
+    await expect(chip).toHaveText(/[1-9]/);
+
+    // Hiding the overlay changes the canvas; restoring it restores the exact
+    // pixels (the draw is deterministic).
+    const before = await mapCanvasDataUrl(page);
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await chip.click();
+    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {
