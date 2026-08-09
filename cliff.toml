@@ -8,6 +8,12 @@ All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
 
 """
+# The `[**breaking**]` prefix is load-bearing, not decoration. While at 0.x a
+# breaking change and a plain `feat:` both bump the minor (see [bump] below), so
+# the version number alone cannot tell them apart — ADR-0004 accepts that
+# precisely because the changelog is supposed to carry the distinction instead.
+# Without this marker it did not, and the signal was recorded nowhere a reader
+# could see it.
 body = """
 {% if version %}\
 ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
@@ -17,7 +23,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
-- {{ commit.message | upper_first }}\
+- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}\
 {% endfor %}
 {% endfor %}
 """
