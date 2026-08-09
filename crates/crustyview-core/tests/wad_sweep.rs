@@ -12,11 +12,11 @@
 //! texture-probe `Err` (e.g. Strife's sentinel negative patch counts) is allowed
 //! and must not prevent obtaining the summary/map.
 
+use crustyview_core::assemble::assemble_view;
 use crustyview_core::map2d::map2d;
 use crustyview_core::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
 use crustyview_core::summary::summarize_wad;
 use crustywad::Wad;
-use crustywad::map::Map;
 use std::path::PathBuf;
 
 #[test]
@@ -59,10 +59,11 @@ fn sweep_wad_collection() {
             );
         }
 
-        // map2d must flatten every group whose Map::assemble succeeds — same
-        // tolerance the sweep already applies to assembly failures elsewhere.
+        // map2d must flatten every group the viewer can assemble — same
+        // tolerance the sweep already applies to assembly failures elsewhere,
+        // and the same BLOCKMAP/REJECT-free path map2d itself takes (#45).
         for group in wad.map_groups() {
-            if Map::assemble(&wad, &group).is_err() {
+            if assemble_view(&wad, &group).is_err() {
                 continue;
             }
             let m = map2d(&wad, &group.name).unwrap_or_else(|msg| {

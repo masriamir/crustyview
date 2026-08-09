@@ -3,9 +3,10 @@
 //! `map2d` is the phase-1 contract behind the browser's top-down map view
 //! (ADR-0002 staging): everything the canvas needs, nothing it doesn't.
 
+use crate::assemble::assemble_view;
 use crate::error::sanitize;
 use crustywad::Wad;
-use crustywad::map::{Map, MapFormat, SidedefIdx};
+use crustywad::map::{MapFormat, SidedefIdx};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -169,7 +170,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         .into_iter()
         .find(|g| g.name == name)
         .ok_or_else(|| sanitize(&format!("no map named {name}")))?;
-    let map = Map::assemble(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
+    let map = assemble_view(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
     let format = map.format();
     // Classify every sector once; each line then looks up its two sides.
     let sector_marks: Vec<(bool, bool)> = map
@@ -283,7 +284,7 @@ fn bounds_of(lines: &[Line2d], things: &[Thing2d]) -> Bounds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::{broken_pwad, build_pwad, tiny_pwad};
+    use crate::fixtures::{broken_pwad, build_pwad, dangling_blockmap_pwad, tiny_pwad};
 
     #[test]
     fn flattens_lines_with_kinds_and_bounds() {
@@ -352,6 +353,12 @@ mod tests {
             map2d(&broken_pwad(), "MAP01").unwrap_err(),
             "map group is missing required lump VERTEXES"
         );
+    }
+
+    #[test]
+    fn a_defective_blockmap_does_not_block_the_view() {
+        let m = map2d(&dangling_blockmap_pwad(), "MAP01").expect("the viewer never reads BLOCKMAP");
+        assert_eq!(m.lines.len(), 1);
     }
 
     #[test]

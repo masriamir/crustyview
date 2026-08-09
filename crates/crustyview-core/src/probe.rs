@@ -1,7 +1,7 @@
 //! Map and texture probes exercising crustywad's heavier read paths.
 
+use crate::assemble::assemble_view;
 use crustywad::gfx::GfxError;
-use crustywad::map::Map;
 use crustywad::{ParseOptions, Wad};
 
 /// Summary counts from assembling the first map group.
@@ -27,7 +27,7 @@ pub struct MapProbe {
 #[must_use]
 pub fn probe_first_map(wad: &Wad) -> Option<MapProbe> {
     let group = wad.map_groups().into_iter().next()?;
-    let map = Map::assemble(wad, &group).ok()?;
+    let map = assemble_view(wad, &group).ok()?;
     Some(MapProbe {
         name: map.name().to_owned(),
         vertices: map.vertices().len(),
@@ -148,7 +148,7 @@ pub struct MapStats {
 #[must_use]
 pub fn map_stats(wad: &Wad, name: &str) -> Option<MapStats> {
     let group = wad.map_groups().into_iter().find(|g| g.name == name)?;
-    let map = Map::assemble(wad, &group).ok()?;
+    let map = assemble_view(wad, &group).ok()?;
     Some(MapStats {
         things: map.things().len(),
         vertexes: map.vertices().len(),

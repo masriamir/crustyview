@@ -5,6 +5,7 @@
 //! behind both the wasm shim (`crustyview-web`) and the future native editor
 //! (`crustyview-native`). See ADR-0002.
 
+pub mod assemble;
 pub mod error;
 pub mod map2d;
 pub mod probe;
