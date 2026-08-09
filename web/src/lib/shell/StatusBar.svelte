@@ -46,10 +46,16 @@
   </div>
   <!-- Outside the phase conditional on purpose: a build identifier is most
        useful when a load has just failed and it's going into a bug report.
-       `aria-label` (rather than a nested visually-hidden prefix) keeps the
-       element's visible text a plain version string, since a nested span's
-       text would still show up in `textContent` despite being clipped. -->
-  <span class="build" aria-label={`Build ${build}`}>{build}</span>
+       One `.visually-hidden` span carries the full "Build v…" announcement
+       (no whitespace juggling between a label and a value), and the visible
+       text sits in its own `aria-hidden` span so it stays plain-text
+       targetable without relying on `aria-label` — a bare `<span>` has the
+       implicit `role=generic`, and ARIA 1.2 forbids accessible names on
+       `generic`, so an `aria-label` there is not reliably honored. -->
+  <span class="build">
+    <span class="visually-hidden">Build {build}</span>
+    <span class="build-text" aria-hidden="true">{build}</span>
+  </span>
 </div>
 
 <style>
