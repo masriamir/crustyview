@@ -58,6 +58,12 @@ for (const f of files) {
         } catch (e) {
           throw new Error("map2d(" + name + ") returned unparseable JSON: " + e.message);
         }
+        const statsJson = doc.mapStats(name);
+        try {
+          JSON.parse(statsJson);
+        } catch (e) {
+          throw new Error("mapStats(" + name + ") returned unparseable JSON: " + e.message);
+        }
       }
     } finally {
       doc.free();

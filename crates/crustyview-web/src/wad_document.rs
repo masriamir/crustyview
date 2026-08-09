@@ -54,6 +54,18 @@ impl WadDocument {
         }
     }
 
+    /// JSON [`MapStats`](crustyview_core::probe::MapStats) for the named map,
+    /// or the string `"null"` when the map is missing or fails to assemble
+    /// (best-effort, like `textureMeta` — not `map2d`'s error envelope).
+    #[must_use]
+    #[wasm_bindgen(js_name = mapStats)]
+    pub fn map_stats(&self, name: &str) -> String {
+        match probe::map_stats(&self.wad, name) {
+            Some(stats) => serde_json::to_string(&stats).unwrap_or_else(|_| "null".to_owned()),
+            None => "null".to_owned(),
+        }
+    }
+
     /// JSON [`TextureMeta`](crustyview_core::probe::TextureMeta) for the first
     /// texture, or the string `"null"` when there is none (or parsing fails).
     #[must_use]
