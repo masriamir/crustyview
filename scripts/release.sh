@@ -22,8 +22,12 @@ on_exit() {
   [[ $rc -eq 0 ]] && return
   case "$phase" in
     mutated)
-      echo "error: release aborted with Cargo.toml/CHANGELOG.md already modified but not committed." >&2
-      echo "recover with: git checkout -- Cargo.toml CHANGELOG.md" >&2
+      # All three files can be dirty here: Cargo.toml from the stamp, Cargo.lock
+      # from `cargo metadata`, CHANGELOG.md from git-cliff. `git add` may also
+      # have staged them already — hence `checkout HEAD --`, not `checkout --`,
+      # which restores from the index and would preserve the staged changes.
+      echo "error: release aborted with Cargo.toml/Cargo.lock/CHANGELOG.md modified but not committed." >&2
+      echo "recover with: git checkout HEAD -- Cargo.toml Cargo.lock CHANGELOG.md" >&2
       ;;
     committed)
       echo "error: release commit landed but tagging failed; the commit exists without its tag." >&2
