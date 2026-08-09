@@ -239,6 +239,43 @@ test.describe('desktop shell smoke', () => {
         .getByRole('button', { name: 'Always show player start' }),
     ).toHaveAttribute('aria-pressed', 'false');
   });
+
+  test('bracket keys adjust the grid size and enable the grid', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const tools = page.getByRole('group', { name: '2D map view controls' });
+    const grid = tools.getByRole('button', { name: 'Show grid' });
+    await expect(grid).toHaveAttribute('aria-pressed', 'false');
+    await expect(grid).toHaveText(/Grid · 32/);
+
+    await mapCanvas(page).focus();
+    await page.keyboard.press(']');
+    await expect(grid).toHaveText(/Grid · 64/);
+    // Adjusting while hidden turns the grid on.
+    await expect(grid).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('[');
+    await expect(grid).toHaveText(/Grid · 32/);
+
+    // The size survives a reload (no URL router: re-load and re-navigate first).
+    await page.keyboard.press(']');
+    await expect(grid).toHaveText(/Grid · 64/);
+    await page.reload();
+    await loadWad(page, 'freedoom1.wad');
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: 'E1M1', exact: true })
+      .click();
+    await expectMapCanvasPainted(page);
+    await expect(
+      page
+        .getByRole('group', { name: '2D map view controls' })
+        .getByRole('button', { name: 'Show grid' }),
+    ).toHaveText(/Grid · 64/);
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {

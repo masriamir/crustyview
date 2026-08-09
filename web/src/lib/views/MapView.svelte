@@ -100,7 +100,7 @@
           aria-label="Show grid"
           onclick={() => mapPrefs.toggleGrid()}
         >
-          Grid
+          Grid · {mapPrefs.gridSize}
         </button>
         <button
           type="button"

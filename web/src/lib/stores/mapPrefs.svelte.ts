@@ -1,3 +1,4 @@
+import { DEFAULT_GRID_SIZE, isGridSize, type GridSize } from '../views/map2d/grid';
 import { CATEGORIES, type ThingCategory } from '../views/map2d/things';
 
 const STORAGE_KEY = 'crustyview-map-prefs';
@@ -14,6 +15,7 @@ interface StoredMapPrefs {
   showSecretSectors: boolean;
   showDamagingSectors: boolean;
   alwaysShowPlayerStart: boolean;
+  gridSize: GridSize;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -25,6 +27,7 @@ const DEFAULTS: StoredMapPrefs = {
   showSecretSectors: false,
   showDamagingSectors: false,
   alwaysShowPlayerStart: true,
+  gridSize: DEFAULT_GRID_SIZE,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -42,6 +45,7 @@ export class MapPrefsStore {
   showSecretSectors = $state(DEFAULTS.showSecretSectors);
   showDamagingSectors = $state(DEFAULTS.showDamagingSectors);
   alwaysShowPlayerStart = $state(DEFAULTS.alwaysShowPlayerStart);
+  gridSize = $state<GridSize>(DEFAULT_GRID_SIZE);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
 
   /** The player-1 arrow draws when things are shown or the always-show pref is on. */
@@ -74,6 +78,7 @@ export class MapPrefsStore {
       this.showDamagingSectors = v.showDamagingSectors;
     if (typeof v.alwaysShowPlayerStart === 'boolean')
       this.alwaysShowPlayerStart = v.alwaysShowPlayerStart;
+    if (isGridSize(v.gridSize)) this.gridSize = v.gridSize;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -115,6 +120,11 @@ export class MapPrefsStore {
     this.#persist();
   }
 
+  setGridSize(size: GridSize): void {
+    this.gridSize = size;
+    this.#persist();
+  }
+
   toggleStyle(): void {
     this.style = this.style === 'theme' ? 'classic' : 'theme';
     this.#persist();
@@ -144,6 +154,7 @@ export class MapPrefsStore {
           showSecretSectors: this.showSecretSectors,
           showDamagingSectors: this.showDamagingSectors,
           alwaysShowPlayerStart: this.alwaysShowPlayerStart,
+          gridSize: this.gridSize,
         } satisfies StoredMapPrefs),
       );
     } catch {
