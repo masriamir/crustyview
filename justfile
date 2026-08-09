@@ -52,6 +52,11 @@ sweep-wasm dir:
 fetch-freedoom dir=".freedoom" version="0.13.0":
     ./scripts/fetch-freedoom.sh "{{dir}}" "{{version}}"
 
+# Cut a release: bump from Conventional Commits, write CHANGELOG.md, commit, tag.
+# `just release --dry-run` previews without writing.
+release *args:
+    ./scripts/release.sh {{args}}
+
 # Playwright E2E smoke (fixtures: `just fetch-freedoom` once; browser: `just e2e-install` once)
 e2e: build-web
     cd web && npx playwright test

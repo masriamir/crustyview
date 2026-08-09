@@ -1,0 +1,54 @@
+# git-cliff configuration. The bump rules encode the versioning policy in
+# docs/adr/0004-versioning-and-release-policy.md — keep the two in sync.
+[changelog]
+header = """
+# Changelog
+
+All notable changes to crustyview are documented here. Versions follow the
+policy in `docs/adr/0004-versioning-and-release-policy.md`.
+"""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+]
+
+[bump]
+# Policy: `feat:` → minor even while at 0.x (git-cliff would otherwise make it a
+# patch), and a breaking change → minor until 1.0 rather than major.
+features_always_bump_minor = true
+breaking_always_bump_major = false
+# With zero tags, git-cliff's own default initial tag is unprefixed ("0.1.0"),
+# which fails validation against `tag_pattern` above. Pin it to match both the
+# `v<version>` tag scheme and the workspace's starting version (Task 1).
+initial_tag = "v0.1.0"
