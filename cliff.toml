@@ -6,6 +6,7 @@ header = """
 
 All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
+
 """
 body = """
 {% if version %}\
