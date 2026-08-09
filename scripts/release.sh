@@ -8,6 +8,20 @@
 # which cannot resolve unpublished intra-workspace deps (release-plz#2595).
 set -euo pipefail
 
+# Once `mutating` flips true, an ERR trap prints the recovery command instead
+# of leaving the operator to guess. It stays a no-op before that point (dry
+# run, arg validation, tag-exists precheck) and is turned back off once the
+# release commit lands, since "git checkout" is no longer the right advice
+# once history has already moved.
+mutating=false
+on_err() {
+  if $mutating; then
+    echo "error: release aborted with Cargo.toml/CHANGELOG.md already modified but not committed." >&2
+    echo "recover with: git checkout -- Cargo.toml CHANGELOG.md" >&2
+  fi
+}
+trap on_err ERR
+
 # Parse every argument and reject anything unrecognised. Matching only "$1"
 # would make a typo (`--dryrun`) or a wrapper that reorders arguments fall
 # through to a REAL release — which commits and tags. Failing closed is the
@@ -70,6 +84,19 @@ if $dry_run; then
   exit 0
 fi
 
+# git-cliff silently returns the PREVIOUS tag (exit 0, "There is nothing to
+# bump" on stderr) when only skip = true commit types (chore/ci/build, see
+# cliff.toml) have landed since the last release. That value still satisfies
+# the vMAJOR.MINOR.PATCH check above, so without this guard the script would
+# sail into a real release on an unchanged version: stamp a no-op, regenerate
+# the changelog, and successfully commit — only for `git tag` to fail
+# afterward because the tag already exists, aborting under set -e with a
+# spurious chore(release) commit left behind (and compounding on any retry).
+if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+  echo "error: tag $next already exists — nothing to bump since the last release?" >&2
+  exit 1
+fi
+
 # A silent no-op here would be the worst failure this script has: it would go on
 # to write a changelog, commit, and tag a release whose manifest still declares
 # the old version. So the pass exits non-zero unless it actually stamped a line.
@@ -84,6 +111,10 @@ if ! awk -v ver="$ver" '
   exit 1
 fi
 mv Cargo.toml.tmp Cargo.toml
+# Cargo.toml is now stamped and CHANGELOG.md is about to be written; a
+# mid-mutation failure from here on is recoverable but not obvious, so arm
+# the recovery hint.
+mutating=true
 
 # Read it back rather than trusting the write. -F because `.` would otherwise be
 # a regex wildcard, so "0.2.0" would also match a malformed "01210".
@@ -92,14 +123,22 @@ if ! awk "$read_version_awk" Cargo.toml | grep -qxF "$ver"; then
   exit 1
 fi
 
-# Refresh Cargo.lock so the commit is self-consistent. Also fails loudly if the
-# rewrite produced a manifest cargo can't parse.
-cargo metadata --format-version 1 --no-deps >/dev/null
+# Refresh Cargo.lock so the commit is self-consistent — `--no-deps` must NOT
+# be used here, since it skips dependency resolution entirely and leaves
+# Cargo.lock un-rewritten, so the release commit would carry a bumped
+# Cargo.toml against a stale lock (`cargo build --locked` then fails at that
+# tag). This also fails loudly if the rewrite produced a manifest cargo can't
+# parse.
+cargo metadata --format-version 1 >/dev/null
 
 git-cliff --tag "$next" -o CHANGELOG.md
 
 git add Cargo.toml Cargo.lock CHANGELOG.md
 git commit -m "chore(release): $next"
+# The commit landed: Cargo.toml/CHANGELOG.md are no longer uncommitted
+# mutations, so "git checkout -- ..." stops being the right recovery advice
+# for anything that fails from here (e.g. `git tag`).
+mutating=false
 git tag "$next"
 
 echo "Tagged $next. Push with: git push --follow-tags"
