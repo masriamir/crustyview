@@ -6,7 +6,8 @@
 //! [`load_error_message`] is a plain sanitize passthrough. `sanitize` stays
 //! as defense-in-depth: it strips ANSI escapes, control characters, and
 //! extra lines in case a future crustywad release regresses a `Display`
-//! implementation.
+//! implementation. It is shared crate-wide — `map2d` routes its user-facing
+//! messages through it too (#46).
 
 use crustywad::ParseError;
 

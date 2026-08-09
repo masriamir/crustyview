@@ -77,9 +77,11 @@ export class WadStore {
     let entry = this.#map2dCache.get(name);
     if (entry === undefined) {
       try {
-        const parsed = JSON.parse(this.#doc.map2d(name)) as Map2d | Map2dFailure;
+        const parsed = JSON.parse(this.#doc.map2d(name)) as Map2d | Map2dFailure | null;
         entry =
-          'error' in parsed ? { map: null, error: parsed.error } : { map: parsed, error: null };
+          parsed !== null && 'error' in parsed
+            ? { map: null, error: parsed.error }
+            : { map: parsed, error: null };
       } catch {
         // Unparseable payload — fall back to the generic alert line.
         entry = { map: null, error: null };
