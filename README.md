@@ -15,4 +15,10 @@ The browser app lives in top-level `web/` (Svelte + Vite + TypeScript). Install 
 dependencies once (`cd web && npm install`), then run `just dev` (which builds the wasm
 and starts the Vite dev server).
 
+## Decisions
+
+Architectural decisions are recorded as ADRs in [`docs/adr/`](docs/adr/).
+
+- [ADR-0004](docs/adr/0004-versioning-and-release-policy.md) — versioning and release policy
+
 Status: bootstrap + WASM go/no-go spike.
