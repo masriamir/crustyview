@@ -88,30 +88,14 @@ pub(crate) fn tiny_pwad() -> Wad {
     .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
     .collect();
 
-    // Assemble the PWAD: header + lumps + directory.
-    let lumps: [(&str, &[u8]); 6] = [
+    build_pwad(&[
         ("MAP01", &[]),
         ("THINGS", &things),
         ("LINEDEFS", &linedefs),
         ("SIDEDEFS", &sidedefs),
         ("VERTEXES", &vertexes),
         ("SECTORS", &sectors),
-    ];
-    let mut body = Vec::new();
-    let mut directory = Vec::new();
-    for (name, data) in lumps {
-        let filepos = 12 + body.len();
-        body.extend_from_slice(data);
-        directory.extend_from_slice(&i32::try_from(filepos).unwrap().to_le_bytes());
-        directory.extend_from_slice(&i32::try_from(data.len()).unwrap().to_le_bytes());
-        directory.extend_from_slice(&name8(name));
-    }
-    let mut bytes = b"PWAD".to_vec();
-    bytes.extend_from_slice(&6i32.to_le_bytes());
-    bytes.extend_from_slice(&i32::try_from(12 + body.len()).unwrap().to_le_bytes());
-    bytes.extend_from_slice(&body);
-    bytes.extend_from_slice(&directory);
-    Wad::from_bytes(bytes).expect("tiny PWAD parses")
+    ])
 }
 
 /// A PWAD whose MAP01 group lacks the required VERTEXES lump.
