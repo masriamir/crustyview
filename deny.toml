@@ -8,6 +8,11 @@ ignore = []
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Intra-workspace path deps carry no version requirement: every crate here is
+# `publish = false`, so the requirement would be meaningless and would pin to a
+# stale `^0.1.0` as the workspace version moves. This exemption applies only to
+# private crates, so public-crate wildcards are still denied.
+allow-wildcard-paths = true
 
 [licenses]
 version = 2

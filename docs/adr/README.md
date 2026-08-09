@@ -37,3 +37,5 @@ choices don't need an ADR.
   portable Rust/`wgpu` core behind a Svelte + TypeScript web shell
 - [ADR-0003](0003-viewer-ui-ux-sidebar-shell.md) — Viewer UI/UX: sidebar
   shell, state-driven navigation, tokened light/dark theming, mobile-capable
+- [ADR-0004](0004-versioning-and-release-policy.md) — Versioning and release
+  policy: single workspace version, git-cliff over release-plz
