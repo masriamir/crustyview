@@ -16,6 +16,10 @@ dry_run=false
 for arg in "$@"; do
   case "$arg" in
     --dry-run) dry_run=true ;;
+    # `just release -- --dry-run` forwards the separator literally. Accepting it
+    # as a no-op costs nothing: it is explicit, so it can't be a typo that slips
+    # through to a real release.
+    --) ;;
     *)
       echo "error: unknown argument '$arg'" >&2
       echo "usage: scripts/release.sh [--dry-run]" >&2
