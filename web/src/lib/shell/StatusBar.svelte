@@ -46,7 +46,7 @@
   </div>
   <!-- Outside the phase conditional on purpose: a build identifier is most
        useful when a load has just failed and it's going into a bug report. -->
-  <span class="build">{build}</span>
+  <span class="build"><span class="visually-hidden">Build </span>{build}</span>
 </div>
 
 <style>
