@@ -8,8 +8,21 @@
 # which cannot resolve unpublished intra-workspace deps (release-plz#2595).
 set -euo pipefail
 
+# Parse every argument and reject anything unrecognised. Matching only "$1"
+# would make a typo (`--dryrun`) or a wrapper that reorders arguments fall
+# through to a REAL release — which commits and tags. Failing closed is the
+# only safe default here.
 dry_run=false
-[[ "${1:-}" == "--dry-run" ]] && dry_run=true
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) dry_run=true ;;
+    *)
+      echo "error: unknown argument '$arg'" >&2
+      echo "usage: scripts/release.sh [--dry-run]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
@@ -20,12 +33,16 @@ if ! $dry_run && [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 next="$(git-cliff --bumped-version)"   # e.g. v0.2.0
-ver="${next#v}"
 
-if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "error: git-cliff returned an unusable version: '$next'" >&2
+# Validate the TAG, not just the stripped version. `next` is what gets tagged,
+# and an unprefixed value like `0.1.0` would pass a version-only check while
+# violating the v<version> policy — and it would fall outside cliff.toml's
+# anchored tag_pattern, making the tag invisible as the next release's baseline.
+if [[ ! "$next" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "error: git-cliff returned an unusable tag: '$next' (expected vMAJOR.MINOR.PATCH)" >&2
   exit 1
 fi
+ver="${next#v}"
 
 # Both passes below scope to the [workspace.package] table identically: `inblock`
 # is re-evaluated at every table header, so a `version` key in any other table is
