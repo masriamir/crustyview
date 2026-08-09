@@ -1,10 +1,12 @@
 //! User-facing messages for WAD load failures.
 //!
-//! `crustywad::ParseError`'s `Display` embeds `binrw`'s multi-line ANSI
-//! backtrace report for the `Header` and `Directory` variants (crustywad#416),
-//! which is unfit for an error banner. [`load_error_message`] maps those two
-//! variants to short single-line messages and sanitizes everything else in
-//! case a future crustywad release changes a `Display` implementation.
+//! Since crustywad 0.9.4 (crustywad#416), every `ParseError` variant's
+//! `Display` is a clean single line — the `Header`/`Directory` variants no
+//! longer embed `binrw`'s multi-line ANSI backtrace report — so
+//! [`load_error_message`] is a plain sanitize passthrough. `sanitize` stays
+//! as defense-in-depth: it strips ANSI escapes, control characters, and
+//! extra lines in case a future crustywad release regresses a `Display`
+//! implementation.
 
 use crustywad::ParseError;
 
@@ -12,15 +14,7 @@ use crustywad::ParseError;
 /// load, suitable for direct display to the user.
 #[must_use]
 pub fn load_error_message(err: &ParseError) -> String {
-    match err {
-        // Header and Directory wrap a `binrw::Error` whose `Display` is the
-        // multi-line report; their fixed fields can only fail on early EOF.
-        ParseError::Header(_) => "failed to parse WAD header: unexpected end of input".to_owned(),
-        ParseError::Directory { index, .. } => {
-            format!("failed to parse WAD directory entry {index}: unexpected end of input")
-        }
-        other => sanitize(&other.to_string()),
-    }
+    sanitize(&err.to_string())
 }
 
 /// First line only, ANSI escape sequences and control characters removed,
@@ -89,6 +83,10 @@ mod tests {
         v
     }
 
+    // The next two assertions now pin crustywad 0.9.4's own `Display` wording
+    // end-to-end — crustywad#416 adopted exactly the strings this module's
+    // hand-written arms used to produce. An upstream rewording should fail
+    // here rather than silently change the error banner.
     #[test]
     fn truncated_header_maps_to_single_clean_line() {
         let msg = load_error_message(&load_err(&[0u8; 9]));
