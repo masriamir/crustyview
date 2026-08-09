@@ -3,7 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-08-09
 - **Deciders:** Amir Masri
-- **Tracking issue / PR:** #83 · PR #87 (`chore/83-versioning-policy`)
+- **Tracking issue / PR:** #83 · PR #87 (`chore/83-versioning-policy`); amended by
+  #90 (squash-merge contract, policy item 5) after cutting v0.1.0
 
 ## Context and problem statement
 
@@ -80,13 +81,20 @@ Within that choice, the concrete policy is:
    table: `feat:` → minor, `fix:`/`docs:`/`perf:` → patch, a `!` or
    `BREAKING CHANGE:` footer → minor while the workspace is 0.x and major
    from 1.0 on. An MSRV raise gets no special-cased bump — it's whatever its
-   own commit type implies.
+   own commit type implies. In practice only the `!` form is reachable; see
+   policy item 5 for why the footer form is not.
 3. Releases are cut by **`just release`**, run locally by a maintainer — not
    by CI, and not by a bot-authored release PR.
 4. The build string rendered in the status bar is sourced from
    `env!("CARGO_PKG_VERSION")` inside the wasm build plus a Vite-injected git
    SHA (issue #84 — a separately filed, separately implemented piece of
    work; not built by this ADR).
+5. **The PR title is the changelog entry and the bump; the squash commit body
+   is not load-bearing.** crustyview squash-merges, so `main` carries one
+   commit per PR whose message is the PR title, and that is the text
+   git-cliff parses. `squash_merge_commit_message` is held at `BLANK` so the
+   body stays empty; breaking changes are declared with `!` in the PR title.
+   See below.
 
 ### Consequences
 
@@ -111,6 +119,16 @@ Within that choice, the concrete policy is:
   status bar itself renders — desktop widths. `.status-bar` is
   `display: none` below `48rem`, the same mobile gap #79 already tracks for
   map stats; not solved by this ADR.
+- Good, because squash-merge collapses a branch's review churn into one
+  changelog entry per shipped PR, so the published notes describe outcomes
+  rather than the path taken to them.
+- Bad, because the PR title becomes the single load-bearing string in the
+  whole release path and nothing validates it. lefthook's `commit-msg` hook
+  checks the branch commits, which squash-merge then discards; the title
+  passes through no hook, no CI job, and no branch protection (a private repo
+  on a free plan cannot require checks). A PR shipping user-visible work under
+  a `chore:` title is omitted from the changelog *and* skips the minor bump,
+  and nothing reports it.
 
 **Why the bump mapping diverges from crustywad, on purpose.** crustywad maps
 `feat:` → *patch* and reserves *minor* for breaking changes. That's because
@@ -137,6 +155,61 @@ marker still carries the signal explicitly in the generated changelog, so the
 information isn't lost — it's just not yet encoded in the number. That
 distinction becomes load-bearing once crustyview reaches 1.0, at which point
 `breaking_always_bump_major` should flip to `true`.
+
+**How squash-merge feeds the changelog, and why the commit body is not
+load-bearing.** Every PR lands on `main` as a single squash commit whose
+message is the PR title, with GitHub appending ` (#N)`. git-cliff therefore
+parses **PR titles, never the commits written on the branch** — which means a
+PR title alone decides whether the work appears in `CHANGELOG.md`
+(`filter_unconventional` drops a non-conventional title outright, and
+`chore`/`ci`/`build` are `skip = true`), which section it lands under, and how
+the version moves. This is a genuine benefit and not merely a hazard: PR #87
+carried 14 commits, 9 of them `fix(release):` churn from review rounds, and
+squashing under a `chore:` title collapsed the lot into one skipped commit, so
+release-script iteration never reached the user-facing changelog. It also
+means every changelog line carries a `(#N)` pointing back at a reviewed PR.
+
+The body is deliberately **not** part of that contract, and
+`squash_merge_commit_message` is held at `BLANK` to keep it empty. Three
+properties of git-cliff 2.13.1, measured against this repo's `cliff.toml`
+rather than read from documentation, drove that:
+
+- The body is already **invisible to the changelog**: the template renders
+  `commit.message`, which for a conventional commit is the description alone.
+- The body is **not inert for the bump**: a line beginning `BREAKING CHANGE:`
+  anywhere in it promotes patch to minor, including from inside a fenced code
+  block, since nothing here parses markdown. Only losing the line-start
+  position (a `>` quote) suppresses it.
+- **Per-commit granularity is unavailable** regardless of preference:
+  `split_commits = true` emits duplicate copies of the parent commit's
+  description and loses the breaking bump entirely.
+
+So `PR_BODY` would buy nothing the changelog can show while importing a silent
+bump hazard that fires off a pasted code fence — and crustyview PR bodies
+routinely contain fences. `COMMIT_MESSAGES` would let a branch commit's own
+footer fire by the back door, driven by exactly the commits squash-merge
+exists to discard. A curated `Changelog:` trailer read from `commit.footers`
+was considered and rejected as machinery this repo is too small to need, with
+a silent fallback to the title when forgotten. `BLANK` closes the hazard by
+construction rather than by discipline, and it forecloses nothing: GitHub's
+merge dialog still permits editing the squash body at merge time, so a prose
+`BREAKING CHANGE:` remains available when it is deliberately wanted.
+
+The cost is that `!` in the PR title becomes the only routinely-available
+breaking-change channel, so what `!` actually does has to be known rather than
+assumed:
+
+| PR title | Bump | Note |
+|---|---|---|
+| `feat:` / `feat!:` | minor | `!` changes nothing on `feat` while at 0.x |
+| `fix:` | patch | |
+| `fix!:` / `docs!:` / `perf!:` | minor | where `!` changes the outcome |
+| `chore!:` / `ci!:` / `build!:` | minor | `protect_breaking_commits` overrides `skip`, so it appears under a bare `### Chore` heading |
+
+Breaking entries are marked `[**breaking**]` in the changelog (#92) — without
+that marker the `!` drove the bump but rendered identically to a
+non-breaking commit, which would leave the "Why same-minor" reasoning above
+resting on a signal that did not exist.
 
 ## Pros and cons of the options
 
