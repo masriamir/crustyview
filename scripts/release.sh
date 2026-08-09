@@ -8,19 +8,32 @@
 # which cannot resolve unpublished intra-workspace deps (release-plz#2595).
 set -euo pipefail
 
-# Once `mutating` flips true, an ERR trap prints the recovery command instead
-# of leaving the operator to guess. It stays a no-op before that point (dry
-# run, arg validation, tag-exists precheck) and is turned back off once the
-# release commit lands, since "git checkout" is no longer the right advice
-# once history has already moved.
-mutating=false
-on_err() {
-  if $mutating; then
-    echo "error: release aborted with Cargo.toml/CHANGELOG.md already modified but not committed." >&2
-    echo "recover with: git checkout -- Cargo.toml CHANGELOG.md" >&2
-  fi
+# An EXIT trap (not ERR) so this fires on both a failing command under `set -e`
+# AND an explicit `exit` — bash's ERR trap does not trigger for the latter, and
+# several failure paths below (version-stamp verification, argument errors) exit
+# explicitly. `phase` tracks how far the script got, because the right advice
+# changes as it progresses: before any write, there's nothing to undo; once
+# Cargo.toml/CHANGELOG.md are stamped but not committed, `git checkout` cleanly
+# undoes them; once the release commit lands, checkout is wrong (history has
+# already moved), so the advice shifts to inspecting and resolving that commit.
+phase=clean
+on_exit() {
+  local rc=$?
+  [[ $rc -eq 0 ]] && return
+  case "$phase" in
+    mutated)
+      echo "error: release aborted with Cargo.toml/CHANGELOG.md already modified but not committed." >&2
+      echo "recover with: git checkout -- Cargo.toml CHANGELOG.md" >&2
+      ;;
+    committed)
+      echo "error: release commit landed but tagging failed; the commit exists without its tag." >&2
+      echo "inspect it with: git log -1" >&2
+      echo "then either tag it manually: git tag $next" >&2
+      echo "or undo the commit: git reset --hard HEAD~1" >&2
+      ;;
+  esac
 }
-trap on_err ERR
+trap on_exit EXIT
 
 # Parse every argument and reject anything unrecognised. Matching only "$1"
 # would make a typo (`--dryrun`) or a wrapper that reorders arguments fall
@@ -114,7 +127,7 @@ mv Cargo.toml.tmp Cargo.toml
 # Cargo.toml is now stamped and CHANGELOG.md is about to be written; a
 # mid-mutation failure from here on is recoverable but not obvious, so arm
 # the recovery hint.
-mutating=true
+phase=mutated
 
 # Read it back rather than trusting the write. -F because `.` would otherwise be
 # a regex wildcard, so "0.2.0" would also match a malformed "01210".
@@ -137,8 +150,9 @@ git add Cargo.toml Cargo.lock CHANGELOG.md
 git commit -m "chore(release): $next"
 # The commit landed: Cargo.toml/CHANGELOG.md are no longer uncommitted
 # mutations, so "git checkout -- ..." stops being the right recovery advice
-# for anything that fails from here (e.g. `git tag`).
-mutating=false
+# for anything that fails from here (e.g. `git tag`) — the advice shifts to
+# resolving the now-untagged commit instead.
+phase=committed
 git tag "$next"
 
 echo "Tagged $next. Push with: git push --follow-tags"
