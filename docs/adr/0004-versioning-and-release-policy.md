@@ -180,7 +180,11 @@ distinction becomes load-bearing once crustyview reaches 1.0, at which point
   verified against the real tooling on a throwaway branch and tag (both
   since deleted, leaving zero tags in the repo): `feat:` → `0.2.0`, `fix:` →
   `0.1.1`, `feat!:` → `0.2.0` (not `1.0.0`), `chore:` → no changelog entry
-  and no version change. All four matched on the first run.
+  and no version change. All four matched on the first run. Every one of
+  those test commits touched only `web/src/app.css` — a file outside the
+  cargo workspace — so the same run also demonstrates that `web/`-only
+  changes are visible to the tooling, which is the property release-plz
+  could not provide.
 - Issue #86 tracks revisiting release-plz if upstream #2595 closes, or if the
   crates are ever published; no implementation work is scoped there today.
 - **Revisit if:** release-plz/release-plz#2595 closes upstream, or
