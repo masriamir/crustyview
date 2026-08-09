@@ -293,6 +293,23 @@ test.describe('desktop shell smoke', () => {
     await expect(bar).toContainText(/LINEDEFS [1-9]\d*/);
     await expect(bar).toContainText(/SECTORS [1-9]\d*/);
   });
+
+  test('build string renders before any WAD loads and sits outside the live region', async ({
+    page,
+  }) => {
+    await gotoApp(page);
+
+    // Visible in the empty state — a build id is most useful when a load failed.
+    const build = page.locator('.status-bar .build');
+    await expect(build).toBeVisible();
+    await expect(build).toHaveText(/^v\d+\.\d+\.\d+( · [0-9a-f]{7,})?$/);
+
+    // The polite live region must not contain it, or every load announcement
+    // would drag the build string along with it. Assert this structurally rather
+    // than by text, so the check survives the version reaching 1.x.
+    await expect(page.locator('[role="status"] .build')).toHaveCount(0);
+    await expect(page.getByRole('status')).toContainText('No WAD loaded');
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {
