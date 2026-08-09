@@ -15,7 +15,7 @@ interface StoredMapPrefs {
   showSecretSectors: boolean;
   showDamagingSectors: boolean;
   alwaysShowPlayerStart: boolean;
-  gridSize: number;
+  gridSize: GridSize;
 }
 
 const DEFAULTS: StoredMapPrefs = {

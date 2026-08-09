@@ -522,22 +522,29 @@
   function adjustGridSize(direction: -1 | 1): void {
     if (!mapPrefs.showGrid) mapPrefs.toggleGrid();
     const next = stepGridSize(mapPrefs.gridSize, direction);
+    const clamped = next === mapPrefs.gridSize;
     mapPrefs.setGridSize(next);
-    // Announce even when clamped at the ends — silent keys read as broken.
-    gridAnnouncement = `Grid ${next}`;
+    // A clamped press still announces — with distinct wording, since identical
+    // live-region text is skipped by both Svelte and screen readers.
+    gridAnnouncement = clamped
+      ? `Grid ${next}, ${direction === 1 ? 'largest' : 'smallest'} size`
+      : `Grid ${next}`;
   }
 
   function handleKeyDown(e: KeyboardEvent): void {
+    // Brackets first: many layouts type them with AltGr (reported as ctrl+alt)
+    // or Option, which the blanket modifier guard below would swallow. Only
+    // meta stays reserved — Cmd+[ / Cmd+] are browser history navigation.
+    if ((e.key === '[' || e.key === ']') && !e.metaKey) {
+      e.preventDefault();
+      adjustGridSize(e.key === ']' ? 1 : -1);
+      return;
+    }
     // Leave modified keys to the browser and the OS.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '0') {
       e.preventDefault();
       refit();
-      return;
-    }
-    if (e.key === '[' || e.key === ']') {
-      e.preventDefault();
-      adjustGridSize(e.key === ']' ? 1 : -1);
       return;
     }
     const t = transform;
