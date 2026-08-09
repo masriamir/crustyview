@@ -5,6 +5,8 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 ## Dependency rule (load-bearing)
 - Depend on a **pinned crustywad release** (`crustywad = "0.9"`). Do not path-depend on a local checkout.
 - API friction / bugs → file an **issue on crustywad**, fix on its `main`, bump here on release.
+- When the crustywad pin bumps, mirror its `rust-version` in `[workspace.package]` — CI's
+  `MSRV matches crustywad` step (in the `clippy` job) fails on drift.
 - Urgent fixes only: uncomment the `[patch.crates-io]` git-main override in the root `Cargo.toml`.
 
 ## Layout
@@ -30,7 +32,8 @@ Work is tracked on the shared **[Crustywad GitHub Project #5](https://github.com
 
 **Epics** (`epic` label) use native GitHub sub-issues for progress rollup: **#7 viewer shell & UI**, **#8 3D renderer**. Attach each new feature issue as a sub-issue of its epic. An epic moves to `In progress` when its first sub-issue starts and to `Done` (board-automated) only when all its sub-issues close; set the epic's aggregate Status by hand, since GitHub doesn't roll Status up.
 
-**Labels** mirror crustywad's general-purpose taxonomy (`epic`, `spike`, `testing`, `chore`, `maintenance`, `security`, `performance`, `release`, plus triage labels) with two crustyview domain labels: `renderer` (wgpu/3D viewport) and `web-ui` (Svelte/TS shell).
+**Labels** mirror crustywad's general-purpose taxonomy (`epic`, `spike`, `testing`, `chore`, `maintenance`, `security`, `performance`, `release`, plus triage labels) with three crustyview domain labels: `renderer` (wgpu/3D viewport), `web-ui` (Svelte/TS shell),
+and `accessibility` (a11y work across the shell and map views).
 
 ### Issue status transitions (agent-driven)
 
