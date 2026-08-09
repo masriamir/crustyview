@@ -32,7 +32,7 @@ on_exit() {
     committed)
       echo "error: release commit landed but tagging failed; the commit exists without its tag." >&2
       echo "inspect it with: git log -1" >&2
-      echo "then either tag it manually: git tag $next" >&2
+      echo "then either tag it manually: git tag -a $next -m 'crustyview $next'" >&2
       echo "or undo the commit: git reset --hard HEAD~1" >&2
       ;;
   esac
@@ -157,6 +157,16 @@ git commit -m "chore(release): $next"
 # for anything that fails from here (e.g. `git tag`) — the advice shifts to
 # resolving the now-untagged commit instead.
 phase=committed
-git tag "$next"
+# Annotated (-a), never lightweight. `git push --follow-tags` — the very command
+# this script tells the operator to run — carries *annotated* tags only, so a
+# lightweight tag here yields a silent half-release: the commit reaches the
+# remote, the tag does not, and the push still exits 0. That is how v0.1.0 first
+# shipped untagged. Annotated is also simply the right object for a release: it
+# records a tagger, a date, and a message, which is what GitHub and most release
+# tooling expect to find.
+git tag -a "$next" -m "crustyview $next"
 
-echo "Tagged $next. Push with: git push --follow-tags"
+echo "Tagged $next (annotated). Push with: git push --follow-tags"
+# Pushing is the operator's step, and a plain `git push` silently omits tags, so
+# name the one command that distinguishes a complete release from a half one.
+echo "Then confirm it landed: git ls-remote --tags origin $next"
