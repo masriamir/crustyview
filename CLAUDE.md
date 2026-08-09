@@ -21,6 +21,11 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
 - Every change is tracked by a GitHub **issue** on the board (see Project tracking); branch
   by issue number where one exists (`<type>/<###>-<slug>`).
+- **Releases are cut locally**, never in CI: `just release` (`--dry-run` to preview) bumps
+  `[workspace.package].version` from Conventional Commits, regenerates `CHANGELOG.md`, commits,
+  and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are
+  `skip = true` in `cliff.toml`, so a run with only those refuses rather than re-tagging.
+  release-plz is deliberately **not** used — see ADR-0004.
 
 ## Project tracking
 
@@ -62,6 +67,9 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   a sidebar shell (header · tree · main view · status bar) with state-driven navigation
   (no URL router), domain stores (`wad`/`nav`/`theme`), tokened light/dark theming, and a
   first-class compact layout (bottom nav + push navigation below 48rem).
+  [ADR-0004](../docs/adr/0004-versioning-and-release-policy.md) records versioning and
+  releases — one product version in `[workspace.package]` inherited by all three crates,
+  one tag `v<version>`, one root `CHANGELOG.md`, cut locally by `just release` via git-cliff.
 
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
