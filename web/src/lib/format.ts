@@ -33,6 +33,11 @@ export interface Map2d {
   damaging_sectors: number;
 }
 
+/** Failure envelope `WadDocument.map2d(name)` returns instead of map JSON. */
+export interface Map2dFailure {
+  error: string;
+}
+
 /** A label/value pair for the stats panel. */
 export interface StatRow {
   label: string;

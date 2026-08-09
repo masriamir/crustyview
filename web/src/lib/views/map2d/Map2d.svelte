@@ -112,6 +112,12 @@
   });
   const isEmpty = $derived(data !== null && data.lines.length === 0 && data.things.length === 0);
 
+  // Same `phase` dependency discipline as `data`: a new WAD must re-derive.
+  const assembleError = $derived.by((): string | null => {
+    void wad.phase;
+    return wad.map2dError(name);
+  });
+
   /** The map this instance has already fitted — plain bookkeeping, not reactive state. */
   let fittedFor: Map2d | null = null;
 
@@ -629,7 +635,11 @@
 </script>
 
 {#if data === null}
-  <p class="error" role="alert">Could not assemble {name}.</p>
+  {#if assembleError !== null}
+    <p class="error" role="alert">Could not assemble {name}: {assembleError}</p>
+  {:else}
+    <p class="error" role="alert">Could not assemble {name}.</p>
+  {/if}
 {:else}
   <div class="map2d" bind:this={container}>
     <!-- ARIA files `application` under structure, so Svelte's tables call it
