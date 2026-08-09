@@ -168,7 +168,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         .map_groups()
         .into_iter()
         .find(|g| g.name == name)
-        .ok_or_else(|| format!("no map named {name}"))?;
+        .ok_or_else(|| sanitize(&format!("no map named {name}")))?;
     let map = Map::assemble(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
     let format = map.format();
     // Classify every sector once; each line then looks up its two sides.

@@ -54,7 +54,9 @@ export async function loadBrokenMapWad(page: Page): Promise<void> {
   buf.writeInt32LE(12, 8); // directory sits right after the header
   lumps.forEach((name, i) => {
     const at = 12 + 16 * i;
-    buf.writeInt32LE(12, at); // filepos (unused: size 0)
+    // filepos past the directory (never read: size 0) so entries don't
+    // point into directory bytes.
+    buf.writeInt32LE(12 + 16 * lumps.length, at);
     buf.writeInt32LE(0, at + 4); // size
     buf.write(name, at + 8, 'ascii');
   });
