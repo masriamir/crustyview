@@ -81,8 +81,9 @@ if ! awk -v ver="$ver" '
 fi
 mv Cargo.toml.tmp Cargo.toml
 
-# Read it back rather than trusting the write.
-if ! awk "$read_version_awk" Cargo.toml | grep -qx "$ver"; then
+# Read it back rather than trusting the write. -F because `.` would otherwise be
+# a regex wildcard, so "0.2.0" would also match a malformed "01210".
+if ! awk "$read_version_awk" Cargo.toml | grep -qxF "$ver"; then
   echo "error: version stamp verification failed; expected $ver" >&2
   exit 1
 fi
