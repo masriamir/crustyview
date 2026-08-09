@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-09
 - **Deciders:** Amir Masri
-- **Tracking issue / PR:** #83
+- **Tracking issue / PR:** #83 · PR #87 (`chore/83-versioning-policy`)
 
 ## Context and problem statement
 

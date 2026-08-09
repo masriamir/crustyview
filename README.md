@@ -17,8 +17,9 @@ and starts the Vite dev server).
 
 ## Decisions
 
-Architectural decisions are recorded as ADRs in [`docs/adr/`](docs/adr/).
+Architectural decisions are recorded as ADRs in [`docs/adr/`](docs/adr/); see
+the [index](docs/adr/README.md#index) for the full list.
 
-- [ADR-0004](docs/adr/0004-versioning-and-release-policy.md) — versioning and release policy
+---
 
 Status: bootstrap + WASM go/no-go spike.
