@@ -24,6 +24,7 @@
     CLASSIC_LINE_SECTOR_SECRET,
     CLASSIC_LINE_TELEPORT,
   } from './lines';
+  import { stepGridSize } from './grid';
 
   interface Props {
     name: string;
@@ -66,8 +67,7 @@
     player: '#34c759',
   };
 
-  /** Grid spacing in map units, and the smallest on-screen spacing worth drawing. */
-  const GRID_STEP = 128;
+  /** The smallest on-screen grid spacing worth drawing. */
   const MIN_GRID_PX = 8;
   /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
   const THING_PX = 3;
@@ -101,6 +101,8 @@
   let fitScale = $state(1);
   /** A pointer is down and panning/pinching, so the canvas shows a closed-hand cursor. */
   let dragging = $state(false);
+  /** Polite live-region text for grid size changes ("Grid 64"). */
+  let gridAnnouncement = $state('');
 
   // `wad.map2d` caches per name behind non-reactive fields, so depend on `phase`
   // explicitly: loading another WAD must re-derive rather than serve a stale map.
@@ -167,9 +169,14 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawGrid(ctx: CanvasRenderingContext2D, t: Transform, color: string): void {
+  function drawGrid(
+    ctx: CanvasRenderingContext2D,
+    t: Transform,
+    color: string,
+    step: number,
+  ): void {
     // Written as a positive test so a non-finite scale also bails out here.
-    if (!(GRID_STEP * t.scale >= MIN_GRID_PX)) return;
+    if (!(step * t.scale >= MIN_GRID_PX)) return;
     // Invert the viewport corners: only the visible map rect needs grid lines.
     const corners = [screenToMap(t, 0, 0), screenToMap(t, width, height)];
     const minX = Math.min(corners[0].x, corners[1].x);
@@ -177,13 +184,13 @@
     const minY = Math.min(corners[0].y, corners[1].y);
     const maxY = Math.max(corners[0].y, corners[1].y);
     const path = new Path2D();
-    for (let x = Math.ceil(minX / GRID_STEP) * GRID_STEP; x <= maxX; x += GRID_STEP) {
+    for (let x = Math.ceil(minX / step) * step; x <= maxX; x += step) {
       const from = mapToScreen(t, x, minY);
       const to = mapToScreen(t, x, maxY);
       path.moveTo(from.x, from.y);
       path.lineTo(to.x, to.y);
     }
-    for (let y = Math.ceil(minY / GRID_STEP) * GRID_STEP; y <= maxY; y += GRID_STEP) {
+    for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) {
       const from = mapToScreen(t, minX, y);
       const to = mapToScreen(t, maxX, y);
       path.moveTo(from.x, from.y);
@@ -331,7 +338,7 @@
     const map = data;
     const t = transform;
     if (!map || !t) return;
-    if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid);
+    if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid, mapPrefs.gridSize);
     drawLines(ctx, map, t, colors);
     if (mapPrefs.showSecretSectors)
       drawLineOverlay(ctx, map, t, {
@@ -511,12 +518,26 @@
     transform = zoomAt(t, e.offsetX, e.offsetY, factor, range.min, range.max);
   }
 
+  /** Step the grid, turning it on if hidden — adjusting is immediate feedback. */
+  function adjustGridSize(direction: -1 | 1): void {
+    if (!mapPrefs.showGrid) mapPrefs.toggleGrid();
+    const next = stepGridSize(mapPrefs.gridSize, direction);
+    mapPrefs.setGridSize(next);
+    // Announce even when clamped at the ends — silent keys read as broken.
+    gridAnnouncement = `Grid ${next}`;
+  }
+
   function handleKeyDown(e: KeyboardEvent): void {
     // Leave modified keys to the browser and the OS.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '0') {
       e.preventDefault();
       refit();
+      return;
+    }
+    if (e.key === '[' || e.key === ']') {
+      e.preventDefault();
+      adjustGridSize(e.key === ']' ? 1 : -1);
       return;
     }
     const t = transform;
@@ -588,6 +609,7 @@
     void mapPrefs.showSecretSectors;
     void mapPrefs.showDamagingSectors;
     void mapPrefs.showGrid;
+    void mapPrefs.gridSize;
     void mapPrefs.style;
     void theme.resolved;
     scheduleDraw();
@@ -627,8 +649,10 @@
     ></canvas>
     <p id={instructionsId} class="visually-hidden">
       Drag or use the arrow keys to pan. Zoom with the scroll wheel, a pinch, or the plus
-      and minus keys. Press 0 or double-click to fit the whole map.
+      and minus keys. Press 0 or double-click to fit the whole map. Press [ or ] to shrink
+      or grow the grid.
     </p>
+    <p class="visually-hidden" role="status">{gridAnnouncement}</p>
     {#if isEmpty}<p class="empty" role="status">Empty map.</p>{/if}
   </div>
 {/if}
