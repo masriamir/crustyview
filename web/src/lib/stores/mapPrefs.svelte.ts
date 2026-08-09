@@ -13,6 +13,7 @@ interface StoredMapPrefs {
   showTeleportLines: boolean;
   showSecretSectors: boolean;
   showDamagingSectors: boolean;
+  alwaysShowPlayerStart: boolean;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -23,6 +24,7 @@ const DEFAULTS: StoredMapPrefs = {
   showTeleportLines: true,
   showSecretSectors: false,
   showDamagingSectors: false,
+  alwaysShowPlayerStart: true,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -39,7 +41,13 @@ export class MapPrefsStore {
   showTeleportLines = $state(DEFAULTS.showTeleportLines);
   showSecretSectors = $state(DEFAULTS.showSecretSectors);
   showDamagingSectors = $state(DEFAULTS.showDamagingSectors);
+  alwaysShowPlayerStart = $state(DEFAULTS.alwaysShowPlayerStart);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
+
+  /** The player-1 arrow draws when things are shown or the always-show pref is on. */
+  get showPlayerStart(): boolean {
+    return this.showThings || this.alwaysShowPlayerStart;
+  }
 
   constructor() {
     let stored: string | null = null;
@@ -64,6 +72,8 @@ export class MapPrefsStore {
     if (typeof v.showSecretSectors === 'boolean') this.showSecretSectors = v.showSecretSectors;
     if (typeof v.showDamagingSectors === 'boolean')
       this.showDamagingSectors = v.showDamagingSectors;
+    if (typeof v.alwaysShowPlayerStart === 'boolean')
+      this.alwaysShowPlayerStart = v.alwaysShowPlayerStart;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -100,6 +110,11 @@ export class MapPrefsStore {
     this.#persist();
   }
 
+  toggleAlwaysShowPlayerStart(): void {
+    this.alwaysShowPlayerStart = !this.alwaysShowPlayerStart;
+    this.#persist();
+  }
+
   toggleStyle(): void {
     this.style = this.style === 'theme' ? 'classic' : 'theme';
     this.#persist();
@@ -128,6 +143,7 @@ export class MapPrefsStore {
           showTeleportLines: this.showTeleportLines,
           showSecretSectors: this.showSecretSectors,
           showDamagingSectors: this.showDamagingSectors,
+          alwaysShowPlayerStart: this.alwaysShowPlayerStart,
         } satisfies StoredMapPrefs),
       );
     } catch {

@@ -353,7 +353,7 @@
         marked: (l) => l.teleport === true,
       });
     if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
-    drawPlayerStart(ctx, map, t, colors.player);
+    if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }
 
   // Track the container's content box — the canvas is styled to fill it exactly.
@@ -582,6 +582,7 @@
     void width;
     void height;
     void mapPrefs.showThings;
+    void mapPrefs.alwaysShowPlayerStart;
     for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
     void mapPrefs.showTeleportLines;
     void mapPrefs.showSecretSectors;

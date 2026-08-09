@@ -27,6 +27,7 @@ describe('MapPrefsStore', () => {
       showTeleportLines: true,
       showSecretSectors: false,
       showDamagingSectors: false,
+      alwaysShowPlayerStart: true,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);
@@ -135,5 +136,31 @@ describe('MapPrefsStore', () => {
     const p = new MapPrefsStore();
     expect(p.showSecretSectors).toBe(false);
     expect(p.showDamagingSectors).toBe(false);
+  });
+
+  it('player start defaults to always shown; toggle flips, persists, and restores', () => {
+    const p = new MapPrefsStore();
+    expect(p.alwaysShowPlayerStart).toBe(true);
+    p.toggleAlwaysShowPlayerStart();
+    expect(p.alwaysShowPlayerStart).toBe(false);
+    const q = new MapPrefsStore();
+    expect(q.alwaysShowPlayerStart).toBe(false);
+  });
+
+  it('non-boolean stored alwaysShowPlayerStart is ignored', () => {
+    localStorage.setItem(KEY, JSON.stringify({ alwaysShowPlayerStart: 'nope' }));
+    const p = new MapPrefsStore();
+    expect(p.alwaysShowPlayerStart).toBe(true);
+  });
+
+  it('showPlayerStart is false only when things and always-show are both off', () => {
+    const p = new MapPrefsStore();
+    expect(p.showPlayerStart).toBe(true); // things on, always-show on
+    p.toggleThings();
+    expect(p.showPlayerStart).toBe(true); // things off, always-show on
+    p.toggleAlwaysShowPlayerStart();
+    expect(p.showPlayerStart).toBe(false); // things off, always-show off
+    p.toggleThings();
+    expect(p.showPlayerStart).toBe(true); // things on, always-show off
   });
 });
