@@ -3,6 +3,7 @@
 //! `map2d` is the phase-1 contract behind the browser's top-down map view
 //! (ADR-0002 staging): everything the canvas needs, nothing it doesn't.
 
+use crate::error::sanitize;
 use crustywad::Wad;
 use crustywad::map::{Map, MapFormat, SidedefIdx};
 
@@ -153,13 +154,22 @@ pub struct Map2d {
 
 /// Flatten the named map group for 2D drawing.
 ///
-/// Returns `None` when no group has that name or assembly fails
-/// (best-effort, like the probes). Bounds cover vertices referenced by
-/// lines *and* things; an empty map yields a zero-area bounds at origin.
-#[must_use]
-pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
-    let group = wad.map_groups().into_iter().find(|g| g.name == name)?;
-    let map = Map::assemble(wad, &group).ok()?;
+/// Bounds cover vertices referenced by lines *and* things; an empty map
+/// yields a zero-area bounds at origin.
+///
+/// # Errors
+///
+/// Returns a user-facing single-line message when no group has that name or
+/// when assembly fails — the real crustywad error is the payload, not a
+/// generic fallback (#46). Sanitized as defense-in-depth, like
+/// [`crate::error::load_error_message`].
+pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
+    let group = wad
+        .map_groups()
+        .into_iter()
+        .find(|g| g.name == name)
+        .ok_or_else(|| format!("no map named {name}"))?;
+    let map = Map::assemble(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
     let format = map.format();
     // Classify every sector once; each line then looks up its two sides.
     let sector_marks: Vec<(bool, bool)> = map
@@ -224,6 +234,21 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
             type_id: t.type_id,
         })
         .collect();
+    let bounds = bounds_of(&lines, &things);
+    Ok(Map2d {
+        name: map.name().to_owned(),
+        bounds,
+        lines,
+        things,
+        secret_sectors,
+        damaging_sectors,
+    })
+}
+
+/// Inclusive bounds over line endpoints and thing positions; zero-area at the
+/// origin when there is no finite geometry (empty map, or a pathological
+/// (UDMF) coordinate poisoning a side).
+fn bounds_of(lines: &[Line2d], things: &[Thing2d]) -> Bounds {
     let xs = lines
         .iter()
         .flat_map(|l| [l.x1, l.x2])
@@ -239,11 +264,11 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
         max_y: ys.fold(f64::NEG_INFINITY, f64::max),
     };
     // All four must be finite: an empty map leaves the folds at ±infinity,
-    // and a pathological (UDMF) coordinate can poison any single side.
+    // and any single side can be poisoned independently.
     let finite = [bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y]
         .iter()
         .all(|v| v.is_finite());
-    let bounds = if finite {
+    if finite {
         bounds
     } else {
         Bounds {
@@ -252,15 +277,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Option<Map2d> {
             max_x: 0.0,
             max_y: 0.0,
         }
-    };
-    Some(Map2d {
-        name: map.name().to_owned(),
-        bounds,
-        lines,
-        things,
-        secret_sectors,
-        damaging_sectors,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -390,8 +407,11 @@ mod tests {
     }
 
     #[test]
-    fn unknown_name_is_none() {
-        assert!(map2d(&tiny_pwad(), "MAP99").is_none());
+    fn unknown_name_reports_no_such_map() {
+        assert_eq!(
+            map2d(&tiny_pwad(), "MAP99").unwrap_err(),
+            "no map named MAP99"
+        );
     }
 
     #[test]
@@ -403,30 +423,13 @@ mod tests {
         assert!(json.contains("\"one_sided\""));
     }
 
-    /// Build a PWAD with an empty map: all five lumps present but zero-length.
-    /// Tests the zero-area bounds fallback when no geometry exists.
-    fn empty_pwad() -> Wad {
+    /// Assemble a PWAD from named lumps: header + bodies + directory.
+    fn build_pwad(lumps: &[(&str, &[u8])]) -> Wad {
         fn name8(n: &str) -> [u8; 8] {
             let mut b = [0u8; 8];
             b[..n.len()].copy_from_slice(n.as_bytes());
             b
         }
-        // Empty lump payloads
-        let vertexes: Vec<u8> = Vec::new();
-        let linedefs: Vec<u8> = Vec::new();
-        let sidedefs: Vec<u8> = Vec::new();
-        let sectors: Vec<u8> = Vec::new();
-        let things: Vec<u8> = Vec::new();
-
-        // Assemble the PWAD: header + lumps + directory.
-        let lumps: [(&str, &[u8]); 6] = [
-            ("MAP01", &[]),
-            ("THINGS", &things),
-            ("LINEDEFS", &linedefs),
-            ("SIDEDEFS", &sidedefs),
-            ("VERTEXES", &vertexes),
-            ("SECTORS", &sectors),
-        ];
         let mut body = Vec::new();
         let mut directory = Vec::new();
         for (name, data) in lumps {
@@ -437,11 +440,40 @@ mod tests {
             directory.extend_from_slice(&name8(name));
         }
         let mut bytes = b"PWAD".to_vec();
-        bytes.extend_from_slice(&6i32.to_le_bytes());
+        bytes.extend_from_slice(&i32::try_from(lumps.len()).unwrap().to_le_bytes());
         bytes.extend_from_slice(&i32::try_from(12 + body.len()).unwrap().to_le_bytes());
         bytes.extend_from_slice(&body);
         bytes.extend_from_slice(&directory);
-        Wad::from_bytes(bytes).expect("empty PWAD parses")
+        Wad::from_bytes(bytes).expect("synthetic PWAD parses")
+    }
+
+    /// Build a PWAD with an empty map: all five lumps present but zero-length.
+    /// Tests the zero-area bounds fallback when no geometry exists.
+    fn empty_pwad() -> Wad {
+        build_pwad(&[
+            ("MAP01", &[]),
+            ("THINGS", &[]),
+            ("LINEDEFS", &[]),
+            ("SIDEDEFS", &[]),
+            ("VERTEXES", &[]),
+            ("SECTORS", &[]),
+        ])
+    }
+
+    #[test]
+    fn assembly_failure_reports_the_real_error() {
+        // MAP01 group with the required VERTEXES lump omitted entirely.
+        let wad = build_pwad(&[
+            ("MAP01", &[]),
+            ("THINGS", &[]),
+            ("LINEDEFS", &[]),
+            ("SIDEDEFS", &[]),
+            ("SECTORS", &[]),
+        ]);
+        assert_eq!(
+            map2d(&wad, "MAP01").unwrap_err(),
+            "map group is missing required lump VERTEXES"
+        );
     }
 
     #[test]

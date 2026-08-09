@@ -19,7 +19,7 @@ pub fn load_error_message(err: &ParseError) -> String {
 
 /// First line only, ANSI escape sequences and control characters removed,
 /// trimmed.
-fn sanitize(message: &str) -> String {
+pub(crate) fn sanitize(message: &str) -> String {
     let first_line = message.lines().next().unwrap_or_default();
     let mut out = String::with_capacity(first_line.len());
     let mut chars = first_line.chars().peekable();
