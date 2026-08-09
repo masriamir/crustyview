@@ -74,6 +74,7 @@ export class WadStore {
     return this.#map2dEntry(name).error;
   }
 
+  /** Record counts for `name`, cached per map; null when missing or unassemblable. */
   mapStats(name: string): MapStats | null {
     if (!this.#doc) return null;
     if (!this.#mapStatsCache.has(name)) {
