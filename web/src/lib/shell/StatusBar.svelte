@@ -45,8 +45,11 @@
     {/if}
   </div>
   <!-- Outside the phase conditional on purpose: a build identifier is most
-       useful when a load has just failed and it's going into a bug report. -->
-  <span class="build"><span class="visually-hidden">Build </span>{build}</span>
+       useful when a load has just failed and it's going into a bug report.
+       `aria-label` (rather than a nested visually-hidden prefix) keeps the
+       element's visible text a plain version string, since a nested span's
+       text would still show up in `textContent` despite being clipped. -->
+  <span class="build" aria-label={`Build ${build}`}>{build}</span>
 </div>
 
 <style>
