@@ -284,17 +284,20 @@ fn bounds_of(lines: &[Line2d], things: &[Thing2d]) -> Bounds {
 mod tests {
     use super::*;
 
+    /// A lump/texture name padded to the on-disk 8-byte field.
+    fn name8(n: &str) -> [u8; 8] {
+        assert!(n.len() <= 8, "lump name {n:?} exceeds the 8-byte WAD limit");
+        let mut b = [0u8; 8];
+        b[..n.len()].copy_from_slice(n.as_bytes());
+        b
+    }
+
     /// Build a minimal single-map PWAD from raw lumps: a right triangle of 3
     /// vertices, 8 linedefs (one two-sided, one secret-flagged, two teleport
     /// sources, three bordering marked sectors), 4 sectors (plain, secret 9,
     /// damaging 5, Boom secret+damage 0xE0), 5 sidedefs, and 2 things
     /// (P1 start + an imp).
     fn tiny_pwad() -> Wad {
-        fn name8(n: &str) -> [u8; 8] {
-            let mut b = [0u8; 8];
-            b[..n.len()].copy_from_slice(n.as_bytes());
-            b
-        }
         // Lump payloads (little-endian throughout).
         let vertexes: Vec<u8> = [(0i16, 0i16), (128, 0), (0, 128)]
             .iter()
@@ -425,11 +428,6 @@ mod tests {
 
     /// Assemble a PWAD from named lumps: header + bodies + directory.
     fn build_pwad(lumps: &[(&str, &[u8])]) -> Wad {
-        fn name8(n: &str) -> [u8; 8] {
-            let mut b = [0u8; 8];
-            b[..n.len()].copy_from_slice(n.as_bytes());
-            b
-        }
         let mut body = Vec::new();
         let mut directory = Vec::new();
         for (name, data) in lumps {
