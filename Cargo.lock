@@ -114,9 +114,9 @@ dependencies = [
 
 [[package]]
 name = "crustywad"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfa02c6ad22fed752b4bf637fc4a1bc07b01f7e15470fe9fcd6ba1a3222972f7"
+checksum = "782ac60e7f2eff353e1f8493030ab7b6e83f5d446632c20fbf6cbd7deacea074"
 dependencies = [
  "binrw",
  "thiserror",

@@ -108,3 +108,50 @@ pub(crate) fn broken_pwad() -> Wad {
         ("SECTORS", &[]),
     ])
 }
+
+/// A PWAD whose `BLOCKMAP` references a linedef that does not exist —
+/// the Eviternity failure class in miniature (#45). Minimal geometry: 3
+/// vertices, 1 linedef, 1 sidedef, 1 sector.
+pub(crate) fn dangling_blockmap_pwad() -> Wad {
+    let vertexes: Vec<u8> = [(0i16, 0i16), (128, 0), (0, 128)]
+        .iter()
+        .flat_map(|(x, y)| [x.to_le_bytes(), y.to_le_bytes()].concat())
+        .collect();
+    let linedefs: Vec<u8> = [[0u16, 1, 0, 0, 0, 0, 0xFFFF]]
+        .iter()
+        .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
+        .collect();
+    let mut sidedefs = Vec::new();
+    sidedefs.extend_from_slice(&0i16.to_le_bytes());
+    sidedefs.extend_from_slice(&0i16.to_le_bytes());
+    sidedefs.extend_from_slice(&name8("-"));
+    sidedefs.extend_from_slice(&name8("-"));
+    sidedefs.extend_from_slice(&name8("STARTAN3"));
+    sidedefs.extend_from_slice(&0u16.to_le_bytes());
+    let mut sectors = Vec::new();
+    sectors.extend_from_slice(&0i16.to_le_bytes());
+    sectors.extend_from_slice(&128i16.to_le_bytes());
+    sectors.extend_from_slice(&name8("FLOOR0_1"));
+    sectors.extend_from_slice(&name8("CEIL1_1"));
+    for v in [160u16, 0, 0] {
+        sectors.extend_from_slice(&v.to_le_bytes());
+    }
+    // BLOCKMAP: origin x/y, columns, rows; one block offset (in words); then a
+    // blocklist of leading 0, a dangling linedef index, and the 0xFFFF terminator.
+    let mut blockmap: Vec<u8> = Vec::new();
+    for v in [0i16, 0, 1, 1] {
+        blockmap.extend_from_slice(&v.to_le_bytes());
+    }
+    for v in [5u16, 0, 999, 0xFFFF] {
+        blockmap.extend_from_slice(&v.to_le_bytes());
+    }
+    build_pwad(&[
+        ("MAP01", &[]),
+        ("THINGS", &[]),
+        ("LINEDEFS", &linedefs),
+        ("SIDEDEFS", &sidedefs),
+        ("VERTEXES", &vertexes),
+        ("SECTORS", &sectors),
+        ("BLOCKMAP", &blockmap),
+    ])
+}
