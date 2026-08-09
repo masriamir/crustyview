@@ -23,11 +23,14 @@ jobs:
           components: clippy
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       # The workspace MSRV must mirror the pinned crustywad release's (#52).
-      # `unique | join` also catches drift between our own members.
+      # Both sides use the same `[... | tostring] | unique | join` shape, so the
+      # comparison stays a single deterministic string: it catches drift between
+      # our own members, survives more than one resolved crustywad, and reports a
+      # missing rust-version as a literal `null` instead of an empty field.
       - name: MSRV matches crustywad
         run: |
-          ws=$(cargo metadata --format-version 1 --no-deps | jq -r '[.packages[].rust_version] | unique | join(",")')
-          dep=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name=="crustywad") | .rust_version')
+          ws=$(cargo metadata --format-version 1 --no-deps | jq -r '[.packages[].rust_version | tostring] | unique | join(",")')
+          dep=$(cargo metadata --format-version 1 | jq -r '[.packages[] | select(.name=="crustywad") | .rust_version | tostring] | unique | join(",")')
           echo "workspace: $ws  crustywad: $dep"
           [ "$ws" = "$dep" ] || { echo "::error::rust-version drift: workspace $ws vs crustywad $dep"; exit 1; }
 
