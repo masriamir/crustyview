@@ -28,6 +28,7 @@ describe('MapPrefsStore', () => {
       showSecretSectors: false,
       showDamagingSectors: false,
       alwaysShowPlayerStart: true,
+      gridSize: 32,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);
@@ -162,5 +163,21 @@ describe('MapPrefsStore', () => {
     expect(p.showPlayerStart).toBe(false); // things off, always-show off
     p.toggleThings();
     expect(p.showPlayerStart).toBe(true); // things on, always-show off
+  });
+
+  it('grid size defaults to 32; setGridSize persists and restores', () => {
+    const p = new MapPrefsStore();
+    expect(p.gridSize).toBe(32);
+    p.setGridSize(64);
+    expect(p.gridSize).toBe(64);
+    const q = new MapPrefsStore();
+    expect(q.gridSize).toBe(64);
+  });
+
+  it('non-ladder stored gridSize falls back to 32', () => {
+    localStorage.setItem(KEY, JSON.stringify({ gridSize: 33 }));
+    expect(new MapPrefsStore().gridSize).toBe(32);
+    localStorage.setItem(KEY, JSON.stringify({ gridSize: 'big' }));
+    expect(new MapPrefsStore().gridSize).toBe(32);
   });
 });
