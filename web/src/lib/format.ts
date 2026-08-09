@@ -14,7 +14,8 @@ export interface TextureMeta {
   height: number;
 }
 
-/** JSON shape returned by `WadDocument.map2d(name)` (or `null`). */
+/** JSON shape returned by `WadDocument.map2d(name)` on success; failures
+ * return a [`Map2dFailure`] envelope instead. */
 export interface Map2d {
   name: string;
   bounds: { min_x: number; min_y: number; max_x: number; max_y: number };
@@ -31,6 +32,11 @@ export interface Map2d {
   things: { x: number; y: number; angle: number; type_id: number }[];
   secret_sectors: number;
   damaging_sectors: number;
+}
+
+/** Failure envelope `WadDocument.map2d(name)` returns instead of map JSON. */
+export interface Map2dFailure {
+  error: string;
 }
 
 /** A label/value pair for the stats panel. */

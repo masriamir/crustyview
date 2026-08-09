@@ -4,6 +4,7 @@ import {
   expectTextureCanvasPainted,
   gotoApp,
   haveFixtures,
+  loadBrokenMapWad,
   loadJunk,
   loadTinyJunk,
   loadWad,
@@ -287,6 +288,21 @@ test('sub-header-size file shows a clean error message', async ({ page }) => {
   expect(text).not.toContain('\u001b'); // no raw ANSI escapes
   expect(text).not.toContain('Backtrace');
   expect(text).not.toContain('.cargo/registry');
+});
+
+test('broken map shows the real assembly error', async ({ page }) => {
+  await gotoApp(page);
+  await loadBrokenMapWad(page);
+  await page
+    .getByRole('navigation', { name: 'Sections' })
+    .getByRole('button', { name: 'MAP01', exact: true })
+    .click();
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('Could not assemble MAP01');
+  await expect(alert).toContainText('missing required lump VERTEXES');
+  const text = (await alert.textContent()) ?? '';
+  expect(text).not.toContain('\u001b'); // no raw ANSI escapes
+  expect(text).not.toContain('Backtrace');
 });
 
 test('theme toggle persists across reload', async ({ page }) => {

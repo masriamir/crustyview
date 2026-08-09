@@ -6,7 +6,8 @@
 //! [`load_error_message`] is a plain sanitize passthrough. `sanitize` stays
 //! as defense-in-depth: it strips ANSI escapes, control characters, and
 //! extra lines in case a future crustywad release regresses a `Display`
-//! implementation.
+//! implementation. It is shared crate-wide — `map2d` routes its user-facing
+//! messages through it too (#46).
 
 use crustywad::ParseError;
 
@@ -19,7 +20,7 @@ pub fn load_error_message(err: &ParseError) -> String {
 
 /// First line only, ANSI escape sequences and control characters removed,
 /// trimmed.
-fn sanitize(message: &str) -> String {
+pub(crate) fn sanitize(message: &str) -> String {
     let first_line = message.lines().next().unwrap_or_default();
     let mut out = String::with_capacity(first_line.len());
     let mut chars = first_line.chars().peekable();

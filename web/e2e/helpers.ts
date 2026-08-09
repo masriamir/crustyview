@@ -44,6 +44,29 @@ export async function loadTinyJunk(page: Page): Promise<void> {
   });
 }
 
+/** Upload a crafted PWAD whose MAP01 group is missing the required VERTEXES lump. */
+export async function loadBrokenMapWad(page: Page): Promise<void> {
+  const lumps = ['MAP01', 'THINGS', 'LINEDEFS', 'SIDEDEFS', 'SECTORS'];
+  // 12-byte header + one 16-byte directory entry per (empty) lump.
+  const buf = Buffer.alloc(12 + 16 * lumps.length);
+  buf.write('PWAD', 0, 'ascii');
+  buf.writeInt32LE(lumps.length, 4);
+  buf.writeInt32LE(12, 8); // directory sits right after the header
+  lumps.forEach((name, i) => {
+    const at = 12 + 16 * i;
+    // filepos past the directory (never read: size 0) so entries don't
+    // point into directory bytes.
+    buf.writeInt32LE(12 + 16 * lumps.length, at);
+    buf.writeInt32LE(0, at + 4); // size
+    buf.write(name, at + 8, 'ascii');
+  });
+  await page.locator('header input[type="file"]').setInputFiles({
+    name: 'broken-map.wad',
+    mimeType: 'application/octet-stream',
+    buffer: buf,
+  });
+}
+
 /** Assert the Textures view's first-texture canvas has non-blank pixels. */
 export async function expectTextureCanvasPainted(page: Page): Promise<void> {
   const canvas = page.getByRole('img', { name: 'Composited first-texture preview' });

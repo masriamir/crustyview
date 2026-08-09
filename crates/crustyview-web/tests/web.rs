@@ -56,7 +56,7 @@ fn sub_header_bytes_reject_with_clean_message() {
 }
 
 #[wasm_bindgen_test]
-fn map2d_of_missing_map_is_null() {
+fn map2d_of_missing_map_reports_the_error() {
     let doc = WadDocument::load(empty_pwad()).expect("valid WAD");
-    assert_eq!(doc.map2d("MAP01"), "null");
+    assert_eq!(doc.map2d("MAP01"), r#"{"error":"no map named MAP01"}"#);
 }

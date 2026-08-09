@@ -41,14 +41,16 @@ impl WadDocument {
         self.wad.map_groups().into_iter().map(|g| g.name).collect()
     }
 
-    /// JSON [`Map2d`](crustyview_core::map2d::Map2d) for the named map, or
-    /// the string `"null"` when the map is missing or fails to assemble.
+    /// JSON [`Map2d`](crustyview_core::map2d::Map2d) for the named map, or a
+    /// `{"error":"<message>"}` envelope when the map is missing or fails to
+    /// assemble (#46) — the message is user-facing and single-line.
     #[must_use]
     #[wasm_bindgen(js_name = map2d)]
     pub fn map2d(&self, name: &str) -> String {
         match map2d::map2d(&self.wad, name) {
-            Some(m) => serde_json::to_string(&m).unwrap_or_else(|_| "null".to_owned()),
-            None => "null".to_owned(),
+            Ok(m) => serde_json::to_string(&m)
+                .unwrap_or_else(|_| error_envelope("could not serialize map data")),
+            Err(msg) => error_envelope(&msg),
         }
     }
 
@@ -74,4 +76,10 @@ impl WadDocument {
             .map(|t| t.rgba)
             .unwrap_or_default()
     }
+}
+
+/// The failure shape [`WadDocument::map2d`] returns: `{"error":"<msg>"}`,
+/// JSON-escaped.
+fn error_envelope(msg: &str) -> String {
+    serde_json::json!({ "error": msg }).to_string()
 }

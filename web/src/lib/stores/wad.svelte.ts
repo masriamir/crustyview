@@ -1,5 +1,5 @@
 import { WadDocument } from '../../wasm/crustyview_web.js';
-import type { Map2d, TextureMeta, WadSummary } from '../format';
+import type { Map2d, Map2dFailure, TextureMeta, WadSummary } from '../format';
 
 type Phase = 'empty' | 'loading' | 'loaded' | 'error';
 
@@ -12,7 +12,7 @@ export class WadStore {
   fileName = $state<string | null>(null);
   #doc: WadDocument | null = null;
   #loadSeq = 0;
-  #map2dCache = new Map<string, Map2d | null>();
+  #map2dCache = new Map<string, { map: Map2d | null; error: string | null }>();
 
   async load(file: File): Promise<void> {
     const seq = ++this.#loadSeq;
@@ -64,15 +64,31 @@ export class WadStore {
 
   /** Flattened 2D geometry for a map, cached per name; null when unavailable. */
   map2d(name: string): Map2d | null {
-    if (!this.#doc) return null;
-    if (!this.#map2dCache.has(name)) {
+    return this.#map2dEntry(name).map;
+  }
+
+  /** The user-facing assembly error for `name`, or null when the map loaded. */
+  map2dError(name: string): string | null {
+    return this.#map2dEntry(name).error;
+  }
+
+  #map2dEntry(name: string): { map: Map2d | null; error: string | null } {
+    if (!this.#doc) return { map: null, error: null };
+    let entry = this.#map2dCache.get(name);
+    if (entry === undefined) {
       try {
-        this.#map2dCache.set(name, JSON.parse(this.#doc.map2d(name)) as Map2d | null);
+        const parsed = JSON.parse(this.#doc.map2d(name)) as Map2d | Map2dFailure | null;
+        entry =
+          parsed !== null && 'error' in parsed
+            ? { map: null, error: parsed.error }
+            : { map: parsed, error: null };
       } catch {
-        this.#map2dCache.set(name, null);
+        // Unparseable payload — fall back to the generic alert line.
+        entry = { map: null, error: null };
       }
+      this.#map2dCache.set(name, entry);
     }
-    return this.#map2dCache.get(name) ?? null;
+    return entry;
   }
 
   reset(): void {

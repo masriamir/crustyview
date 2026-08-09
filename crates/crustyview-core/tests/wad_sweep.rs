@@ -65,10 +65,9 @@ fn sweep_wad_collection() {
             if Map::assemble(&wad, &group).is_err() {
                 continue;
             }
-            let flattened = map2d(&wad, &group.name);
-            let m = flattened.unwrap_or_else(|| {
+            let m = map2d(&wad, &group.name).unwrap_or_else(|msg| {
                 panic!(
-                    "{name}: map group {:?} assembled but map2d returned None",
+                    "{name}: map group {:?} assembled but map2d failed: {msg}",
                     group.name
                 )
             });
