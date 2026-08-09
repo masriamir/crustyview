@@ -39,6 +39,18 @@ export interface Map2dFailure {
   error: string;
 }
 
+/** JSON shape returned by `WadDocument.mapStats(name)` (or `null`). */
+export interface MapStats {
+  things: number;
+  vertexes: number;
+  linedefs: number;
+  sidedefs: number;
+  sectors: number;
+  segs: number;
+  subsectors: number;
+  nodes: number;
+}
+
 /** A label/value pair for the stats panel. */
 export interface StatRow {
   label: string;

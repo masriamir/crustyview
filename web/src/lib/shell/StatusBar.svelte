@@ -2,6 +2,20 @@
   import { mapCursor } from '../stores/mapCursor.svelte';
   import { nav } from '../stores/nav.svelte';
   import { wad } from '../stores/wad.svelte';
+
+  // `wad.mapStats` caches behind non-reactive fields — depend on `phase`
+  // explicitly, same discipline as the map view's derives.
+  const stats = $derived.by(() => {
+    void wad.phase;
+    return nav.selectedMap ? wad.mapStats(nav.selectedMap) : null;
+  });
+  // One string, built here rather than in markup, so formatting can't wrap
+  // a label away from its count.
+  const statsText = $derived(
+    stats === null
+      ? null
+      : `THINGS ${stats.things} · VERTEXES ${stats.vertexes} · LINEDEFS ${stats.linedefs} · SECTORS ${stats.sectors}`,
+  );
 </script>
 
 <div class="status-bar" role="status">
@@ -10,6 +24,9 @@
     <span>{wad.summary.lump_count} lumps</span>
     <span>{wad.summary.map_count} maps</span>
     {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
+    {#if nav.selectedMap && statsText}
+      <span class="stats">{statsText}</span>
+    {/if}
     <!-- `aria-hidden`: this bar is a polite live region, and the coordinates change
          on every hover move — announcing them would talk over everything else. They
          are a visual readout for a pointer-only interaction, so nothing is lost. -->
@@ -22,6 +39,10 @@
 </div>
 
 <style>
+  .stats {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+  }
   .status-bar {
     grid-area: status;
     display: flex;
