@@ -277,6 +277,22 @@ test.describe('desktop shell smoke', () => {
         .getByRole('button', { name: 'Show grid' }),
     ).toHaveText(/Grid · 64/);
   });
+
+  test('selecting a map shows its stats in the status bar', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    await page
+      .getByRole('navigation', { name: 'Sections' })
+      .getByRole('button', { name: 'E1M1', exact: true })
+      .click();
+    await expectMapCanvasPainted(page);
+
+    const bar = page.getByRole('status').filter({ hasText: 'IWAD' });
+    await expect(bar).toContainText(/THINGS [1-9]\d*/);
+    await expect(bar).toContainText(/VERTEXES [1-9]\d*/);
+    await expect(bar).toContainText(/LINEDEFS [1-9]\d*/);
+    await expect(bar).toContainText(/SECTORS [1-9]\d*/);
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {
