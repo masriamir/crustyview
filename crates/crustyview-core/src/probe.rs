@@ -115,3 +115,82 @@ pub fn probe_first_texture_meta(wad: &Wad) -> Result<Option<TextureMeta>, GfxErr
         height,
     }))
 }
+
+/// Record counts for one assembled map, keyed by the classic lump names.
+///
+/// Counts come from the assembled arenas — format-agnostic, and they report
+/// what the viewer models: lenient-mode recovery can drop dangling records,
+/// so a count can differ from the raw lump's record tally on broken maps.
+/// Maps without BSP lumps report `segs`/`subsectors`/`nodes` as 0.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub struct MapStats {
+    /// THINGS records.
+    pub things: usize,
+    /// VERTEXES records.
+    pub vertexes: usize,
+    /// LINEDEFS records.
+    pub linedefs: usize,
+    /// SIDEDEFS records.
+    pub sidedefs: usize,
+    /// SECTORS records.
+    pub sectors: usize,
+    /// SEGS records (0 without BSP lumps).
+    pub segs: usize,
+    /// SSECTORS records (0 without BSP lumps).
+    pub subsectors: usize,
+    /// NODES records (0 without BSP lumps).
+    pub nodes: usize,
+}
+
+/// Counts from the named map's assembled arenas, or `None` when no group has
+/// that name or assembly fails — best-effort like the other probes; the map
+/// view's alert owns failure messaging (#46).
+#[must_use]
+pub fn map_stats(wad: &Wad, name: &str) -> Option<MapStats> {
+    let group = wad.map_groups().into_iter().find(|g| g.name == name)?;
+    let map = Map::assemble(wad, &group).ok()?;
+    Some(MapStats {
+        things: map.things().len(),
+        vertexes: map.vertices().len(),
+        linedefs: map.linedefs().len(),
+        sidedefs: map.sidedefs().len(),
+        sectors: map.sectors().len(),
+        segs: map.segs().len(),
+        subsectors: map.subsectors().len(),
+        nodes: map.nodes().len(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_stats_counts_the_assembled_arenas() {
+        let stats = map_stats(&crate::fixtures::tiny_pwad(), "MAP01").expect("assembles");
+        assert_eq!(stats.things, 2);
+        assert_eq!(stats.vertexes, 3);
+        assert_eq!(stats.linedefs, 8);
+        assert_eq!(stats.sidedefs, 5);
+        assert_eq!(stats.sectors, 4);
+        assert_eq!(
+            (stats.segs, stats.subsectors, stats.nodes),
+            (0, 0, 0),
+            "no BSP lumps"
+        );
+    }
+
+    #[test]
+    fn map_stats_is_none_for_missing_or_broken_maps() {
+        assert!(map_stats(&crate::fixtures::tiny_pwad(), "MAP99").is_none());
+        assert!(map_stats(&crate::fixtures::broken_pwad(), "MAP01").is_none());
+    }
+
+    #[test]
+    fn map_stats_serializes_snake_case() {
+        let stats = map_stats(&crate::fixtures::tiny_pwad(), "MAP01").unwrap();
+        let json = serde_json::to_string(&stats).unwrap();
+        assert!(json.contains("\"vertexes\":3"));
+        assert!(json.contains("\"subsectors\":0"));
+    }
+}
