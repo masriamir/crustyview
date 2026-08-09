@@ -42,6 +42,8 @@
   .stats {
     font-family: var(--font-mono);
     font-size: 0.8rem;
+    /* Keep every label·count pair on one line even on a narrow desktop bar. */
+    white-space: nowrap;
   }
   .status-bar {
     grid-area: status;
