@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { version } from '../../wasm/crustyview_web.js';
+  import { BUILD_SHA, formatBuild } from '../buildInfo';
   import { mapCursor } from '../stores/mapCursor.svelte';
   import { nav } from '../stores/nav.svelte';
   import { wad } from '../stores/wad.svelte';
@@ -16,26 +18,35 @@
       ? null
       : `THINGS ${stats.things} · VERTEXES ${stats.vertexes} · LINEDEFS ${stats.linedefs} · SECTORS ${stats.sectors}`,
   );
+  // Constant for the life of the page: main.ts awaits wasm init before mounting.
+  const build = formatBuild(version(), BUILD_SHA);
 </script>
 
-<div class="status-bar" role="status">
-  {#if wad.phase === 'loaded' && wad.summary}
-    <span>{wad.summary.kind}</span>
-    <span>{wad.summary.lump_count} lumps</span>
-    <span>{wad.summary.map_count} maps</span>
-    {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
-    {#if nav.selectedMap && statsText}
-      <span class="stats">{statsText}</span>
+<div class="status-bar">
+  <!-- The live region is an inner element, not the bar itself: the build string
+       is static and must not be swept into load announcements. -->
+  <div class="live" role="status">
+    {#if wad.phase === 'loaded' && wad.summary}
+      <span>{wad.summary.kind}</span>
+      <span>{wad.summary.lump_count} lumps</span>
+      <span>{wad.summary.map_count} maps</span>
+      {#if nav.selectedMap}<span>{nav.selectedMap}</span>{/if}
+      {#if nav.selectedMap && statsText}
+        <span class="stats">{statsText}</span>
+      {/if}
+      <!-- `aria-hidden`: this bar is a polite live region, and the coordinates change
+           on every hover move — announcing them would talk over everything else. They
+           are a visual readout for a pointer-only interaction, so nothing is lost. -->
+      {#if mapCursor.pos}<span aria-hidden="true">({mapCursor.pos.x}, {mapCursor.pos.y})</span>{/if}
+    {:else if wad.phase === 'loading'}
+      <span>Loading…</span>
+    {:else}
+      <span>No WAD loaded</span>
     {/if}
-    <!-- `aria-hidden`: this bar is a polite live region, and the coordinates change
-         on every hover move — announcing them would talk over everything else. They
-         are a visual readout for a pointer-only interaction, so nothing is lost. -->
-    {#if mapCursor.pos}<span aria-hidden="true">({mapCursor.pos.x}, {mapCursor.pos.y})</span>{/if}
-  {:else if wad.phase === 'loading'}
-    <span>Loading…</span>
-  {:else}
-    <span>No WAD loaded</span>
-  {/if}
+  </div>
+  <!-- Outside the phase conditional on purpose: a build identifier is most
+       useful when a load has just failed and it's going into a bug report. -->
+  <span class="build">{build}</span>
 </div>
 
 <style>
@@ -55,6 +66,16 @@
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.8rem;
+  }
+  /* The live region carries the layout the bar itself used to. */
+  .live {
+    display: flex;
+    gap: 1.25rem;
+  }
+  /* Pushed to the trailing edge so it never jostles as status content changes. */
+  .build {
+    margin-left: auto;
+    white-space: nowrap;
   }
   @media (max-width: 48rem) {
     .status-bar {
