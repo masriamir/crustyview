@@ -9,3 +9,6 @@ pub mod error;
 pub mod map2d;
 pub mod probe;
 pub mod summary;
+
+#[cfg(test)]
+pub(crate) mod fixtures;
