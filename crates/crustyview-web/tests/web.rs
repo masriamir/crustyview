@@ -66,3 +66,15 @@ fn map_stats_of_missing_map_is_null() {
     let doc = WadDocument::load(empty_pwad()).expect("valid WAD");
     assert_eq!(doc.map_stats("MAP01"), "null");
 }
+
+#[wasm_bindgen_test]
+fn version_is_the_crate_version() {
+    let v = crustyview_web::version();
+    assert_eq!(v, env!("CARGO_PKG_VERSION"));
+    // Guard the shape too: a bare `env!` typo that yielded an empty string
+    // would still satisfy the equality above at build time.
+    assert!(
+        v.split('.').count() == 3,
+        "expected MAJOR.MINOR.PATCH, got {v}"
+    );
+}
