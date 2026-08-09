@@ -81,8 +81,9 @@ Within that choice, the concrete policy is:
    table: `feat:` → minor, `fix:`/`docs:`/`perf:` → patch, a `!` or
    `BREAKING CHANGE:` footer → minor while the workspace is 0.x and major
    from 1.0 on. An MSRV raise gets no special-cased bump — it's whatever its
-   own commit type implies. In practice only the `!` form is reachable; see
-   policy item 5 for why the footer form is not.
+   own commit type implies. Through the normal merge flow only the `!` form is
+   reachable; see policy item 5 for why the footer form requires a deliberate
+   step.
 3. Releases are cut by **`just release`**, run locally by a maintainer — not
    by CI, and not by a bot-authored release PR.
 4. The build string rendered in the status bar is sourced from
@@ -206,10 +207,12 @@ assumed:
 | `fix!:` / `docs!:` / `perf!:` | minor | where `!` changes the outcome |
 | `chore!:` / `ci!:` / `build!:` | minor | `protect_breaking_commits` overrides `skip`, so it appears under a bare `### Chore` heading |
 
-Breaking entries are marked `[**breaking**]` in the changelog (#92) — without
-that marker the `!` drove the bump but rendered identically to a
-non-breaking commit, which would leave the "Why same-minor" reasoning above
-resting on a signal that did not exist.
+The changelog must therefore mark breaking entries `[**breaking**]`. Without
+that marker the `!` drove the bump but rendered identically to a non-breaking
+commit, which left the "Why same-minor" reasoning above resting on a signal
+that did not exist — the marker is what makes that argument true rather than
+merely intended. Implemented separately by #92 (PR #93), so that it lands as
+its own `fix(release):` changelog entry.
 
 ## Pros and cons of the options
 
