@@ -81,8 +81,8 @@ pub(crate) fn tiny_pwad() -> Wad {
     let sectors: Vec<u8> = [sector(0), sector(9), sector(5), sector(0xE0)].concat();
     // THINGS: x, y (i16), angle, type, flags (u16)
     let things: Vec<u8> = [
-        [32i16 as u16, 32, 90, 1, 7], // player 1 start
-        [64u16, 16, 0, 3001, 7],      // imp
+        [32u16, 32, 90, 1, 7],   // player 1 start
+        [64u16, 16, 0, 3001, 7], // imp
     ]
     .iter()
     .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
