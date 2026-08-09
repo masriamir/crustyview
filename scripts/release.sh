@@ -27,7 +27,19 @@ if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-current="$(awk '/^\[workspace\.package\]/{b=1} b&&/^version = /{gsub(/[^0-9.]/,"");print;exit}' Cargo.toml)"
+# Both passes below scope to the [workspace.package] table identically: `inblock`
+# is re-evaluated at every table header, so a `version` key in any other table is
+# never read or written. The header match tolerates trailing space and a comment.
+read_version_awk='
+  /^\[/ { inblock = ($0 ~ /^\[workspace\.package\][[:space:]]*(#.*)?$/) }
+  inblock && /^version = / { gsub(/[^0-9.]/, ""); print; found = 1; exit }
+  END { if (!found) exit 1 }
+'
+
+if ! current="$(awk "$read_version_awk" Cargo.toml)" || [[ -z "$current" ]]; then
+  echo "error: no version key under [workspace.package] in Cargo.toml" >&2
+  exit 1
+fi
 
 if $dry_run; then
   echo "current: $current"
@@ -37,15 +49,29 @@ if $dry_run; then
   exit 0
 fi
 
-# Scoped to the [workspace.package] table: a `version` key in any other table
-# is left alone.
-awk -v ver="$ver" '
-  /^\[/ { inblock = ($0 == "[workspace.package]") }
-  inblock && /^version = / && !done { print "version = \"" ver "\""; done=1; next }
+# A silent no-op here would be the worst failure this script has: it would go on
+# to write a changelog, commit, and tag a release whose manifest still declares
+# the old version. So the pass exits non-zero unless it actually stamped a line.
+if ! awk -v ver="$ver" '
+  /^\[/ { inblock = ($0 ~ /^\[workspace\.package\][[:space:]]*(#.*)?$/) }
+  inblock && /^version = / && !done { print "version = \"" ver "\""; done = 1; next }
   { print }
-' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
+  END { if (!done) exit 1 }
+' Cargo.toml > Cargo.toml.tmp; then
+  rm -f Cargo.toml.tmp
+  echo "error: could not stamp the version into [workspace.package] — has Cargo.toml's layout changed?" >&2
+  exit 1
+fi
+mv Cargo.toml.tmp Cargo.toml
 
-# Refresh Cargo.lock so the commit is self-consistent.
+# Read it back rather than trusting the write.
+if ! awk "$read_version_awk" Cargo.toml | grep -qx "$ver"; then
+  echo "error: version stamp verification failed; expected $ver" >&2
+  exit 1
+fi
+
+# Refresh Cargo.lock so the commit is self-consistent. Also fails loudly if the
+# rewrite produced a manifest cargo can't parse.
 cargo metadata --format-version 1 --no-deps >/dev/null
 
 git-cliff --tag "$next" -o CHANGELOG.md
