@@ -21,6 +21,14 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
 - Every change is tracked by a GitHub **issue** on the board (see Project tracking); branch
   by issue number where one exists (`<type>/<###>-<slug>`).
+- **PRs squash-merge, so the PR title _is_ the changelog entry and the version bump** — it
+  becomes the only commit on `main`, and git-cliff parses it, never the branch's commits.
+  Write it as a real Conventional Commit describing the shipped outcome: the type decides
+  inclusion (`chore:`/`ci:`/`build:` are skipped) and the bump, so a `chore:`-titled feature
+  is silently dropped from `CHANGELOG.md` and skips the minor. Declare breaking changes with
+  `!` in the **title** — the squash body is `BLANK` by policy and carries nothing, so a
+  `BREAKING CHANGE:` footer written on a branch commit is discarded at merge (ADR-0004,
+  policy item 5). Never `gh pr create --fill`: it derives the title from the branch name.
 - **Releases are cut locally**, never in CI: `just release` (`--dry-run` to preview) bumps
   `[workspace.package].version` from Conventional Commits, regenerates `CHANGELOG.md`, commits,
   and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are
