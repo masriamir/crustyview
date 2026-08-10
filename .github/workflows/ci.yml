@@ -156,7 +156,7 @@ jobs:
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ''   # TEMPORARY PROBE (#109) — simulates a Dependabot run, which gets no Actions secrets
           # The action exits 0 on a rejected upload by default; both this and the
           # removal of `continue-on-error` are needed for a failure to be visible.
           fail_ci_if_error: true
