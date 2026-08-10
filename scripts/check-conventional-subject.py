@@ -11,8 +11,9 @@ sole commit message on `main` and is what git-cliff parses for changelog inclusi
 section, and version bump (ADR-0004 policy item 5). Keeping one regex here means a
 title that satisfies CI cannot be one lefthook would have rejected, or vice versa.
 
-Reads the subject on stdin and considers only its first line, so it can be fed a
-commit-message file (`head -n 1`) or a PR title alike.
+Reads stdin and considers only its first line, so a whole commit-message file can be
+redirected in as readily as a bare PR title is piped in. Callers do not need to slice
+off the subject themselves.
 """
 
 import re
