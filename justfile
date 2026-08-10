@@ -1,7 +1,14 @@
 # crustyview
 set shell := ["bash", "-uc"]
 
+# Build the workspace
+build:
+    cargo build --workspace
+
 # One-time setup for a fresh clone (idempotent): wasm target, web deps, git hooks
+#
+# Keep this BELOW `build`: bare `just` runs the FIRST recipe in the file, so putting
+# setup at the top silently turned the no-argument default into "run installs".
 setup:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -23,7 +30,9 @@ setup:
         echo "missing: $tool"
         case "$tool" in
           cargo|rustup) echo "  install: https://rustup.rs" ;;
-          npm)          echo "  install: https://nodejs.org (v22+)" ;;
+          # 22.20, not 22: web/package-lock.json pins a transitive dep requiring
+          # `^22.20 || ^24.12 || >=25`, so plain "22+" lets `npm ci` fail on 22.0-22.19.
+          npm)          echo "  install: https://nodejs.org (v22.20+)" ;;
           # Platform-neutral: this message is what a contributor on any OS sees.
           lefthook)     echo "  install: https://github.com/evilmartians/lefthook#install (macOS: brew install lefthook)" ;;
           wasm-pack)    echo "  install: cargo install wasm-pack" ;;
@@ -45,20 +54,22 @@ setup:
 
     # The assertion, not a formality: `lefthook install` reporting success is not the
     # same as the hooks being on disk, and every gate below depends on them being there.
+    #
+    # Ask git where the hooks live rather than assuming `.git/hooks`. In a worktree (and
+    # some submodule layouts) `.git` is a FILE pointing elsewhere, so `.git/hooks` does
+    # not exist even though the hooks are installed and firing — hard-coding the path
+    # makes this check cry wolf in exactly the setups it should support.
     echo "==> verifying hooks"
+    hooks_dir="$(git rev-parse --git-path hooks)"
     for hook in commit-msg pre-commit pre-push; do
-      if [ ! -f ".git/hooks/$hook" ]; then
-        echo "error: .git/hooks/$hook is missing after 'lefthook install'" >&2
+      if [ ! -f "$hooks_dir/$hook" ]; then
+        echo "error: $hooks_dir/$hook is missing after 'lefthook install'" >&2
         echo "  local gates (commit message, fmt/clippy, branch name) would silently do nothing" >&2
         exit 1
       fi
-      echo "    ok  .git/hooks/$hook"
+      echo "    ok  $hooks_dir/$hook"
     done
     echo "setup complete."
-
-# Build the workspace
-build:
-    cargo build --workspace
 
 # Run tests (the WAD sweep skips unless CRUSTYVIEW_WAD_DIR is set)
 test:

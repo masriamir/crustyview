@@ -14,7 +14,7 @@ You need:
 | Tool | Used by | Install |
 |---|---|---|
 | Rust (stable; MSRV pinned in `Cargo.toml`) | everything | <https://rustup.rs> |
-| Node.js 22+ | the Svelte app | <https://nodejs.org> |
+| Node.js **22.20+** | the Svelte app | <https://nodejs.org> |
 | `just` | every recipe below | <https://github.com/casey/just> |
 | `lefthook` | the git hooks | <https://github.com/evilmartians/lefthook#install> |
 | `wasm-pack` | `just dev`, `just web-wasm`, `just sweep-wasm` | `cargo install wasm-pack` |
@@ -23,6 +23,9 @@ You need:
 
 `just setup` checks for all of them and stops with the install command if any is missing, so you
 do not have to audit this list by hand.
+
+**22.20, not 22** — `web/package-lock.json` pins a transitive dependency requiring
+`^22.20 || ^24.12 || >=25`, so `npm ci` fails on 22.0–22.19 despite those satisfying "22+".
 
 ```sh
 git clone https://github.com/masriamir/crustyview
@@ -36,8 +39,8 @@ on disk**. It is idempotent — re-run it whenever you like. If a prerequisite i
 and names the install command rather than continuing quietly.
 
 **Why the hook step gets its own verification.** The repo ships a `lefthook.yml`, but git hooks
-live in `.git/hooks/`, which is not version-controlled — so a fresh clone has no hooks until
-`lefthook install` runs. Skip it and every local gate silently does nothing: commit messages go
+live in git's hooks directory, which is not version-controlled — so a fresh clone has no hooks
+until `lefthook install` runs. Skip it and every local gate silently does nothing: commit messages go
 unchecked, `cargo fmt`/`clippy` never run before a commit, branch names are never validated.
 Nothing warns you; things simply pass. That is not hypothetical — it went unnoticed in this repo
 and in its sibling until 2026-08-10. `just setup` therefore asserts the hooks exist and fails if
@@ -50,8 +53,12 @@ If you prefer to run the steps yourself, the equivalent is:
 rustup target add wasm32-unknown-unknown
 cd web && npm ci && cd ..
 lefthook install
-ls .git/hooks/   # expect: commit-msg, pre-commit, pre-push
+ls "$(git rev-parse --git-path hooks)"   # expect: commit-msg, pre-commit, pre-push
 ```
+
+Ask git for the hooks path rather than assuming `.git/hooks`: inside a worktree (or some
+submodule layouts) `.git` is a *file* pointing elsewhere, so `.git/hooks` does not exist even
+though the hooks are installed and firing.
 
 ## Everyday commands
 
