@@ -29,6 +29,12 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   `!` in the **title** — the squash body is `BLANK` by policy and carries nothing, so a
   `BREAKING CHANGE:` footer written on a branch commit is discarded at merge (ADR-0004,
   policy item 5). Never `gh pr create --fill`: it derives the title from the branch name.
+- The title's **form** is checked by CI's `pr-title` job, which shares one regex with
+  lefthook's `commit-msg` hook — `scripts/check-conventional-subject.py` is the single source
+  of truth for both, so the gate on the PR title and the gate on branch commits cannot drift
+  apart. It cannot be a *required* check while the repo is private+free, so treat a red
+  `pr-title` as blocking by process. It validates form only: whether the chosen **type** is the
+  right one for the change remains a human judgement no parser can make.
 - **Releases are cut locally**, never in CI: `just release` (`--dry-run` to preview) bumps
   `[workspace.package].version` from Conventional Commits, regenerates `CHANGELOG.md`, commits,
   and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are

@@ -1,0 +1,31 @@
+name: PR Title
+
+# PRs squash-merge, so the PR title becomes the only commit message on `main` and is
+# the string git-cliff parses for changelog inclusion, section, and version bump
+# (ADR-0004 policy item 5). Nothing else checks it: lefthook's `commit-msg` hook
+# validates the branch commits, which are exactly what squash-merge discards.
+#
+# A private repo on a free personal plan cannot make this a required check (the same
+# constraint behind copilot-review.yml), so it is advisory by construction — a red X
+# here means "fix the title before merging", enforced by process. Convert it to a
+# required check when the repo goes public.
+on:
+  pull_request:
+    # `edited` catches a retitle; `synchronize` re-attaches the check to each new head
+    # SHA, so a push can't leave the latest commit without this signal.
+    types: [opened, edited, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate PR title
+        env:
+          # Via the environment, never interpolated into the script: a PR title is
+          # attacker-controlled text.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | python3 scripts/check-conventional-subject.py
