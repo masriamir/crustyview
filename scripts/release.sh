@@ -166,7 +166,13 @@ phase=committed
 # tooling expect to find.
 git tag -a "$next" -m "crustyview $next"
 
-echo "Tagged $next (annotated). Push with: git push --follow-tags"
+echo "Tagged $next (annotated). Next, in order:"
 # Pushing is the operator's step, and a plain `git push` silently omits tags, so
 # name the one command that distinguishes a complete release from a half one.
-echo "Then confirm it landed: git ls-remote --tags origin $next"
+echo "  1. git push --follow-tags"
+echo "  2. git ls-remote --tags origin $next   # confirm the tag landed"
+# The GitHub Release is deliberately NOT created here: `gh release create` needs the
+# tag to exist on the remote, and this script has not pushed. Keeping it out also
+# keeps this script network-free, so a failure here can never leave a half-published
+# release. `just release-publish` is idempotent and re-runnable (#86).
+echo "  3. just release-publish                # create the GitHub Release"

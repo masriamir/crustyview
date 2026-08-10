@@ -129,6 +129,46 @@ fetch-freedoom dir=".freedoom" version="0.13.0":
 release *args:
     ./scripts/release.sh {{args}}
 
+# Publish the GitHub Release for the latest tag (run after `git push --follow-tags`)
+release-publish:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Separate from `just release` because `gh release create` needs the tag on the
+    # REMOTE, and release.sh deliberately does not push (ADR-0004: pushing is the
+    # operator's step). Keeping the network out of release.sh also means a failure
+    # here can never leave a half-cut release behind. Idempotent: re-run freely.
+    tag="$(git describe --tags --abbrev=0)"
+
+    # The tag must be on the remote, or `gh release create` invents a ref from the
+    # default branch and the Release silently points at the wrong commit.
+    if ! git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+      echo "error: $tag is not on origin yet — run 'git push --follow-tags' first" >&2
+      exit 1
+    fi
+
+    if gh release view "$tag" >/dev/null 2>&1; then
+      echo "GitHub Release $tag already exists — nothing to do."
+      exit 0
+    fi
+
+    # `--strip all` drops the changelog header/footer; the leading `## [x.y.z]` heading
+    # goes too, since GitHub already titles the Release with the tag.
+    #
+    # awk, not sed: BSD sed (macOS) rejects `1{/re/d}` without a trailing semicolon
+    # while GNU sed accepts it, and this recipe runs on a maintainer's machine —
+    # so the portable form is the only one that is actually tested where it runs.
+    notes="$(mktemp)"
+    trap 'rm -f "$notes"' EXIT
+    git-cliff --latest --strip all \
+      | awk 'NR==1 && /^## \[/ { next } !started && NF==0 { next } { started=1; print }' > "$notes"
+    if [ ! -s "$notes" ]; then
+      echo "error: generated release notes are empty for $tag" >&2
+      exit 1
+    fi
+
+    gh release create "$tag" --title "$tag" --notes-file "$notes" --verify-tag
+    echo "Published: $(gh release view "$tag" --json url --jq .url)"
+
 # Playwright E2E smoke (fixtures: `just fetch-freedoom` once; browser: `just e2e-install` once)
 e2e: build-web
     cd web && npx playwright test

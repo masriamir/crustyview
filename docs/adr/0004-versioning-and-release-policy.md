@@ -279,6 +279,33 @@ its own `fix(release):` changelog entry.
   could not provide.
 - Issue #86 tracks revisiting release-plz if upstream #2595 closes, or if the
   crates are ever published; no implementation work is scoped there today.
+- **crates.io publishing was evaluated on 2026-08-10 (#86) and declined.**
+  `crustyview-core` is genuinely publishable — the name is free, and both its
+  dependencies (`crustywad`, `serde`) are on the registry — so this is a
+  choice, not a blocker. Two reasons against, and neither is "we forgot":
+  1. **It collides with D1.** One workspace version means `crustyview-core`
+     moves whenever the *product* moves, so shipping a UI feature would
+     republish core at a new minor with a byte-identical API. That is a
+     meaningless bump aimed at precisely the audience versioning exists to
+     inform. Publishing properly requires giving up the single-version
+     decision, which is a larger change than the publish flag.
+  2. **It is close to irreversible.** crates.io has no delete — only yank —
+     and a name is never reclaimable. With no consumer asking for it, the
+     asymmetry favours waiting.
+
+  **Revisit when** something actually wants to depend on `crustyview-core`, or
+  when per-crate versioning is wanted for its own sake. At that point D1 and D2
+  both reopen: D2's mapping is justified by "nothing pins it, no caret
+  requirement exists anywhere pointing at it", which publishing makes false.
+  Until then `publish = false` on all three crates is a recorded decision, not
+  an unexamined default.
+- **GitHub Releases are created from the tags** as of #86, via
+  `just release-publish`. It is deliberately a separate step from `just
+  release`: `gh release create` needs the tag on the remote, and `release.sh`
+  does not push (pushing stays the operator's step, above). Keeping the network
+  out of `release.sh` also means a failure while publishing can never leave a
+  half-cut release behind. The recipe is idempotent and refuses to run against
+  a tag that has not been pushed.
 - **Revisit if:** release-plz/release-plz#2595 closes upstream, or
   crustyview's crates are ever published (#86) — either could remove the
   blocker that ruled out option 2; or when crustyview reaches 1.0, at which
