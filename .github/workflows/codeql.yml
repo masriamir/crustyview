@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# Same rule as ci.yml: cancel superseded PR runs, never `main` runs — a cancelled
+# `main` analysis would leave a gap in the code-scanning baseline.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
