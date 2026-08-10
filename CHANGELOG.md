@@ -3,6 +3,16 @@
 All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
 
+## [0.1.1] - 2026-08-10
+
+### Bug Fixes
+
+- Create the release tag annotated so --follow-tags pushes it (#91)
+- Render a breaking-change marker in the changelog (#93)
+
+### Documentation
+
+- Record the squash-merge changelog contract in ADR-0004 (#94)
 ## [0.1.0] - 2026-08-09
 
 ### Bug Fixes
