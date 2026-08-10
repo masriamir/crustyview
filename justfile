@@ -1,20 +1,18 @@
 # crustyview
 set shell := ["bash", "-uc"]
 
-# One-time setup for a fresh clone: wasm target, web deps, and git hooks
-#
-# The last step is the reason this recipe exists. `lefthook.yml` is version-controlled
-# but `.git/hooks/` is not, so a fresh clone has NO hooks until `lefthook install` runs
-# — and a missing hook is indistinguishable from a passing one. That gap went unnoticed
-# in this repo and in crustywad until 2026-08-10 (#111). So this recipe does not just
-# run the steps, it ASSERTS the hooks exist afterwards and fails if they do not.
-#
-# It cannot bootstrap `just` (you are already running it) or `lefthook` (external
-# install), so missing prerequisites stop it with the command to fix them rather than
-# letting it continue quietly. Every step is idempotent — re-run it any time.
+# One-time setup for a fresh clone (idempotent): wasm target, web deps, git hooks
 setup:
     #!/usr/bin/env bash
     set -euo pipefail
+    # The hook step is why this recipe exists. `lefthook.yml` is version-controlled but
+    # `.git/hooks/` is not, so a fresh clone has NO hooks until `lefthook install` runs
+    # — and a missing hook is indistinguishable from a passing one. That gap went
+    # unnoticed in this repo and in crustywad until 2026-08-10 (#111). So this does not
+    # just run the steps, it ASSERTS the hooks exist afterwards and fails if they do not.
+    #
+    # It cannot bootstrap `just` (you are running it) or `lefthook` (external install),
+    # so missing prerequisites stop it with the fix rather than continuing quietly.
     missing=0
     for tool in cargo rustup npm lefthook; do
       if ! command -v "$tool" >/dev/null 2>&1; then
@@ -68,10 +66,11 @@ lint:
 fmt:
     cargo fmt --all
 
-# Fast local subset of the GitHub CI jobs (native + wasm). NOT a mirror: it skips
-# wasm-test, web-build, coverage, sweep-freedoom and web-e2e, so green here does not
-# guarantee green in CI. Check `gh pr checks` before calling a PR ready.
+# Fast local SUBSET of CI (not a mirror) — `gh pr checks` is the source of truth
 ci:
+    # Skips wasm-test, web-build, coverage, sweep-freedoom and web-e2e, so a green
+    # run here is necessary but not sufficient. `just --list` shows only the last
+    # comment line above a recipe, which is why the detail lives in the body.
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
@@ -83,7 +82,7 @@ ci:
 web-wasm:
     cd crates/crustyview-web && wasm-pack build --target web --out-dir ../../web/src/wasm
 
-# Dev server for the Svelte app (builds wasm first; assumes `cd web && npm install` was run once)
+# Dev server for the Svelte app (builds wasm first; run `just setup` once beforehand)
 dev: web-wasm
     cd web && npm run dev
 
@@ -103,8 +102,7 @@ sweep-wasm dir:
 fetch-freedoom dir=".freedoom" version="0.13.0":
     ./scripts/fetch-freedoom.sh "{{dir}}" "{{version}}"
 
-# Cut a release: bump from Conventional Commits, write CHANGELOG.md, commit, tag.
-# `just release --dry-run` previews without writing.
+# Cut a release: bump from Conventional Commits, write CHANGELOG.md, commit, tag (--dry-run previews)
 release *args:
     ./scripts/release.sh {{args}}
 
