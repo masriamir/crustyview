@@ -46,6 +46,22 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are
   `skip = true` in `cliff.toml`, so a run with only those refuses rather than re-tagging.
   release-plz is deliberately **not** used — see ADR-0004.
+- **Every `uses:` in `.github/workflows/` is pinned to a 40-character commit SHA**, with the
+  human-readable ref preserved in a trailing comment
+  (`actions/checkout@3d3c42e5… # v7`). A tag or branch ref is mutable, so an unpinned action
+  is an unreviewed third party with write access to the CI that gates `main`. Mirrors
+  crustywad. Three details that are easy to get wrong:
+  - **Branch refs get pinned too**, and say so: `dtolnay/rust-toolchain@4360b525… # stable
+    branch pin`. This freezes the *action*, not the Rust toolchain — the action still
+    installs whatever `stable` resolves to at run time.
+  - **`taiki-e/install-action`'s ref is the tool name**, so its comment must be the tool
+    (`# cargo-deny`), not a version. The same action appears at several SHAs, one per tool,
+    and the comment is the only thing that says which is which.
+  - **Never hand-write a SHA.** Resolve it — `gh api repos/<owner>/<repo>/commits/<ref>
+    --jq .sha` — and keep the comment matching the ref you resolved, or the next reader
+    cannot tell what the pin was meant to track. Bumps are Dependabot's job
+    (`.github/dependabot.yml`, weekly), not something to do by hand while editing a workflow
+    for other reasons.
 
 ## Project tracking
 

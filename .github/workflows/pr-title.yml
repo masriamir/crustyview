@@ -28,7 +28,7 @@ jobs:
       # required check, the argument no longer holds and pinning to `base.sha` has become
       # worth doing (#101). Until then the self-test below is the guard: it fails loudly
       # if the validator is weakened.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # The validator gates branch commits and PR titles alike, so a regression in it
       # disarms both gates at once. Prove it still rejects what it must before trusting
       # its verdict on this PR's title.
