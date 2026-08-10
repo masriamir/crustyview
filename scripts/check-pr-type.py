@@ -11,8 +11,10 @@ The title's *form* is already checked by `check-conventional-subject.py`, but fo
 not the problem here: `chore(map): add sector overlay` is perfectly well-formed. Whether
 the type is the *right* one is a judgement about what the change is, so this can only be
 a heuristic — a genuine chore may legitimately touch source (a dependency bump, a
-rename). It therefore warns and never fails. Replayed over the 38 commits on `main` when
-it was written, it fires 3 times, twice on a title that was arguably wrong.
+rename). It therefore warns and never fails. It is quiet in practice; #96 records the
+replay over `main`'s history that measured its false-positive rate before adoption, and
+re-running that replay is the way to re-check it rather than trusting a figure quoted
+here that history will outgrow.
 
 The skipped types are read from `cliff.toml` rather than hardcoded, so this cannot drift
 away from what git-cliff actually does.
@@ -78,9 +80,10 @@ def main():
         return 0
 
     print(
-        f"::warning title=Check the PR type::'{commit_type}:' is skipped by cliff.toml, "
-        f"so this PR will not appear in CHANGELOG.md and will not bump the version — "
-        f"but it changes {len(hits)} source file(s). Confirm the type is right."
+        f"::warning title=Check the PR type::'{commit_type}:' is a skipped type in "
+        f"{cliff_path}, so this PR will not appear in CHANGELOG.md and will not bump the "
+        f"version — but it changes {len(hits)} file(s) under shipped or tested paths. "
+        f"Confirm the type is right."
     )
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -89,9 +92,9 @@ def main():
             summary.write(
                 f"### Check the PR type\n\n"
                 f"`{title}`\n\n"
-                f"`{commit_type}:` is `skip = true` in `cliff.toml`. Under squash-merge "
+                f"`{commit_type}:` is `skip = true` in `{cliff_path}`. Under squash-merge "
                 f"this PR contributes **no changelog entry and no version bump**, yet it "
-                f"changes source:\n\n"
+                f"changes files that ship to users or test their behaviour:\n\n"
             )
             for path in hits:
                 summary.write(f"- `{path}`\n")
