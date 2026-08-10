@@ -224,7 +224,10 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   reviews have been observed taking up to ~14 minutes normally, so give it time before
   concluding it is stuck.
 - Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
-  as needed. CI command: `just ci` (mirrors the crustyview CI checks). Owner/repo:
+  as needed. CI command: `just ci` — a fast **subset** of the CI jobs (fmt, clippy native
+  *and* wasm, test, wasm build, deny), not a mirror: it does not run `wasm-test`,
+  `web-build`, `coverage`, `sweep-freedoom`, or `web-e2e`, so a green `just ci` is
+  necessary but not sufficient. `gh pr checks` remains the source of truth. Owner/repo:
   `masriamir/crustyview`.
 - A PR is ready for human review only when **all** Copilot threads are resolved **and** all
   CI checks pass (`gh pr checks`). The ruleset now enforces both — unresolved threads and the
