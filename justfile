@@ -13,7 +13,7 @@ test:
 lint:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
 
 # Auto-format
 fmt:
@@ -25,7 +25,7 @@ fmt:
 ci:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
     cargo test --workspace --all-features
     cargo build -p crustyview-web --target wasm32-unknown-unknown
     cargo deny check
