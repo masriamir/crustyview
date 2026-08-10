@@ -20,6 +20,19 @@ and starts the Vite dev server).
 Architectural decisions are recorded as ADRs in [`docs/adr/`](docs/adr/); see
 the [index](docs/adr/README.md#index) for the full list.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, branch and commit conventions, and how a PR
+gets merged. One step is easy to miss and fails silently: run **`lefthook install`** after
+cloning, or none of the local git hooks exist.
+
+## License
+
+Dual-licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option
+(`license = "MIT OR Apache-2.0"`). GitHub's sidebar reports this as "NOASSERTION" because its
+detector does not resolve dual licenses — the crate manifests carry the authoritative
+declaration.
+
 ---
 
 Status: bootstrap + WASM go/no-go spike.
