@@ -12,7 +12,7 @@ crustywad and fixed there; crustyview bumps the dependency when a release lands.
 - `crustyview-native` — a portability-proving skeleton binary.
 
 The browser app lives in top-level `web/` (Svelte + Vite + TypeScript). Install its
-dependencies once (`cd web && npm install`), then run `just dev` (which builds the wasm
+dependencies once via `just setup`, then run `just dev` (which builds the wasm
 and starts the Vite dev server).
 
 ## Decisions

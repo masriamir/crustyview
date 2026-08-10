@@ -13,14 +13,22 @@ setup:
     #
     # It cannot bootstrap `just` (you are running it) or `lefthook` (external install),
     # so missing prerequisites stop it with the fix rather than continuing quietly.
+    # Everything the documented workflows shell out to, not just what setup itself
+    # needs — the point is to fail here rather than at first `just dev` or `just ci`.
+    # `wasm-pack` (web-wasm, sweep-wasm), `cargo-deny` (ci) and `python3` (lefthook's
+    # commit-msg hook) are easy to miss precisely because a maintainer already has them.
     missing=0
-    for tool in cargo rustup npm lefthook; do
+    for tool in cargo rustup npm lefthook wasm-pack cargo-deny python3; do
       if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing: $tool"
         case "$tool" in
           cargo|rustup) echo "  install: https://rustup.rs" ;;
           npm)          echo "  install: https://nodejs.org (v22+)" ;;
-          lefthook)     echo "  install: brew install lefthook" ;;
+          # Platform-neutral: this message is what a contributor on any OS sees.
+          lefthook)     echo "  install: https://github.com/evilmartians/lefthook#install (macOS: brew install lefthook)" ;;
+          wasm-pack)    echo "  install: cargo install wasm-pack" ;;
+          cargo-deny)   echo "  install: cargo install cargo-deny" ;;
+          python3)      echo "  install: https://www.python.org/downloads/ (usually preinstalled)" ;;
         esac
         missing=1
       fi

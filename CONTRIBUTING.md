@@ -9,9 +9,20 @@ rather than a public issue — see [SECURITY.md](SECURITY.md).
 
 ## Setup
 
-You need [Rust](https://rustup.rs) (stable; the workspace MSRV is pinned in `Cargo.toml`),
-[Node.js](https://nodejs.org) 22+, [just](https://github.com/casey/just), and
-[lefthook](https://github.com/evilmartians/lefthook).
+You need:
+
+| Tool | Used by | Install |
+|---|---|---|
+| Rust (stable; MSRV pinned in `Cargo.toml`) | everything | <https://rustup.rs> |
+| Node.js 22+ | the Svelte app | <https://nodejs.org> |
+| `just` | every recipe below | <https://github.com/casey/just> |
+| `lefthook` | the git hooks | <https://github.com/evilmartians/lefthook#install> |
+| `wasm-pack` | `just dev`, `just web-wasm`, `just sweep-wasm` | `cargo install wasm-pack` |
+| `cargo-deny` | `just ci` | `cargo install cargo-deny` |
+| `python3` | the `commit-msg` hook | usually preinstalled |
+
+`just setup` checks for all of them and stops with the install command if any is missing, so you
+do not have to audit this list by hand.
 
 ```sh
 git clone https://github.com/masriamir/crustyview
