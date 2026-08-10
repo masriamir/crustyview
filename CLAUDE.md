@@ -32,9 +32,9 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
 - The title's **form** is checked by CI's `pr-title` job, which shares one regex with
   lefthook's `commit-msg` hook — `scripts/check-conventional-subject.py` is the single source
   of truth for both, so the gate on the PR title and the gate on branch commits cannot drift
-  apart. It cannot be a *required* check while the repo is private+free, so treat a red
-  `pr-title` as blocking by process. It validates form only: whether the chosen **type** is the
-  right one for the change remains a human judgement no parser can make.
+  apart. It is a **required** check in the `Main Branch` ruleset, so a red `pr-title` blocks the
+  merge outright. It validates form only: whether the chosen **type** is the right one for the
+  change remains a human judgement no parser can make.
 - The **type** gets a heuristic second opinion from CI's `pr-type` job, which warns when a title
   whose type is `skip = true` in `cliff.toml` ships a diff touching `crates/*/src/**`,
   `crates/*/tests/**` or `web/src/**` — the exact shape that vanishes from `CHANGELOG.md` and
@@ -122,11 +122,22 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     correctly gets **no comment**. Only a missing comment on a Rust-touching PR is a red flag.
 
 ## Copilot review loop
-- Every non-draft PR is auto-requested for **Copilot** review by
-  `.github/workflows/copilot-review.yml`. This exists because a private repo on a free
-  personal plan **cannot** use rulesets/branch protection to request Copilot (or enforce
-  required checks) — the workflow substitutes for that. Retire it when the repo goes public
-  and a ruleset can request Copilot automatically.
+- Copilot review is requested by the **`Main Branch` ruleset**, not by a workflow. The ruleset
+  existed from the start but was inert while the repo was private on a free plan; it activated
+  when the repo went public (2026-08-10), and `.github/workflows/copilot-review.yml` — which had
+  substituted for it — was retired then (#106).
+- Three ruleset behaviours shape the review loop, and two of them replace manual steps:
+  - `review_on_push: true` — **pushing to a PR triggers a fresh review by itself.** Re-requesting
+    by hand is unnecessary; only reach for the manual recipe below when a request appears stuck.
+  - `dismiss_stale_reviews_on_push: true` — the previous review is dismissed rather than lingering
+    and being mistaken for a verdict on the new head.
+  - `required_review_thread_resolution: true` — "never merge over an unresolved thread" is now
+    enforced by the ruleset instead of by discipline.
+- The ruleset also requires 10 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
+  `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`. **`web-e2e`
+  and `pr-type` are deliberately not required** — the first is a documented smoke signal, the
+  second is advisory and can never fail. Merges are squash-only by ruleset as well as by repo
+  setting (#97).
 - Copilot renders **differently on every surface** — mixing them up breaks scripts:
 
   | Surface | Rendering |
@@ -151,7 +162,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   Prints `copilot-pull-request-reviewer` when a request is pending, nothing otherwise. Match the
   login rather than counting: `totalCount` counts **every** pending reviewer, so a waiting human
   would read as a waiting Copilot.
-- Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`, then verify with the query above.
+- Manual (re-)request — rarely needed now that `review_on_push` covers the normal case:
+  `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`, then verify with the query above.
 - **A pending request cannot be re-kicked.** A second POST returns 200, emits no
   `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot
   (422, *"Could not resolve to User node"*). To unstick one, clear the whole reviewer set with
@@ -168,8 +180,10 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   as needed. CI command: `just ci` (mirrors the crustyview CI checks). Owner/repo:
   `masriamir/crustyview`.
 - A PR is ready for human review only when **all** Copilot threads are resolved **and** all
-  CI checks pass (`gh pr checks`). Branch protection can't enforce this while private+free,
-  so it is a process discipline: never merge over an unresolved thread or a red check.
+  CI checks pass (`gh pr checks`). The ruleset now enforces both — unresolved threads and the
+  10 required checks block the merge — so this is no longer discipline alone. Two things still
+  are, because they are outside the ruleset: the codecov comment's missing-lines table, and the
+  advisory `pr-type` warning.
 
 ## Not yet built (tracked on the board)
 - The virtualized texture and lump browsers (need the `textureRgba(name)` contract change

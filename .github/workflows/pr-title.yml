@@ -5,10 +5,10 @@ name: PR Title
 # (ADR-0004 policy item 5). Nothing else checks it: lefthook's `commit-msg` hook
 # validates the branch commits, which are exactly what squash-merge discards.
 #
-# A private repo on a free personal plan cannot make this a required check (the same
-# constraint behind copilot-review.yml), so it is advisory by construction — a red X
-# here means "fix the title before merging", enforced by process. Convert it to a
-# required check when the repo goes public.
+# This is a **required** status check in the `Main Branch` ruleset, so a red X here
+# genuinely blocks the merge rather than asking nicely. It was advisory until the repo
+# went public on 2026-08-10 — rulesets are unavailable on a private repo on a free plan,
+# which is also why a workflow used to request Copilot review (#106).
 on:
   pull_request:
     # `edited` catches a retitle; `synchronize` re-attaches the check to each new head
