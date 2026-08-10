@@ -1,3 +1,18 @@
+# SCOPE — what these numbers cover, and what they cannot.
+#
+# `cargo llvm-cov` runs on the host target. `crustyview-web` gates its whole body on
+# `#[cfg(target_arch = "wasm32")]`, so it compiles to nothing there and is absent from
+# every report: 7 files are measured (crustyview-core + crustyview-native), none of them
+# the browser API. The percentages below therefore mean "of what llvm-cov could see".
+#
+# There is deliberately NO `ignore:` entry for that crate. The omission is structural,
+# not a choice, and an `ignore:` would also silence genuinely measurable code added
+# there later — converting a gap that should close on its own into a permanent one.
+#
+# The compensating control is the required `wasm-test` job: six wasm-bindgen tests in
+# crates/crustyview-web/tests/web.rs exercise all seven browser-API methods. A change to
+# that crate needs a wasm test, because no coverage number here will notice its absence.
+# See CLAUDE.md ("What coverage does NOT measure") and #109.
 coverage:
   status:
     project:
