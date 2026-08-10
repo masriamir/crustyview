@@ -11,15 +11,28 @@ on:
 permissions:
   contents: read
 
-# Superseded pushes to a PR are abandoned rather than run to completion. Deliberately
-# NOT applied to `main`: those runs feed the Codecov base report and the CodeQL
-# baseline, so cancelling one leaves a commit permanently without coverage data — the
-# same shape of hole the 2026-08-10 Codecov outage left on `2cd6908` and `2847b0f`
-# (#109). A cancelled job reports `cancelled`, which does not satisfy a required
-# check; the superseding run posts fresh check runs under the same names, and the
-# ruleset reads those.
+# Superseded pushes to a PR are abandoned rather than run to completion.
+#
+# `main` runs must be untouched by this: they feed the Codecov base report and the
+# CodeQL baseline, so losing one leaves that commit permanently without coverage data
+# — the same hole the 2026-08-10 outage left on `2cd6908` and `2847b0f` (#109).
+#
+# `cancel-in-progress: false` is NOT sufficient to guarantee that, which is the whole
+# reason the group key is shaped the way it is. A concurrency group admits one run at
+# a time regardless, and when a new run is queued GitHub cancels any run already
+# *pending* in that group. So a shared `main` group turns three rapid merges into
+# "run 1 in progress, run 2 cancelled, run 3 pending" — manufacturing the exact gap
+# this comment claims to prevent. Keying non-PR events on `github.sha` gives every
+# commit its own group, so `main` runs never queue behind each other and never
+# cancel. `github.event_name` keeps a `schedule` run from colliding with the `push`
+# run on the same SHA.
+#
+# For PRs the ref is stable across pushes, so successive heads share a group and the
+# superseded one is cancelled. A cancelled job reports `cancelled`, which does not
+# satisfy a required check; the superseding run posts fresh check runs under the same
+# names and the ruleset reads those.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

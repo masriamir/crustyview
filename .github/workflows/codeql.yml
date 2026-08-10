@@ -10,10 +10,14 @@ on:
 permissions:
   contents: read
 
-# Same rule as ci.yml: cancel superseded PR runs, never `main` runs — a cancelled
-# `main` analysis would leave a gap in the code-scanning baseline.
+# Same rule and same group shape as ci.yml — see the long explanation there. Short
+# version: `cancel-in-progress: false` alone does not protect `main`, because queuing a
+# run cancels whatever is already pending in its group. Keying non-PR events on
+# `github.sha` gives each commit its own group, so a `main` analysis is never cancelled
+# and never leaves a gap in the code-scanning baseline. This workflow also runs on
+# `schedule`, which is why `github.event_name` is in the key.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
