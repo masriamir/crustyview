@@ -146,7 +146,15 @@ release-finish:
     # leaves a half-release, and this repo has already shipped one at exactly this
     # seam (v0.1.0 went out untagged — see the annotated-tag comment in release.sh).
     # So the checkpoint stays manual and the ceremony does not.
-    tag="$(git describe --tags --abbrev=0)"
+    # `git describe` exits 128 with "fatal: No names found, cannot describe anything."
+    # when nothing is tagged — an opaque way to learn you have not cut a release, and
+    # equally what a fresh clone that skipped `--tags` would hit.
+    if ! tag="$(git describe --tags --abbrev=0 2>/dev/null)"; then
+      echo "error: no tags found, so there is no release to finish" >&2
+      echo "  cut one first:        just release" >&2
+      echo "  or fetch existing:    git fetch --tags" >&2
+      exit 1
+    fi
     echo "==> finishing $tag"
 
     # Guardrails, because everything below this point is outward-facing and hard to
@@ -210,7 +218,9 @@ release-finish:
     # awk, not sed: BSD sed (macOS) rejects `1{/re/d}` without a trailing semicolon
     # while GNU sed accepts it, and this recipe runs on a maintainer's machine —
     # so the portable form is the only one that is actually tested where it runs.
-    notes="$(mktemp)"
+    # An explicit full template, not bare `mktemp` and not `-t`: BSD and GNU disagree
+    # on what `-t` means, while a complete path template behaves identically on both.
+    notes="$(mktemp "${TMPDIR:-/tmp}/crustyview-relnotes.XXXXXX")"
     trap 'rm -f "$notes"' EXIT
     git-cliff --latest --strip all \
       | awk 'NR==1 && /^## \[/ { next } !started && NF==0 { next } { started=1; print }' > "$notes"
