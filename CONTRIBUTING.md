@@ -13,6 +13,7 @@ You need:
 
 | Tool | Used by | Install |
 |---|---|---|
+| `git` | cloning, the hooks, `just setup` | <https://git-scm.com/downloads> |
 | Rust (stable; MSRV pinned in `Cargo.toml`) | everything | <https://rustup.rs> |
 | Node.js **22.20+** | the Svelte app | <https://nodejs.org> |
 | `just` | every recipe below | <https://github.com/casey/just> |

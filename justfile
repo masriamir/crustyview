@@ -25,10 +25,14 @@ setup:
     # `wasm-pack` (web-wasm, sweep-wasm), `cargo-deny` (ci) and `python3` (lefthook's
     # commit-msg hook) are easy to miss precisely because a maintainer already has them.
     missing=0
-    for tool in cargo rustup npm lefthook wasm-pack cargo-deny python3; do
+    # `git` belongs here even though you needed it to clone: this recipe shells out to
+    # `git rev-parse` for the hooks path, and lefthook itself drives git — so a `git`
+    # that is missing from PATH (not merely absent) breaks setup rather than the clone.
+    for tool in git cargo rustup npm lefthook wasm-pack cargo-deny python3; do
       if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing: $tool"
         case "$tool" in
+          git)          echo "  install: https://git-scm.com/downloads" ;;
           cargo|rustup) echo "  install: https://rustup.rs" ;;
           # 22.20, not 22: web/package-lock.json pins a transitive dep requiring
           # `^22.20 || ^24.12 || >=25`, so plain "22+" lets `npm ci` fail on 22.0-22.19.
