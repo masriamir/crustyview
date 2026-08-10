@@ -1,6 +1,55 @@
 # crustyview
 set shell := ["bash", "-uc"]
 
+# One-time setup for a fresh clone: wasm target, web deps, and git hooks
+#
+# The last step is the reason this recipe exists. `lefthook.yml` is version-controlled
+# but `.git/hooks/` is not, so a fresh clone has NO hooks until `lefthook install` runs
+# — and a missing hook is indistinguishable from a passing one. That gap went unnoticed
+# in this repo and in crustywad until 2026-08-10 (#111). So this recipe does not just
+# run the steps, it ASSERTS the hooks exist afterwards and fails if they do not.
+#
+# It cannot bootstrap `just` (you are already running it) or `lefthook` (external
+# install), so missing prerequisites stop it with the command to fix them rather than
+# letting it continue quietly. Every step is idempotent — re-run it any time.
+setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    missing=0
+    for tool in cargo rustup npm lefthook; do
+      if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "missing: $tool"
+        case "$tool" in
+          cargo|rustup) echo "  install: https://rustup.rs" ;;
+          npm)          echo "  install: https://nodejs.org (v22+)" ;;
+          lefthook)     echo "  install: brew install lefthook" ;;
+        esac
+        missing=1
+      fi
+    done
+    [ "$missing" -eq 0 ] || { echo "error: install the tools above, then re-run 'just setup'" >&2; exit 1; }
+
+    echo "==> rust wasm target"
+    rustup target add wasm32-unknown-unknown
+    echo "==> web dependencies"
+    # `ci`, not `install`: matches what CI runs and never rewrites package-lock.json.
+    (cd web && npm ci)
+    echo "==> git hooks"
+    lefthook install
+
+    # The assertion, not a formality: `lefthook install` reporting success is not the
+    # same as the hooks being on disk, and every gate below depends on them being there.
+    echo "==> verifying hooks"
+    for hook in commit-msg pre-commit pre-push; do
+      if [ ! -f ".git/hooks/$hook" ]; then
+        echo "error: .git/hooks/$hook is missing after 'lefthook install'" >&2
+        echo "  local gates (commit message, fmt/clippy, branch name) would silently do nothing" >&2
+        exit 1
+      fi
+      echo "    ok  .git/hooks/$hook"
+    done
+    echo "setup complete."
+
 # Build the workspace
 build:
     cargo build --workspace

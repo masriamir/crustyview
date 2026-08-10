@@ -23,8 +23,9 @@ the [index](docs/adr/README.md#index) for the full list.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, branch and commit conventions, and how a PR
-gets merged. One step is easy to miss and fails silently: run **`lefthook install`** after
-cloning, or none of the local git hooks exist.
+gets merged. After cloning, run **`just setup`** — it installs the wasm target, the web
+dependencies and the git hooks, then verifies the hooks landed. Without them, every local gate
+silently does nothing.
 
 ## License
 

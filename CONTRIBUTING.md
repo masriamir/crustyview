@@ -16,18 +16,29 @@ You need [Rust](https://rustup.rs) (stable; the workspace MSRV is pinned in `Car
 ```sh
 git clone https://github.com/masriamir/crustyview
 cd crustyview
-rustup target add wasm32-unknown-unknown
-cd web && npm ci && cd ..   # `ci`, not `install` — matches CI, never rewrites the lockfile
-lefthook install          # REQUIRED — see below
+just setup
 ```
 
-**`lefthook install` is not optional and not automatic.** The repo ships a `lefthook.yml`, but
-git hooks live in `.git/hooks/`, which is not version-controlled — so a fresh clone has no hooks
-until you run that command. Skip it and every local gate silently does nothing: commit messages
-go unchecked, `cargo fmt`/`clippy` never run before a commit, and branch names are never
-validated. Nothing warns you; things simply pass. Verify it took:
+`just setup` adds the wasm target, installs the web dependencies with `npm ci` (matching CI, and
+never rewriting the lockfile), installs the git hooks, and then **verifies the hooks are actually
+on disk**. It is idempotent — re-run it whenever you like. If a prerequisite is missing it stops
+and names the install command rather than continuing quietly.
+
+**Why the hook step gets its own verification.** The repo ships a `lefthook.yml`, but git hooks
+live in `.git/hooks/`, which is not version-controlled — so a fresh clone has no hooks until
+`lefthook install` runs. Skip it and every local gate silently does nothing: commit messages go
+unchecked, `cargo fmt`/`clippy` never run before a commit, branch names are never validated.
+Nothing warns you; things simply pass. That is not hypothetical — it went unnoticed in this repo
+and in its sibling until 2026-08-10. `just setup` therefore asserts the hooks exist and fails if
+they do not, because `lefthook install` reporting success is not the same as the hooks being
+there.
+
+If you prefer to run the steps yourself, the equivalent is:
 
 ```sh
+rustup target add wasm32-unknown-unknown
+cd web && npm ci && cd ..
+lefthook install
 ls .git/hooks/   # expect: commit-msg, pre-commit, pre-push
 ```
 
@@ -35,6 +46,7 @@ ls .git/hooks/   # expect: commit-msg, pre-commit, pre-push
 
 | Command | What it does |
 |---|---|
+| `just setup` | One-time (idempotent) clone setup; verifies the git hooks are installed |
 | `just dev` | Build the wasm and start the Vite dev server |
 | `just lint` | `cargo fmt --check` + clippy, **native and wasm targets** |
 | `just test` | `cargo test --workspace --all-features` |
