@@ -4,7 +4,9 @@
 - **Date:** 2026-08-09
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** #83 · PR #87 (`chore/83-versioning-policy`); amended by
-  #90 (squash-merge contract, policy item 5) after cutting v0.1.0
+  #90 (squash-merge contract, policy item 5) after cutting v0.1.0; amended by
+  #108 (the PR title's *form* is now gated by a required check; the wrong-*type*
+  hazard remains ungated and only warned on) after the repo went public
 
 ## Context and problem statement
 
@@ -124,12 +126,26 @@ Within that choice, the concrete policy is:
   changelog entry per shipped PR, so the published notes describe outcomes
   rather than the path taken to them.
 - Bad, because the PR title becomes the single load-bearing string in the
-  whole release path and nothing validates it. lefthook's `commit-msg` hook
-  checks the branch commits, which squash-merge then discards; the title
-  passes through no hook, no CI job, and no branch protection (a private repo
-  on a free plan cannot require checks). A PR shipping user-visible work under
-  a `chore:` title is omitted from the changelog *and* skips the minor bump,
-  and nothing reports it.
+  whole release path. lefthook's `commit-msg` hook checks the branch commits,
+  which squash-merge then discards, so a PR shipping user-visible work under a
+  `chore:` title is omitted from the changelog *and* skips the minor bump.
+
+  **Amended 2026-08-10 (#108).** As written, this bullet went on to say the
+  title "passes through no hook, no CI job, and no branch protection (a private
+  repo on a free plan cannot require checks)". That premise no longer holds.
+  The repo went public on 2026-08-10, and the `Main Branch` ruleset now makes
+  **`pr-title` a required status check** — a red X blocks the merge outright
+  rather than asking nicely. `scripts/check-conventional-subject.py` is the
+  single source of truth shared with lefthook's `commit-msg` hook, so the gate
+  on the PR title and the gate on branch commits cannot drift apart. A separate
+  advisory `pr-type` job warns when a title whose type is `skip = true` in
+  `cliff.toml` ships a diff touching source.
+
+  What survives the amendment is the *reason* the gates exist, which is why
+  this bullet is corrected rather than deleted — and one genuine residual: the
+  gates check the title's **form**, never whether the chosen type is the right
+  one for the change. That remains a human judgement no parser can make, which
+  is precisely why `pr-type` warns and never fails.
 
 **Why the bump mapping diverges from crustywad, on purpose.** crustywad maps
 `feat:` → *patch* and reserves *minor* for breaking changes. That's because

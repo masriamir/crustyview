@@ -130,9 +130,17 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   default, so removing `continue-on-error` alone would not surface it. Reading the results:
   - `codecov/patch` (80% of the diff, per `codecov.yml`) arrives on a PR as a **check run**
     (so `gh pr checks` sees it) and on `main` as a **commit status**
-    (`gh api repos/masriamir/crustyview/commits/<sha>/status`). It counts as a CI check.
+    (`gh api repos/masriamir/crustyview/commits/<sha>/status`). It is a **required** check in
+    the `Main Branch` ruleset as of #108 (app `codecov`, integration id 254). It posts even on
+    a PR that changes no Rust — "Coverage not affected" — so requiring it does not wedge
+    non-Rust work. The trade-off is deliberate: if Codecov stops reporting, PRs block instead
+    of merging with a silently absent coverage signal, which is exactly what went unnoticed
+    for three merges during the 2026-08-10 deactivation (#109). Use the admin bypass if that
+    ever happens.
   - `codecov/project` is configured (`target: auto`, `threshold: 1%`) but has never been seen
-    posting on this repo — don't block on it.
+    posting on this repo — don't block on it. **Re-checked 2026-08-10 after reactivation and
+    it still does not post**, so #103's guess that it would resolve on a public plan is
+    disproven; neither the plan nor the deactivation explains it (#99).
   - The `codecov[bot]` **PR comment** carries the missing-lines table the review loop gates on,
     but `require_changes: true` suppresses it when coverage is unchanged: a PR touching no Rust
     correctly gets **no comment**. Only a missing comment on a Rust-touching PR is a red flag.
@@ -149,11 +157,34 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     and being mistaken for a verdict on the new head.
   - `required_review_thread_resolution: true` — "never merge over an unresolved thread" is now
     enforced by the ruleset instead of by discipline.
-- The ruleset also requires 10 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
-  `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`. **`web-e2e`
-  and `pr-type` are deliberately not required** — the first is a documented smoke signal, the
-  second is advisory and can never fail. Merges are squash-only by ruleset as well as by repo
-  setting (#97).
+- The ruleset also requires 11 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
+  `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`, and
+  `codecov/patch`. Merges are squash-only by ruleset as well as by repo setting (#97).
+  What is deliberately **excluded**, and why — re-affirmed by the #108 audit:
+  - **`web-e2e`** — a documented smoke signal, not a merge gate.
+  - **`pr-type`** — advisory by construction; it can never fail, so requiring it would gate
+    on nothing.
+  - **`analyze` (CodeQL)** — deferred, not declined, and the reason is a trap worth knowing:
+    GitHub treats a check run whose conclusion is `skipped` as **satisfying** a required
+    check. While `codeql.yml` still carries `if: github.event.repository.visibility ==
+    'public'`, the job can skip and the gate would pass by not running (observed on
+    `191cfc0`: `analyze` → `skipped`). Require it only after #112 removes that guard. Note
+    `analyze` (app `github-actions`, the job) and `CodeQL` (app `github-advanced-security`,
+    the code-scanning result) are **different checks** — the latter is absent entirely when
+    no analysis uploads, so requiring it blocks rather than silently passes.
+- Three ruleset parameters that look like defaults but are decisions (#108):
+  - **`bypass_actors`: admin, mode `always`** — load-bearing, do not narrow. `just release`
+    pushes the release commit **directly to `main`** with `git push --follow-tags` (ADR-0004),
+    which the `pull_request` rule would otherwise reject; both `chore(release)` commits
+    reached `main` with no PR. Bypass mode `pull_request` only bypasses inside a PR, so it
+    would break releases.
+  - **`strict_required_status_checks_policy: true`** — a PR must be up to date with `main`
+    before merging. Costs an update-branch round-trip; kept because it prevents a green PR
+    merging against a base it was never tested with.
+  - **`required_approving_review_count: 0`** — Copilot is requested by the ruleset but
+    **cannot approve**, and there is no second human. Any value above 0 would make merging
+    impossible. Unresolved threads are what actually block, via
+    `required_review_thread_resolution`.
 - Copilot renders **differently on every surface** — mixing them up breaks scripts:
 
   | Surface | Rendering |
