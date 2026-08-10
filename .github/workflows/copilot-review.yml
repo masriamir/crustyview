@@ -20,16 +20,58 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
         run: |
-          # Idempotent: skip if Copilot is already a requested reviewer.
-          # The requested_reviewers response reports the login as `Copilot`; match
-          # `copilot` case-insensitively so either that or a `copilot-...[bot]`
-          # form is recognized.
-          if gh api "repos/$REPO/pulls/$PR/requested_reviewers" \
-               --jq '.users[].login' | grep -qiF 'copilot'; then
+          # Copilot is a **Bot**, and REST's `requested_reviewers` returns `users` and
+          # `teams` only — it never contains Copilot, pending request or not. GraphQL is
+          # the only surface that reports one (#104).
+          pending_bot_reviewers() {
+            gh api graphql -F owner="$OWNER" -F name="$NAME" -F pr="$PR" -f query='
+              query($owner: String!, $name: String!, $pr: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $pr) {
+                    reviewRequests(first: 10) {
+                      nodes { requestedReviewer { ... on Bot { login } } }
+                    }
+                  }
+                }
+              }' \
+              --jq '.data.repository.pullRequest.reviewRequests.nodes[]
+                    | .requestedReviewer.login // empty'
+          }
+
+          # A failed query must not be mistaken for "no request pending" — that would turn
+          # an outage into a duplicate request, or a false all-clear.
+          copilot_is_requested() {
+            local logins
+            if ! logins=$(pending_bot_reviewers 2>&1); then
+              echo "::error title=Could not read review requests::The reviewRequests query failed, so whether Copilot is requested is unknown. Not treating this as 'not requested'. Response: $logins"
+              exit 1
+            fi
+            printf '%s\n' "$logins" | grep -qiF 'copilot'
+          }
+
+          # Idempotent: nothing to do if Copilot is already on the PR.
+          if copilot_is_requested; then
             echo "Copilot review already requested."
             exit 0
           fi
-          gh api --method POST "repos/$REPO/pulls/$PR/requested_reviewers" \
-            -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+
+          gh api --method POST "repos/$OWNER/$NAME/pulls/$PR/requested_reviewers" \
+            -f 'reviewers[]=copilot-pull-request-reviewer[bot]' > /dev/null
+
+          # The POST answers 200 with an empty `requested_reviewers` array whether or not
+          # the request took — a request for a login that does not exist returns the same
+          # body — so the response is not evidence. Check the post-condition instead,
+          # with a few attempts so a slow write is not reported as a failure.
+          for _ in 1 2 3; do
+            if copilot_is_requested; then
+              echo "Copilot review requested."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error title=Copilot review was not requested::The request returned success but no Copilot review request exists on the pull request. See CLAUDE.md for how to clear and re-issue a request."
+          exit 1
