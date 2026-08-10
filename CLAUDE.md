@@ -127,13 +127,43 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   personal plan **cannot** use rulesets/branch protection to request Copilot (or enforce
   required checks) — the workflow substitutes for that. Retire it when the repo goes public
   and a ruleset can request Copilot automatically.
-- Copilot has **three intentionally-different identifiers** — mixing them up breaks scripts:
-  - `copilot-pull-request-reviewer` — the review **author** login (match on this when polling `reviews`).
-  - `Copilot` — what `requested_reviewers` returns as `.users[].login` (the display login; the
-    workflow's idempotency check greps for this).
-  - `copilot-pull-request-reviewer[bot]` — the REST **request** slug; the `[bot]` suffix is required
-    *only* by the reviewer-request API call below.
-- Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`.
+- Copilot renders **differently on every surface** — mixing them up breaks scripts:
+
+  | Surface | Rendering |
+  |---|---|
+  | REST reviewer-request slug (the POST) | `copilot-pull-request-reviewer[bot]` — the `[bot]` suffix is required *only* here |
+  | GraphQL `reviewRequests` | `copilot-pull-request-reviewer`, as a **`Bot`** node |
+  | Timeline `review_requested` event | `Copilot` |
+  | REST review **author** (`reviews`) | `copilot-pull-request-reviewer` — match this when polling |
+  | REST `requested_reviewers` | **never appears at all** — the field lists Users only |
+
+- **Never confirm a request from `requested_reviewers` or from the POST's response.** That field
+  cannot hold a bot, and the POST answers 200 with an empty `requested_reviewers` array whether
+  or not the request took — a request for a login that does not exist returns the same body.
+  GraphQL is the only surface that knows:
+  ```sh
+  gh api graphql -F owner=masriamir -F name=crustyview -F pr=<N> -f query='
+    query($owner:String!, $name:String!, $pr:Int!) { repository(owner:$owner, name:$name) {
+      pullRequest(number:$pr) { reviewRequests(first:100) { nodes {
+        requestedReviewer { ... on Bot { login } } } } } } }' \
+    --jq '.data.repository.pullRequest.reviewRequests.nodes[] | .requestedReviewer.login // empty'
+  ```
+  Prints `copilot-pull-request-reviewer` when a request is pending, nothing otherwise. Match the
+  login rather than counting: `totalCount` counts **every** pending reviewer, so a waiting human
+  would read as a waiting Copilot.
+- Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`, then verify with the query above.
+- **A pending request cannot be re-kicked.** A second POST returns 200, emits no
+  `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot
+  (422, *"Could not resolve to User node"*). To unstick one, clear the whole reviewer set with
+  GraphQL and request again:
+  ```sh
+  PRID=$(gh api repos/masriamir/crustyview/pulls/<N> --jq .node_id)
+  gh api graphql -f query="mutation { requestReviews(input: {pullRequestId: \"$PRID\",
+    userIds: [], union: false}) { clientMutationId } }"
+  ```
+  A genuine re-issue shows as `review_request_removed` then `review_requested` in the timeline;
+  reviews have been observed taking up to ~14 minutes normally, so give it time before
+  concluding it is stuck.
 - Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
   as needed. CI command: `just ci` (mirrors the crustyview CI checks). Owner/repo:
   `masriamir/crustyview`.
