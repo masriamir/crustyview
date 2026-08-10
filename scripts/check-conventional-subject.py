@@ -34,9 +34,14 @@ TYPES = (
 
 # Mirrors cliff.toml's `conventional_commits = true` parsing: lowercase type, an
 # optional parenthesized scope, an optional `!` breaking marker, then `: ` and a
-# non-empty description.
+# description.
+#
+# The description is `.*\S`, not `.+`: `.+` would accept `feat:  `, since the literal
+# `: ` consumes the colon and the first space and `.+` is then satisfied by the second
+# one. Requiring a non-whitespace character rejects a blank description without
+# rejecting a legitimate one that happens to carry trailing whitespace.
 PATTERN = re.compile(
-    rf"^({'|'.join(TYPES)})(\([a-z0-9._/-]+\))?!?: .+",
+    rf"^({'|'.join(TYPES)})(\([a-z0-9._/-]+\))?!?: .*\S",
 )
 
 

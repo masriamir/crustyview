@@ -23,6 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # The validator gates branch commits and PR titles alike, so a regression in it
+      # disarms both gates at once. Prove it still rejects what it must before trusting
+      # its verdict on this PR's title.
+      - name: Self-test the validator
+        run: scripts/test-conventional-subject.sh
       - name: Validate PR title
         env:
           # Via the environment, never interpolated into the script: a PR title is
