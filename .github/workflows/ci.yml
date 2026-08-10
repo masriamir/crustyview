@@ -96,7 +96,9 @@ jobs:
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
-        continue-on-error: true
+          # The action exits 0 on a rejected upload by default; both this and the
+          # removal of `continue-on-error` are needed for a failure to be visible.
+          fail_ci_if_error: true
 
   security-deny:
     runs-on: ubuntu-latest
