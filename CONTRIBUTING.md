@@ -17,7 +17,7 @@ You need [Rust](https://rustup.rs) (stable; the workspace MSRV is pinned in `Car
 git clone https://github.com/masriamir/crustyview
 cd crustyview
 rustup target add wasm32-unknown-unknown
-cd web && npm install && cd ..
+cd web && npm ci && cd ..   # `ci`, not `install` — matches CI, never rewrites the lockfile
 lefthook install          # REQUIRED — see below
 ```
 
