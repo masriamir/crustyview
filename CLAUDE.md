@@ -124,10 +124,41 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   desktop and mobile viewports (`just e2e`; one-time `just e2e-install` + `just fetch-freedoom`).
   The fixture-driven specs skip when the `.freedoom/` fixtures are absent. CI runs them in the `web-e2e` job
   (fetches Freedoom itself); the job is a smoke signal, not a merge gate.
-- **Coverage:** the `coverage` job uploads `lcov.info` (`cargo llvm-cov --workspace`) to Codecov
-  with `fail_ci_if_error: true` and no `continue-on-error` — a rejected upload turns CI **red**
-  rather than passing silently. Both are load-bearing: the action exits 0 on upload failure by
-  default, so removing `continue-on-error` alone would not surface it. Reading the results:
+- **Coverage:** the `coverage` job uploads `lcov.info` (`cargo llvm-cov --workspace
+  --all-features`) to Codecov with `fail_ci_if_error: true` and no `continue-on-error` — a
+  rejected upload turns CI **red** rather than passing silently. Both are load-bearing: the
+  action exits 0 on upload failure by default, so removing `continue-on-error` alone would not
+  surface it.
+- **What coverage does NOT measure — read this before trusting the percentage.**
+  `cargo llvm-cov` runs on the **host** target, and `crustyview-web` gates its entire body on
+  `#[cfg(target_arch = "wasm32")]`, so it compiles to nothing there and has nothing to
+  instrument. The report covers **7 files** — six in `crustyview-core` plus
+  `crustyview-native/src/main.rs` — and **zero** in `crustyview-web`. That is 119 lines and all
+  seven browser-API methods (`load`, `summary`, `map_names`, `map2d`, `map_stats`,
+  `texture_meta`, `texture_rgba`) outside the number. The headline percentage means "of what
+  llvm-cov could see", not "of the repo". This is the same structural blind spot that let CI's
+  clippy pass on unlinted code until #115; here it cannot be fixed the same way, because
+  llvm-cov cannot instrument a wasm32 target.
+  - **The compensating control is `wasm-test`**, a required check running
+    `wasm-pack test --node`. `crates/crustyview-web/tests/web.rs` holds six
+    `#[wasm_bindgen_test]`s that exercise all seven methods. The browser API is tested; it is
+    just not line-counted. Treat a change there as needing a wasm test, since no coverage
+    number will notice its absence.
+  - **`codecov/patch` is blind on that crate too**, which matters because it is a required
+    merge gate: a PR touching only `wad_document.rs` contributes zero coverable lines and
+    passes trivially.
+  - Deliberately **not** solved with an `ignore:` entry in `codecov.yml`. The omission is
+    structural rather than chosen, and an `ignore:` would also silence genuinely measurable
+    code added to that crate later — turning a visible gap into a permanent one.
+- **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
+  throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
+  upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
+  (this repo has no Dependabot secrets) and **fork PRs** — degrade gracefully instead of failing
+  a required check. The token is kept because an authenticated upload avoids whatever rate
+  limiting and report-spoofing exposure the tokenless path carries, not because anything breaks
+  without it.
+
+  Reading the results:
   - `codecov/patch` (80% of the diff, per `codecov.yml`) arrives on a PR as a **check run**
     (so `gh pr checks` sees it) and on `main` as a **commit status**
     (`gh api repos/masriamir/crustyview/commits/<sha>/status`). It is a **required** check in
