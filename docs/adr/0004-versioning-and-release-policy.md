@@ -5,8 +5,8 @@
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** #83 · PR #87 (`chore/83-versioning-policy`); amended by
   #90 (squash-merge contract, policy item 5) after cutting v0.1.0; amended by
-  #108 (the wrong-type hazard is now gated by a required check) after the repo
-  went public
+  #108 (the PR title's *form* is now gated by a required check; the wrong-*type*
+  hazard remains ungated and only warned on) after the repo went public
 
 ## Context and problem statement
 
