@@ -7,14 +7,29 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    # Code scanning (CodeQL) requires GitHub Advanced Security, which is not
-    # available on private personal repositories. Skip while private; this job
-    # activates automatically once the repository is made public.
-    if: ${{ github.event.repository.visibility == 'public' }}
+    # This job used to be gated on `github.event.repository.visibility == 'public'`,
+    # because code scanning needs GitHub Advanced Security, which a private personal
+    # repository does not get. The repo went public on 2026-08-10 and the guard became
+    # permanently true, so it is gone (#112) — a condition that can no longer be false
+    # only misleads.
+    #
+    # One property of that guard is worth keeping on the record, because it looks like
+    # a bug when you meet it: `github.event.repository.visibility` is read from the
+    # **event payload**, which is frozen when the event fires. Re-running a workflow
+    # from while the repo was private replayed `private` and skipped again, so the
+    # guard could not be cleared by a re-run — only a new push or PR event activated it.
+    #
+    # Job-level `permissions` REPLACES the workflow default rather than merging with
+    # it, so `contents: read` is restated here; without it this job would run with
+    # `contents: none`.
     permissions:
+      contents: read
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

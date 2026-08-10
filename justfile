@@ -13,17 +13,19 @@ test:
 lint:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
 
 # Auto-format
 fmt:
     cargo fmt --all
 
-# Full local CI: mirrors the GitHub CI jobs (native + wasm)
+# Fast local subset of the GitHub CI jobs (native + wasm). NOT a mirror: it skips
+# wasm-test, web-build, coverage, sweep-freedoom and web-e2e, so green here does not
+# guarantee green in CI. Check `gh pr checks` before calling a PR ready.
 ci:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo clippy -p crustyview-web --target wasm32-unknown-unknown -- -D warnings
+    cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
     cargo test --workspace --all-features
     cargo build -p crustyview-web --target wasm32-unknown-unknown
     cargo deny check

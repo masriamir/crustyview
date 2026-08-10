@@ -4,6 +4,13 @@ on:
     branches: [main]
   pull_request:
 
+# Stated rather than inherited. The repo default is already `read`, so this
+# changes nothing today — it makes the contract local to the file, so a future
+# job that needs more has to ask for it explicitly. No job here calls the API;
+# `upload-artifact` uses the Actions runtime token, not `GITHUB_TOKEN`.
+permissions:
+  contents: read
+
 jobs:
   fmt:
     runs-on: ubuntu-latest
@@ -21,7 +28,26 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable branch pin
         with:
           components: clippy
+          # Required by the wasm clippy step below, not by the workspace one.
+          targets: wasm32-unknown-unknown
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # Not redundant with the line above, and the gap this closes was real:
+      # `crustyview-web` gates its whole body on `#[cfg(target_arch = "wasm32")]`,
+      # so a host-target clippy lints an empty shell — `WadDocument`, `version()`,
+      # the entire browser API surface compile to nothing. Measured on #112: a
+      # deliberate `needless_return` in `wad_document.rs` left the host run at
+      # exit 0 with zero hits, while this run caught it at exit 101 with five.
+      # Until this step existed, CI's lint was strictly weaker than `just lint`.
+      #
+      # `--all-targets` is load-bearing too, for the same reason one layer down:
+      # `tests/web.rs` is `#![cfg(target_arch = "wasm32")]`, so without it the
+      # wasm-bindgen test target goes un-linted even on a wasm run. Measured the
+      # same way — the probe in `tests/web.rs` left this at exit 0 with zero hits
+      # without the flag, and exit 101 with five once added. `--all-features`
+      # is a no-op today (no crate declares features) and is here for parity with
+      # the workspace run above, so a future feature cannot silently drop out.
+      - name: Clippy on the wasm target
+        run: cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
       # The workspace MSRV must mirror the pinned crustywad release's (#52).
       # Both sides use the same `[... | tostring] | unique | join` shape, so the
       # comparison stays a single deterministic string: it catches drift between
