@@ -144,9 +144,13 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   ```sh
   gh api graphql -F owner=masriamir -F name=crustyview -F pr=<N> -f query='
     query($owner:String!, $name:String!, $pr:Int!) { repository(owner:$owner, name:$name) {
-      pullRequest(number:$pr) { reviewRequests(first:10) { totalCount } } } }' \
-    --jq '.data.repository.pullRequest.reviewRequests.totalCount'
+      pullRequest(number:$pr) { reviewRequests(first:100) { nodes {
+        requestedReviewer { ... on Bot { login } } } } } } }' \
+    --jq '.data.repository.pullRequest.reviewRequests.nodes[] | .requestedReviewer.login // empty'
   ```
+  Prints `copilot-pull-request-reviewer` when a request is pending, nothing otherwise. Match the
+  login rather than counting: `totalCount` counts **every** pending reviewer, so a waiting human
+  would read as a waiting Copilot.
 - Manual (re-)request: `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`, then verify with the query above.
 - **A pending request cannot be re-kicked.** A second POST returns 200, emits no
   `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot

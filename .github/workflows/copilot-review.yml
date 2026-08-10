@@ -31,7 +31,10 @@ jobs:
               query($owner: String!, $name: String!, $pr: Int!) {
                 repository(owner: $owner, name: $name) {
                   pullRequest(number: $pr) {
-                    reviewRequests(first: 10) {
+                    # 100 is the per-page maximum. Paging is not worth it: missing
+                    # Copilot behind a longer list would fail the post-condition and
+                    # raise exactly the false alarm this check exists to prevent.
+                    reviewRequests(first: 100) {
                       nodes { requestedReviewer { ... on Bot { login } } }
                     }
                   }
