@@ -35,6 +35,12 @@ Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned depen
   apart. It cannot be a *required* check while the repo is private+free, so treat a red
   `pr-title` as blocking by process. It validates form only: whether the chosen **type** is the
   right one for the change remains a human judgement no parser can make.
+- The **type** gets a heuristic second opinion from CI's `pr-type` job, which warns when a title
+  whose type is `skip = true` in `cliff.toml` ships a diff touching `crates/*/src/**`,
+  `crates/*/tests/**` or `web/src/**` — the exact shape that vanishes from `CHANGELOG.md` and
+  skips the bump. It **never fails a build**, because a real chore can legitimately touch source;
+  read the annotation and decide. The skipped types are read out of `cliff.toml`, so the warning
+  cannot drift from what git-cliff does.
 - **Releases are cut locally**, never in CI: `just release` (`--dry-run` to preview) bumps
   `[workspace.package].version` from Conventional Commits, regenerates `CHANGELOG.md`, commits,
   and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are

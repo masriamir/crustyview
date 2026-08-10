@@ -1,0 +1,41 @@
+name: PR Type
+
+# Companion to pr-title.yml, and deliberately a separate workflow: that one is
+# blocking-by-process (a red X means fix the title), this one can never fail. The type
+# in a PR title is a judgement about what the change *is*, so the most a machine can do
+# is ask the question — a genuine chore may legitimately touch source.
+#
+# What it catches: `cliff.toml` skips some types, and squash-merge makes the PR title the
+# only commit git-cliff parses, so a user-visible change titled `chore:` is dropped from
+# CHANGELOG.md and skips the version bump with nothing to report it (#96).
+on:
+  pull_request:
+    # `edited` catches a retitle, `synchronize` a change to which files the PR touches —
+    # either can flip the verdict.
+    types: [opened, edited, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-type:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The check never fails, so a regression in it is silent: the warning just stops
+      # appearing. Prove it still fires before trusting its silence on this PR.
+      - name: Self-test the heuristic
+        run: scripts/test-pr-type.sh
+      - name: Collect changed paths
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' > changed-paths.txt
+      - name: Check the PR type against the diff
+        env:
+          # Via the environment, never interpolated into the script: a PR title is
+          # attacker-controlled text.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/check-pr-type.py "$PR_TITLE" < changed-paths.txt
