@@ -96,6 +96,19 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   desktop and mobile viewports (`just e2e`; one-time `just e2e-install` + `just fetch-freedoom`).
   The fixture-driven specs skip when the `.freedoom/` fixtures are absent. CI runs them in the `web-e2e` job
   (fetches Freedoom itself); the job is a smoke signal, not a merge gate.
+- **Coverage:** the `coverage` job uploads `lcov.info` (`cargo llvm-cov --workspace`) to Codecov
+  with `fail_ci_if_error: true` and no `continue-on-error` — a rejected upload turns CI **red**
+  rather than passing silently. Both are load-bearing: the action exits 0 on upload failure by
+  default, so removing `continue-on-error` alone would not surface it. Reading the results:
+  - `codecov/patch` (80% of the diff, per `codecov.yml`) arrives on a PR as a **check run**
+    (so `gh pr checks` sees it) and on `main` as a **commit status**
+    (`gh api repos/masriamir/crustyview/commits/<sha>/status`). It counts as a CI check.
+  - `codecov/project` is configured (`target: auto`, `threshold: 1%`) but has never been seen
+    posting on this repo — don't block on it.
+  - The `codecov[bot]` **PR comment** carries the missing-lines table the review loop gates on,
+    but `require_changes: true` suppresses it when coverage is unchanged: a PR touching no Rust
+    correctly gets **no comment**. Only a missing comment on a Rust-touching PR is a red flag.
+
 ## Copilot review loop
 - Every non-draft PR is auto-requested for **Copilot** review by
   `.github/workflows/copilot-review.yml`. This exists because a private repo on a free
