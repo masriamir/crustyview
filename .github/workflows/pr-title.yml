@@ -23,10 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # This is the PR's merge ref, so the validator judging a PR is the copy that PR
-      # ships. Known and accepted for now (#101): the self-test below catches an
-      # accidental weakening, and a deliberate bypass needs no validator edit at all,
-      # since no check here can be marked required and any PR can be merged over a red
-      # X. Pinning this to `base.sha` becomes meaningful once that stops being true.
+      # ships. That was defensible while the check was advisory — a bypass needed no
+      # validator edit, since any PR could be merged over a red X. Now that this is a
+      # required check, the argument no longer holds and pinning to `base.sha` has become
+      # worth doing (#101). Until then the self-test below is the guard: it fails loudly
+      # if the validator is weakened.
       - uses: actions/checkout@v7
       # The validator gates branch commits and PR titles alike, so a regression in it
       # disarms both gates at once. Prove it still rejects what it must before trusting
