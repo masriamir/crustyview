@@ -13,7 +13,7 @@ validator="$script_dir/check-conventional-subject.py"
 pass=0
 fail=0
 
-# expect_valid <expected-exit> <subject>
+# expect <expected-exit> <subject> — prefer the valid/invalid wrappers below.
 expect() {
 	expected=$1
 	subject=$2
