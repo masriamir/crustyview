@@ -129,25 +129,78 @@ fetch-freedoom dir=".freedoom" version="0.13.0":
 release *args:
     ./scripts/release.sh {{args}}
 
-# Publish the GitHub Release for the latest tag (run after `git push --follow-tags`)
-release-publish:
+# Finish a release: push the commit + tag, verify both landed, publish the GitHub Release
+release-finish:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Separate from `just release` because `gh release create` needs the tag on the
-    # REMOTE, and release.sh deliberately does not push (ADR-0004: pushing is the
-    # operator's step). Keeping the network out of release.sh also means a failure
-    # here can never leave a half-cut release behind. Idempotent: re-run freely.
+    # Everything AFTER the review checkpoint, as one idempotent command.
+    #
+    # `just release` deliberately stops before pushing, because that is the last
+    # cheaply reversible moment: until the push, `git reset --hard HEAD~1 && git tag -d
+    # <tag>` erases the release completely, while afterwards the release commit sits on
+    # `main` behind `non_fast_forward` + `deletion` rules and un-pushing needs an admin
+    # bypass. That checkpoint is worth keeping — you read the generated CHANGELOG.md
+    # and version before they become permanent (ADR-0004).
+    #
+    # What is NOT worth keeping is three memorised commands after it. A forgotten one
+    # leaves a half-release, and this repo has already shipped one at exactly this
+    # seam (v0.1.0 went out untagged — see the annotated-tag comment in release.sh).
+    # So the checkpoint stays manual and the ceremony does not.
     tag="$(git describe --tags --abbrev=0)"
+    echo "==> finishing $tag"
 
-    # The tag must be on the remote, or `gh release create` invents a ref from the
-    # default branch and the Release silently points at the wrong commit.
-    if ! git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
-      echo "error: $tag is not on origin yet — run 'git push --follow-tags' first" >&2
+    # Guardrails, because everything below this point is outward-facing and hard to
+    # undo: a pushed tag and a published GitHub Release. `git describe` returns
+    # WHATEVER the nearest tag is, so without these a stray local tag gets shipped to
+    # a public repo. Learned the hard way while building this recipe (#86) — a probe
+    # tag was pushed and a Release published before these existed.
+    #
+    # Same pattern release.sh validates, so the two agree on what a release tag is.
+    if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "error: '$tag' is not a release tag (want vMAJOR.MINOR.PATCH)" >&2
+      echo "  refusing to push or publish it" >&2
+      exit 1
+    fi
+    # An annotated tag is what `--follow-tags` carries; a lightweight one would push
+    # the commit and silently leave the tag behind.
+    if [ "$(git cat-file -t "$tag" 2>/dev/null)" != "tag" ]; then
+      echo "error: $tag is lightweight, not annotated — '--follow-tags' would skip it" >&2
+      exit 1
+    fi
+    # The tag must name the release commit sitting at HEAD. If it does not, something
+    # else has moved and this is not the release just cut.
+    if [ "$(git rev-parse "$tag^{commit}")" != "$(git rev-parse HEAD)" ]; then
+      echo "error: $tag does not point at HEAD — refusing to publish" >&2
+      echo "  tag:  $(git rev-parse --short "$tag^{commit}")" >&2
+      echo "  HEAD: $(git rev-parse --short HEAD)" >&2
       exit 1
     fi
 
+    # Re-runnable: skip whichever steps already happened.
+    if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+      echo "    tag already on origin"
+    else
+      echo "==> pushing commit and tag"
+      # --follow-tags carries ANNOTATED tags only; release.sh creates them with -a
+      # precisely so this works. A plain `git push` would land the commit and silently
+      # leave the tag behind, exiting 0 either way.
+      git push --follow-tags
+    fi
+
+    # Verify rather than trust the push's exit code — the failure mode this guards is a
+    # push that succeeds while carrying no tag.
+    echo "==> verifying the tag landed"
+    if ! git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+      echo "error: $tag is still not on origin after pushing" >&2
+      echo "  a lightweight tag would do this — check: git cat-file -t $tag (want 'tag')" >&2
+      exit 1
+    fi
+    echo "    ok  $tag is on origin"
+
+    echo "==> publishing the GitHub Release"
     if gh release view "$tag" >/dev/null 2>&1; then
-      echo "GitHub Release $tag already exists — nothing to do."
+      echo "    Release $tag already exists — nothing to do."
+      echo "$tag is fully released."
       exit 0
     fi
 

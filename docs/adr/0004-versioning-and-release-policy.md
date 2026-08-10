@@ -299,13 +299,33 @@ its own `fix(release):` changelog entry.
   requirement exists anywhere pointing at it", which publishing makes false.
   Until then `publish = false` on all three crates is a recorded decision, not
   an unexamined default.
-- **GitHub Releases are created from the tags** as of #86, via
-  `just release-publish`. It is deliberately a separate step from `just
-  release`: `gh release create` needs the tag on the remote, and `release.sh`
-  does not push (pushing stays the operator's step, above). Keeping the network
-  out of `release.sh` also means a failure while publishing can never leave a
-  half-cut release behind. The recipe is idempotent and refuses to run against
-  a tag that has not been pushed.
+- **`just release` stops before pushing, on purpose — the review checkpoint.**
+  This was previously convention rather than a recorded decision; #86 states
+  the reasoning. Until the push, `git reset --hard HEAD~1 && git tag -d <tag>`
+  erases the release completely. After it, the release commit is on `main`
+  behind the `Main Branch` ruleset's `non_fast_forward` and `deletion` rules,
+  so un-pushing requires an admin bypass. (The tag half is cheap either way —
+  there are no tag rulesets.) That asymmetry is why the script halts at the
+  last cheaply reversible moment and shows the operator the generated
+  `CHANGELOG.md` and version before they become permanent. It also matches the
+  script's existing `phase` tracking, which tailors its recovery advice as the
+  work becomes harder to undo, and deliberately stops short of the point of no
+  return.
+- **Everything after the checkpoint is one command: `just release-finish`**
+  (#86). It pushes with `--follow-tags`, *verifies the tag actually landed on
+  the remote*, and creates the GitHub Release from `git-cliff --latest`. It is
+  idempotent, so a partial failure is fixed by re-running it.
+
+  The checkpoint being manual is a decision; the ceremony after it was not.
+  Three memorised commands in sequence is a place to forget one, and this
+  repo has already shipped a half-release at exactly that seam — v0.1.0 went
+  out untagged because `--follow-tags` silently skips lightweight tags. Hence
+  the explicit verification step: a `git push` that carries no tag still exits
+  0, so its exit code is not evidence the release is complete.
+
+  `gh release create` also needs the tag on the remote, so it could not live in
+  `release.sh` regardless — and keeping the network out of that script means a
+  failure while publishing can never leave a half-cut release behind.
 - **Revisit if:** release-plz/release-plz#2595 closes upstream, or
   crustyview's crates are ever published (#86) — either could remove the
   blocker that ruled out option 2; or when crustyview reaches 1.0, at which
