@@ -16,6 +16,13 @@
      cover. Opacity animates on the compositor, which keeps its own clock while
      the main thread is frozen: a fast load unmounts this before it is ever
      painted, and only a genuinely slow one reveals it (#57). */
+  /* `visibility: hidden` until the reveal starts, not merely `opacity: 0`: a
+     transparent element still hit-tests, so during the delay it would swallow
+     clicks and scrolls over content the user can still see — an unresponsive UI
+     with nothing on screen to explain it. That window covers every fast load,
+     which is all of them. `visibility` is set explicitly at both keyframe ends
+     rather than left to interpolation, so the flip does not depend on the
+     discrete-animation rules for this property. */
   .overlay {
     position: absolute;
     inset: 0;
@@ -23,11 +30,17 @@
     place-items: center;
     background: var(--bg);
     color: var(--text-muted);
+    visibility: hidden;
     opacity: 0;
     animation: reveal 150ms ease-out 250ms forwards;
   }
   @keyframes reveal {
+    from {
+      visibility: visible;
+      opacity: 0;
+    }
     to {
+      visibility: visible;
       opacity: 1;
     }
   }

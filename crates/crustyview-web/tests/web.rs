@@ -97,6 +97,10 @@ fn build_wad(lumps: &[(&str, Vec<u8>)]) -> Vec<u8> {
     for (name, bytes) in lumps {
         out.extend_from_slice(&i32::try_from(pos).unwrap().to_le_bytes());
         out.extend_from_slice(&i32::try_from(bytes.len()).unwrap().to_le_bytes());
+        // Assert rather than let the slice range panic: a too-long name is a
+        // typo in a fixture, and "lump name exceeds 8 bytes" says so, where a
+        // range-out-of-bounds panic sends you reading this helper instead.
+        assert!(name.len() <= 8, "lump name {name:?} exceeds 8 bytes");
         let mut name8 = [0u8; 8];
         name8[..name.len()].copy_from_slice(name.as_bytes());
         out.extend_from_slice(&name8);
