@@ -166,7 +166,17 @@ phase=committed
 # tooling expect to find.
 git tag -a "$next" -m "crustyview $next"
 
-echo "Tagged $next (annotated). Push with: git push --follow-tags"
-# Pushing is the operator's step, and a plain `git push` silently omits tags, so
-# name the one command that distinguishes a complete release from a half one.
-echo "Then confirm it landed: git ls-remote --tags origin $next"
+# This is the review checkpoint, and it is the reason the script stops here rather
+# than pushing: until the push, `git reset --hard HEAD~1 && git tag -d $next` erases
+# the release completely. Afterwards the release commit is on `main` behind
+# `non_fast_forward` + `deletion` rules, and un-pushing needs an admin bypass. So the
+# operator gets one cheap look at the generated CHANGELOG.md and version first.
+#
+# Everything after the checkpoint is `just release-finish` — one idempotent command
+# that pushes, verifies the tag actually landed, and creates the GitHub Release.
+# Deliberately not three separate manual steps: a forgotten one leaves a half-release,
+# which is how v0.1.0 first shipped untagged (see the annotated-tag note above).
+echo "Tagged $next (annotated), not yet pushed — this is your review checkpoint."
+echo "  Inspect:  git show HEAD --stat  &&  git diff HEAD~1 -- CHANGELOG.md"
+echo "  Undo:     git reset --hard HEAD~1 && git tag -d $next"
+echo "  Ship it:  just release-finish"

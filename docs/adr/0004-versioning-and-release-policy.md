@@ -279,6 +279,53 @@ its own `fix(release):` changelog entry.
   could not provide.
 - Issue #86 tracks revisiting release-plz if upstream #2595 closes, or if the
   crates are ever published; no implementation work is scoped there today.
+- **crates.io publishing was evaluated on 2026-08-10 (#86) and declined.**
+  `crustyview-core` is genuinely publishable — the name is free, and both its
+  dependencies (`crustywad`, `serde`) are on the registry — so this is a
+  choice, not a blocker. Two reasons against, and neither is "we forgot":
+  1. **It collides with D1.** One workspace version means `crustyview-core`
+     moves whenever the *product* moves, so shipping a UI feature would
+     republish core at a new minor with a byte-identical API. That is a
+     meaningless bump aimed at precisely the audience versioning exists to
+     inform. Publishing properly requires giving up the single-version
+     decision, which is a larger change than the publish flag.
+  2. **It is close to irreversible.** crates.io has no delete — only yank —
+     and a name is never reclaimable. With no consumer asking for it, the
+     asymmetry favours waiting.
+
+  **Revisit when** something actually wants to depend on `crustyview-core`, or
+  when per-crate versioning is wanted for its own sake. At that point D1 and D2
+  both reopen: D2's mapping is justified by "nothing pins it, no caret
+  requirement exists anywhere pointing at it", which publishing makes false.
+  Until then `publish = false` on all three crates is a recorded decision, not
+  an unexamined default.
+- **`just release` stops before pushing, on purpose — the review checkpoint.**
+  This was previously convention rather than a recorded decision; #86 states
+  the reasoning. Until the push, `git reset --hard HEAD~1 && git tag -d <tag>`
+  erases the release completely. After it, the release commit is on `main`
+  behind the `Main Branch` ruleset's `non_fast_forward` and `deletion` rules,
+  so un-pushing requires an admin bypass. (The tag half is cheap either way —
+  there are no tag rulesets.) That asymmetry is why the script halts at the
+  last cheaply reversible moment and shows the operator the generated
+  `CHANGELOG.md` and version before they become permanent. It also matches the
+  script's existing `phase` tracking, which tailors its recovery advice as the
+  work becomes harder to undo, and deliberately stops short of the point of no
+  return.
+- **Everything after the checkpoint is one command: `just release-finish`**
+  (#86). It pushes with `--follow-tags`, *verifies the tag actually landed on
+  the remote*, and creates the GitHub Release from `git-cliff --latest`. It is
+  idempotent, so a partial failure is fixed by re-running it.
+
+  The checkpoint being manual is a decision; the ceremony after it was not.
+  Three memorised commands in sequence is a place to forget one, and this
+  repo has already shipped a half-release at exactly that seam — v0.1.0 went
+  out untagged because `--follow-tags` silently skips lightweight tags. Hence
+  the explicit verification step: a `git push` that carries no tag still exits
+  0, so its exit code is not evidence the release is complete.
+
+  `gh release create` also needs the tag on the remote, so it could not live in
+  `release.sh` regardless — and keeping the network out of that script means a
+  failure while publishing can never leave a half-cut release behind.
 - **Revisit if:** release-plz/release-plz#2595 closes upstream, or
   crustyview's crates are ever published (#86) — either could remove the
   blocker that ruled out option 2; or when crustyview reaches 1.0, at which
