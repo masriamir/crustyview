@@ -29,9 +29,11 @@
   interface Props {
     name: string;
     /**
-     * The ladder size actually drawn: `undefined` before the first draw, `null`
-     * when even the largest ladder member is too dense at this zoom. Map2d owns
-     * the value; the parent only reads it, for the toolbar label (#76).
+     * The ladder size actually drawn: `undefined` when nothing is known — no
+     * draw has resolved a transform yet, or the last one bailed out at one of
+     * `draw()`'s early returns — and `null` when even the largest ladder member
+     * is too dense at this zoom. Map2d owns the value; the parent only reads
+     * it, for the toolbar label (#76).
      */
     drawnGridSize?: GridSize | null;
   }

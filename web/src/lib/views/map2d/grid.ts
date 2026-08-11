@@ -42,8 +42,13 @@ export function effectiveGridSize(base: GridSize, scale: number): GridSize | nul
 /**
  * The toolbar's three-state grid label: plain size, `→` coarsened, or a
  * below-the-floor hint. `drawn` is what `Map2d` actually drew — `undefined`
- * before the first draw, `null` when even the largest ladder member is too
- * dense at this zoom (#76).
+ * when nothing is known (no draw has resolved a transform yet, or the last one
+ * bailed out), `null` when even the largest ladder member is too dense at this
+ * zoom (#76).
+ *
+ * The two absent-ish states are distinct on purpose: `undefined` renders the
+ * plain size, so a map open or a failed assembly cannot flash the
+ * below-the-floor hint at a user who never zoomed anywhere.
  */
 export function gridLabel(base: GridSize, drawn: GridSize | null | undefined): string {
   // `null` must be tested BEFORE any relational comparison: `null <= 32`

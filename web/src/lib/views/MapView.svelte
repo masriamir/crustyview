@@ -20,11 +20,16 @@
   let map2d = $state<Map2d>();
   const zoom = $derived(map2d?.zoomFactor() ?? 1);
 
-  /** What Map2d actually draws: `undefined` until the first draw, `null` when too dense. */
+  /**
+   * What Map2d actually draws: `undefined` when nothing is known (no draw has
+   * resolved a transform yet, or the last one bailed out), `null` when even the
+   * largest ladder member is too dense at this zoom.
+   */
   let drawnGridSize = $state<GridSize | null | undefined>(undefined);
 
-  // Three states, deliberately distinct: before the first draw nothing is known,
-  // so show the plain size rather than flash the below-the-floor label (#76).
+  // Three states, deliberately distinct: while nothing is known, show the plain
+  // size rather than flash the below-the-floor label at someone who has not
+  // zoomed anywhere — on a map open, or on a map that failed to assemble (#76).
   const gridLabelText = $derived(gridLabel(mapPrefs.gridSize, drawnGridSize));
 
   const counts = $derived(map2d?.categoryCounts() ?? null);
