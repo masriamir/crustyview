@@ -24,12 +24,20 @@
     CLASSIC_LINE_SECTOR_SECRET,
     CLASSIC_LINE_TELEPORT,
   } from './lines';
-  import { stepGridSize } from './grid';
+  import { effectiveGridSize, stepGridSize, type GridSize } from './grid';
 
   interface Props {
     name: string;
+    /**
+     * The ladder size actually drawn: `undefined` when nothing is known — no
+     * draw has resolved a transform yet, or the last one bailed out at one of
+     * `draw()`'s early returns — and `null` when even the largest ladder member
+     * is too dense at this zoom. Map2d owns the value; the parent only reads
+     * it, for the toolbar label (#76).
+     */
+    drawnGridSize?: GridSize | null;
   }
-  let { name }: Props = $props();
+  let { name, drawnGridSize = $bindable(undefined) }: Props = $props();
 
   /** aria-describedby target for the canvas operating instructions. */
   const instructionsId = $props.id();
@@ -67,8 +75,6 @@
     player: '#34c759',
   };
 
-  /** The smallest on-screen grid spacing worth drawing. */
-  const MIN_GRID_PX = 8;
   /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
   const THING_PX = 3;
   const PLAYER_ARROW_PX = 10;
@@ -181,8 +187,8 @@
     color: string,
     step: number,
   ): void {
-    // Written as a positive test so a non-finite scale also bails out here.
-    if (!(step * t.scale >= MIN_GRID_PX)) return;
+    // Precondition: `step` cleared `MIN_GRID_PX` at this scale — the sole caller
+    // resolves it through `effectiveGridSize`, which owns the density rule (#76).
     // Invert the viewport corners: only the visible map rect needs grid lines.
     const corners = [screenToMap(t, 0, 0), screenToMap(t, width, height)];
     const minX = Math.min(corners[0].x, corners[1].x);
@@ -334,17 +340,34 @@
 
   function draw(): void {
     const el = canvas;
-    if (!el) return;
+    if (!el) {
+      drawnGridSize = undefined;
+      return;
+    }
     const ctx = el.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      drawnGridSize = undefined;
+      return;
+    }
     sizeCanvas(el, ctx);
     const colors = palette(el);
     ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, width, height);
     const map = data;
     const t = transform;
-    if (!map || !t) return;
-    if (mapPrefs.showGrid) drawGrid(ctx, t, colors.grid, mapPrefs.gridSize);
+    if (!map || !t) {
+      drawnGridSize = undefined;
+      return;
+    }
+    const gridStep = effectiveGridSize(mapPrefs.gridSize, t.scale);
+    // Assigned whenever a draw actually resolves a transform (i.e. it gets past
+    // all three early returns above), including when the grid is hidden: the
+    // toolbar label reports what *would* be drawn, and the button is how you
+    // turn it on. Reset to `undefined` on every early return instead, so a bail
+    // (no canvas, no context, or no map/transform) reports "nothing known"
+    // rather than leaving a stale value from whatever was drawn last (#76).
+    drawnGridSize = gridStep;
+    if (mapPrefs.showGrid && gridStep !== null) drawGrid(ctx, t, colors.grid, gridStep);
     drawLines(ctx, map, t, colors);
     if (mapPrefs.showSecretSectors)
       drawLineOverlay(ctx, map, t, {
@@ -530,11 +553,23 @@
     const next = stepGridSize(mapPrefs.gridSize, direction);
     const clamped = next === mapPrefs.gridSize;
     mapPrefs.setGridSize(next);
+    const limit = clamped ? `, ${direction === 1 ? 'largest' : 'smallest'} size` : '';
+    // With no transform there is no view to describe, so say nothing about
+    // drawing rather than claim the grid is too small. (Barely reachable: the
+    // key only arrives when the canvas has focus, which means a map is drawn.)
+    let shown = '';
+    if (transform) {
+      const drawn = effectiveGridSize(next, transform.scale);
+      shown =
+        drawn === null
+          ? ', too small to draw at this zoom'
+          : drawn === next
+            ? ''
+            : `, drawn as ${drawn}`;
+    }
     // A clamped press still announces — with distinct wording, since identical
     // live-region text is skipped by both Svelte and screen readers.
-    gridAnnouncement = clamped
-      ? `Grid ${next}, ${direction === 1 ? 'largest' : 'smallest'} size`
-      : `Grid ${next}`;
+    gridAnnouncement = `Grid ${next}${limit}${shown}`;
   }
 
   function handleKeyDown(e: KeyboardEvent): void {
