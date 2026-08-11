@@ -301,6 +301,25 @@ test.describe('desktop shell smoke', () => {
     await expect(grid).toHaveText(/Grid · 1→\d+/);
   });
 
+  test('the grid button exposes the drawn size in its accessible name', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const grid = page
+      .getByRole('group', { name: '2D map view controls' })
+      .getByRole('button', { name: 'Show grid' });
+
+    // Step down to base 1 (32 → 16 → 8 → 4 → 2 → 1), where coarsening is
+    // guaranteed on any real map at any viewport. `[` also enables the grid.
+    await mapCanvas(page).focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press('[');
+
+    await expect(grid).toHaveAccessibleName(/Show grid, 1, drawn as \d+/);
+  });
+
   test('selecting a map shows its stats in the status bar', async ({ page }) => {
     await gotoApp(page);
     await loadWad(page, 'freedoom1.wad');
