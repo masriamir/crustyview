@@ -113,6 +113,13 @@
   /** Debounce for the drawable-state announcement; 0 when none is pending. */
   let gridAnnounceTimer = 0;
   /**
+   * The text a pending timer will announce when it fires. Refreshed on every
+   * draw while a timer is pending (not just on a crossing that restarts the
+   * timer), so the callback always announces the latest observed state
+   * rather than a stale snapshot from whichever crossing scheduled it (#127).
+   */
+  let gridAnnounceText = '';
+  /**
    * Whether the grid was drawable at the previous draw, or `null` when no
    * baseline is established. `null` suppresses the next comparison, so opening
    * a map — or re-showing the grid — settles silently instead of announcing.
@@ -385,26 +392,41 @@
     drawnGridSize = gridStep;
     if (mapPrefs.showGrid) {
       const drawable = gridStep !== null;
+      const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
       // Only a change from an established baseline announces. The text is
-      // composed HERE rather than in the callback: a restart clears the previous
-      // timer, so the text that survives to fire is always the most recent
-      // transition's — which is where the zoom actually landed — and no separate
-      // "latest value" bookkeeping is needed. The only other places that touch
-      // this timer are the immediate press in `adjustGridSize` and the unmount
-      // cleanup in `onDestroy` — deliberately NOT the redraw effect's teardown,
-      // which re-runs on every transform change and would cancel this mid-gesture (#127).
+      // composed HERE rather than in the callback, and refreshed below on every
+      // draw while a timer is pending — not just on a restart — so the text
+      // that survives to fire always describes the most recently observed
+      // state, which is where the zoom actually landed. Only a genuine crossing
+      // restarts the timer itself; a non-crossing refresh never extends the
+      // debounce window. The only other places that touch this timer are the
+      // hide branch below, the immediate press in `adjustGridSize`, and the
+      // unmount cleanup in `onDestroy` — deliberately NOT the redraw effect's
+      // teardown, which re-runs on every transform change and would cancel this
+      // mid-gesture (#127).
       if (gridDrawable !== null && gridDrawable !== drawable) {
-        const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
+        gridAnnounceText = text;
         if (gridAnnounceTimer !== 0) window.clearTimeout(gridAnnounceTimer);
         gridAnnounceTimer = window.setTimeout(() => {
           gridAnnounceTimer = 0;
-          gridAnnouncement = text;
+          gridAnnouncement = gridAnnounceText;
         }, GRID_ANNOUNCE_DELAY_MS);
+      } else if (gridAnnounceTimer !== 0) {
+        // A non-crossing draw while a timer is pending: refresh the text so the
+        // callback announces the latest state, but leave the timer itself
+        // alone — ordinary zoom ticks must not extend the debounce window.
+        gridAnnounceText = text;
       }
       gridDrawable = drawable;
     } else {
       // Hidden: there is no drawable state to track, and showing the grid again
       // re-establishes the baseline silently rather than announcing on toggle.
+      // Hiding also stands down a pending transition: it would land after the
+      // toggle's own announcement, describing a grid that is no longer shown.
+      if (gridAnnounceTimer !== 0) {
+        window.clearTimeout(gridAnnounceTimer);
+        gridAnnounceTimer = 0;
+      }
       gridDrawable = null;
     }
     if (mapPrefs.showGrid && gridStep !== null) drawGrid(ctx, t, colors.grid, gridStep);
