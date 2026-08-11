@@ -99,6 +99,14 @@ impl WadDocument {
         let Some(set) = self.cached_texture_set() else {
             return Vec::new();
         };
+        // Short-circuit before the palette parse, mirroring `probe_first_texture`.
+        // Unlike there — where the same reordering flipped `Ok(None)` into `Err`
+        // (#57) — the output here is identical either way, since every failure
+        // path already collapses to an empty buffer. This is about not doing a
+        // strict PLAYPAL parse whose result cannot matter.
+        if set.textures().is_empty() {
+            return Vec::new();
+        }
         let Ok(Some(playpal)) = self.wad.playpal() else {
             return Vec::new();
         };

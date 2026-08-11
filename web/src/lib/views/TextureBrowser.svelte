@@ -3,8 +3,9 @@
 
   let canvas: HTMLCanvasElement;
 
-  // `wad.textureMeta` caches behind a non-reactive field — depend on `phase`
-  // explicitly, same discipline as the status bar's stats derive.
+  // `wad.textureMeta()` reads a cache held in a non-reactive field, so it can't
+  // drive a derive on its own — depend on `phase` explicitly, same discipline as
+  // the status bar's stats derive.
   const meta = $derived.by(() => {
     void wad.phase;
     return wad.textureMeta();
