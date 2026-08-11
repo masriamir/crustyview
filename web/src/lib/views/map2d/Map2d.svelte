@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { Map2d } from '../../format';
   import { wad } from '../../stores/wad.svelte';
   import { mapCursor } from '../../stores/mapCursor.svelte';
@@ -117,7 +118,12 @@
    * a map — or re-showing the grid — settles silently instead of announcing.
    */
   let gridDrawable: boolean | null = null;
-  /** Long enough that a continuous wheel or pinch zoom announces once, at rest. */
+  /**
+   * Debounce window: collapses a rapid re-crossing of the drawable boundary
+   * (e.g. a pinch that overshoots and corrects) into a single announcement of
+   * wherever the zoom ends up. Ticks that don't cross back don't restart it,
+   * so this does not require the zoom/pinch gesture itself to come to rest.
+   */
   const GRID_ANNOUNCE_DELAY_MS = 500;
 
   // `wad.map2d` caches per name behind non-reactive fields, so depend on `phase`
@@ -383,7 +389,10 @@
       // composed HERE rather than in the callback: a restart clears the previous
       // timer, so the text that survives to fire is always the most recent
       // transition's — which is where the zoom actually landed — and no separate
-      // "latest value" bookkeeping is needed (#127).
+      // "latest value" bookkeeping is needed. The only other places that touch
+      // this timer are the immediate press in `adjustGridSize` and the unmount
+      // cleanup in `onDestroy` — deliberately NOT the redraw effect's teardown,
+      // which re-runs on every transform change and would cancel this mid-gesture (#127).
       if (gridDrawable !== null && gridDrawable !== drawable) {
         const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
         if (gridAnnounceTimer !== 0) window.clearTimeout(gridAnnounceTimer);
@@ -695,14 +704,21 @@
     void theme.resolved;
     scheduleDraw();
     return () => {
-      if (gridAnnounceTimer !== 0) {
-        window.clearTimeout(gridAnnounceTimer);
-        gridAnnounceTimer = 0;
-      }
       if (frame === 0) return;
       cancelAnimationFrame(frame);
       frame = 0;
     };
+  });
+
+  // Not the redraw effect's teardown: that effect tracks `transform` and so re-runs
+  // on every wheel tick, pinch move, pan and zoom keypress, and Svelte runs an
+  // effect's cleanup before each re-run. Cancelling there killed the pending
+  // announcement mid-gesture — the exact case it exists to cover (#127).
+  onDestroy(() => {
+    if (gridAnnounceTimer !== 0) {
+      window.clearTimeout(gridAnnounceTimer);
+      gridAnnounceTimer = 0;
+    }
   });
 </script>
 
