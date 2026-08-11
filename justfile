@@ -184,25 +184,53 @@ release-finish:
       exit 1
     fi
 
-    # Re-runnable: skip whichever steps already happened.
-    if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
-      echo "    tag already on origin"
+    # Releases are cut on `main` and pushed there (ADR-0004), so anywhere else this
+    # would publish a Release for a commit `main` does not contain.
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [ "$branch" != "main" ]; then
+      echo "error: release-finish must run on main, not '$branch'" >&2
+      exit 1
+    fi
+
+    # Idempotence keys on BOTH the tag and the commit, not the tag alone. A tag can be
+    # on origin while the release commit is not on origin/main — push the tag by hand,
+    # or have a push half-fail — and a tag-only check would then skip the push and
+    # happily publish a Release for a commit main does not contain.
+    git fetch --quiet origin main
+    tag_on_origin=false
+    commit_on_origin=false
+    git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1 && tag_on_origin=true
+    git merge-base --is-ancestor HEAD origin/main >/dev/null 2>&1 && commit_on_origin=true
+
+    if $tag_on_origin && $commit_on_origin; then
+      echo "    commit and tag already on origin"
     else
-      echo "==> pushing commit and tag"
+      echo "==> pushing commit and tag to origin"
+      # `origin main` explicitly, never a bare `git push`: the branch's configured push
+      # remote is not guaranteed to be origin, and everything verified below asks
+      # origin. Pushing one place and verifying another would report a false success.
+      #
       # --follow-tags carries ANNOTATED tags only; release.sh creates them with -a
       # precisely so this works. A plain `git push` would land the commit and silently
       # leave the tag behind, exiting 0 either way.
-      git push --follow-tags
+      git push --follow-tags origin main
     fi
 
     # Verify rather than trust the push's exit code — the failure mode this guards is a
-    # push that succeeds while carrying no tag.
-    echo "==> verifying the tag landed"
+    # push that succeeds while carrying no tag, or landing the tag without the commit.
+    echo "==> verifying the release landed on origin"
+    git fetch --quiet origin main
     if ! git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
       echo "error: $tag is still not on origin after pushing" >&2
       echo "  a lightweight tag would do this — check: git cat-file -t $tag (want 'tag')" >&2
       exit 1
     fi
+    if ! git merge-base --is-ancestor HEAD origin/main >/dev/null 2>&1; then
+      echo "error: the release commit is not on origin/main after pushing" >&2
+      echo "  publishing now would tag a commit main does not contain" >&2
+      exit 1
+    fi
+    echo "    ok  commit is on origin/main"
     echo "    ok  $tag is on origin"
 
     echo "==> publishing the GitHub Release"
