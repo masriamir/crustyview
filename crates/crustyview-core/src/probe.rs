@@ -1,7 +1,7 @@
 //! Map and texture probes exercising crustywad's heavier read paths.
 
 use crate::assemble::assemble_view;
-use crustywad::gfx::GfxError;
+use crustywad::gfx::{GfxError, Palette, TextureSet};
 use crustywad::{ParseOptions, Wad};
 
 /// Summary counts from assembling the first map group.
@@ -63,13 +63,32 @@ pub fn probe_first_texture(wad: &Wad) -> Result<Option<TextureProbe>, GfxError> 
     let Some(set) = wad.texture_set()? else {
         return Ok(None);
     };
-    let Some(name) = set.textures().first().map(|t| t.name.clone()) else {
-        return Ok(None);
-    };
     let Some(playpal) = wad.playpal()? else {
         return Ok(None);
     };
     let Some(palette) = playpal.palettes().first() else {
+        return Ok(None);
+    };
+    first_texture_from_set(&set, palette)
+}
+
+/// Composite `set`'s first texture with `palette`, reusing an already-parsed
+/// texture set.
+///
+/// Split out of [`probe_first_texture`] so a caller holding a parsed set (the
+/// wasm handle, which memoizes one) can skip re-parsing TEXTURE1/PNAMES — that
+/// parse is ~73 ms on a 125 MB WAD and was previously paid twice (#57).
+///
+/// Returns `Ok(None)` when the set has no textures.
+///
+/// # Errors
+///
+/// Returns [`GfxError`] if compositing fails.
+pub fn first_texture_from_set(
+    set: &TextureSet,
+    palette: &Palette,
+) -> Result<Option<TextureProbe>, GfxError> {
+    let Some(name) = set.textures().first().map(|t| t.name.clone()) else {
         return Ok(None);
     };
     let (image, _warnings) = set.compose_rgba(0, &ParseOptions::default(), palette)?;
@@ -101,19 +120,29 @@ pub fn probe_first_texture_meta(wad: &Wad) -> Result<Option<TextureMeta>, GfxErr
     let Some(set) = wad.texture_set()? else {
         return Ok(None);
     };
-    let Some(def) = set.textures().first() else {
-        return Ok(None);
-    };
-    // Treat non-representable (negative/corrupt) dimensions as "no usable
-    // texture" rather than reporting a misleading 0×0.
+    Ok(texture_meta_from_set(&set))
+}
+
+/// Name + dimensions of `set`'s first texture, reusing an already-parsed
+/// texture set (no compositing).
+///
+/// Split out of [`probe_first_texture_meta`] for the same reason as
+/// [`first_texture_from_set`] (#57).
+///
+/// Returns `None` when the set has no textures, or when the first texture's
+/// dimensions are non-representable (negative/corrupt) — treated as "no usable
+/// texture" rather than a misleading 0×0.
+#[must_use]
+pub fn texture_meta_from_set(set: &TextureSet) -> Option<TextureMeta> {
+    let def = set.textures().first()?;
     let (Ok(width), Ok(height)) = (u16::try_from(def.width), u16::try_from(def.height)) else {
-        return Ok(None);
+        return None;
     };
-    Ok(Some(TextureMeta {
+    Some(TextureMeta {
         name: def.name.clone(),
         width,
         height,
-    }))
+    })
 }
 
 /// Record counts for one assembled map, keyed by the classic lump names.

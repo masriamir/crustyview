@@ -4,7 +4,10 @@
 mod common;
 
 use common::build_wad;
-use crustyview_core::probe::{probe_first_map, probe_first_texture, probe_first_texture_meta};
+use crustyview_core::probe::{
+    first_texture_from_set, probe_first_map, probe_first_texture, probe_first_texture_meta,
+    texture_meta_from_set,
+};
 use crustywad::Wad;
 
 fn empty_pwad() -> Wad {
@@ -148,4 +151,95 @@ fn probe_first_texture_meta_none_on_negative_dims() {
     .unwrap();
 
     assert!(probe_first_texture_meta(&wad).unwrap().is_none());
+}
+
+#[test]
+fn texture_meta_from_set_reads_the_first_texture() {
+    let texture1 = common::build_texture1("TEX1", 8, 8);
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+    let set = wad
+        .texture_set()
+        .unwrap()
+        .expect("texture set should parse");
+
+    let meta = texture_meta_from_set(&set).expect("meta should be present");
+    assert_eq!(meta.name, "TEX1");
+    assert_eq!(meta.width, 8);
+    assert_eq!(meta.height, 8);
+}
+
+#[test]
+fn texture_meta_from_set_is_none_when_the_set_has_no_textures() {
+    let texture1 = common::build_texture1_empty();
+    let pnames = common::build_pnames_empty();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[("TEXTURE1", &texture1), ("PNAMES", &pnames)],
+    ))
+    .unwrap();
+    let set = wad
+        .texture_set()
+        .unwrap()
+        .expect("texture set should parse");
+
+    assert!(texture_meta_from_set(&set).is_none());
+}
+
+#[test]
+fn first_texture_from_set_composites_with_the_given_palette() {
+    let texture1 = common::build_texture1_with_patch("TEX1", 8, 8, 0);
+    let pnames = common::build_pnames(&["PAT1"]);
+    let patch = common::build_patch_full(8, 8, 1);
+    let playpal = common::build_playpal_zero();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[
+            ("TEXTURE1", &texture1),
+            ("PNAMES", &pnames),
+            ("PAT1", &patch),
+            ("PLAYPAL", &playpal),
+        ],
+    ))
+    .unwrap();
+    let set = wad
+        .texture_set()
+        .unwrap()
+        .expect("texture set should parse");
+    let playpal = wad.playpal().unwrap().expect("playpal should parse");
+    let palette = playpal.palettes().first().expect("one palette");
+
+    let probe = first_texture_from_set(&set, palette)
+        .unwrap()
+        .expect("texture probe should be present");
+    assert_eq!(probe.name, "TEX1");
+    assert_eq!(probe.rgba.len(), 8 * 8 * 4);
+}
+
+#[test]
+fn first_texture_from_set_is_none_when_the_set_has_no_textures() {
+    let texture1 = common::build_texture1_empty();
+    let pnames = common::build_pnames_empty();
+    let playpal = common::build_playpal_zero();
+    let wad = Wad::from_bytes(build_wad(
+        *b"IWAD",
+        &[
+            ("TEXTURE1", &texture1),
+            ("PNAMES", &pnames),
+            ("PLAYPAL", &playpal),
+        ],
+    ))
+    .unwrap();
+    let set = wad
+        .texture_set()
+        .unwrap()
+        .expect("texture set should parse");
+    let playpal = wad.playpal().unwrap().expect("playpal should parse");
+    let palette = playpal.palettes().first().expect("one palette");
+
+    assert!(first_texture_from_set(&set, palette).unwrap().is_none());
 }
