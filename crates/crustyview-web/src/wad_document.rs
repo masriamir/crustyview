@@ -5,12 +5,20 @@
 
 use crustyview_core::{error, map2d, probe, summary};
 use crustywad::Wad;
+use crustywad::gfx::TextureSet;
+use std::cell::OnceCell;
 use wasm_bindgen::prelude::*;
 
 /// A parsed WAD held in wasm memory. Construct with [`WadDocument::load`].
 #[wasm_bindgen]
 pub struct WadDocument {
     wad: Wad,
+    /// Parsed on first texture query and reused. `Wad::texture_set` re-parses
+    /// TEXTURE1/TEXTURE2 + PNAMES on every call — ~73 ms on a 125 MB WAD — and
+    /// both texture entry points need it, so it was previously paid twice (#57).
+    /// `OnceCell`, not `LazyLock`: wasm32 is single-threaded and this handle is
+    /// neither `Send` nor `Sync`.
+    texture_set: OnceCell<Option<TextureSet>>,
 }
 
 #[wasm_bindgen]
@@ -23,7 +31,10 @@ impl WadDocument {
     pub fn load(bytes: Vec<u8>) -> Result<WadDocument, JsError> {
         let wad =
             Wad::from_bytes(bytes).map_err(|e| JsError::new(&error::load_error_message(&e)))?;
-        Ok(WadDocument { wad })
+        Ok(WadDocument {
+            wad,
+            texture_set: OnceCell::new(),
+        })
     }
 
     /// A JSON [`WadSummary`](crustyview_core::summary::WadSummary).
@@ -71,9 +82,12 @@ impl WadDocument {
     #[must_use]
     #[wasm_bindgen(js_name = textureMeta)]
     pub fn texture_meta(&self) -> String {
-        match probe::probe_first_texture_meta(&self.wad) {
-            Ok(Some(meta)) => serde_json::to_string(&meta).unwrap_or_else(|_| "null".to_owned()),
-            _ => "null".to_owned(),
+        match self
+            .cached_texture_set()
+            .and_then(probe::texture_meta_from_set)
+        {
+            Some(meta) => serde_json::to_string(&meta).unwrap_or_else(|_| "null".to_owned()),
+            None => "null".to_owned(),
         }
     }
 
@@ -82,11 +96,41 @@ impl WadDocument {
     #[must_use]
     #[wasm_bindgen(js_name = textureRgba)]
     pub fn texture_rgba(&self) -> Vec<u8> {
-        probe::probe_first_texture(&self.wad)
+        let Some(set) = self.cached_texture_set() else {
+            return Vec::new();
+        };
+        // Short-circuit before the palette parse, mirroring `probe_first_texture`.
+        // Unlike there — where the same reordering flipped `Ok(None)` into `Err`
+        // (#57) — the output here is identical either way, since every failure
+        // path already collapses to an empty buffer. This is about not doing a
+        // strict PLAYPAL parse whose result cannot matter.
+        if set.textures().is_empty() {
+            return Vec::new();
+        }
+        let Ok(Some(playpal)) = self.wad.playpal() else {
+            return Vec::new();
+        };
+        let Some(palette) = playpal.palettes().first() else {
+            return Vec::new();
+        };
+        probe::first_texture_from_set(set, palette)
             .ok()
             .flatten()
             .map(|t| t.rgba)
             .unwrap_or_default()
+    }
+}
+
+impl WadDocument {
+    /// The parsed texture set, computed once.
+    ///
+    /// A parse error caches as `None`, which is exactly what both texture entry
+    /// points already reported for a failure — so memoizing cannot change what
+    /// JavaScript sees.
+    fn cached_texture_set(&self) -> Option<&TextureSet> {
+        self.texture_set
+            .get_or_init(|| self.wad.texture_set().ok().flatten())
+            .as_ref()
     }
 }
 

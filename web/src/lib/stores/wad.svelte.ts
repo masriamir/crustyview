@@ -7,17 +7,19 @@ export class WadStore {
   phase = $state<Phase>('empty');
   summary = $state<WadSummary | null>(null);
   mapNames = $state<string[]>([]);
-  textureMeta = $state<TextureMeta | null>(null);
   error = $state<string | null>(null);
   fileName = $state<string | null>(null);
+  loadingFileName = $state<string | null>(null);
   #doc: WadDocument | null = null;
   #loadSeq = 0;
   #map2dCache = new Map<string, { map: Map2d | null; error: string | null }>();
   #mapStatsCache = new Map<string, MapStats | null>();
+  #textureMetaCache: { value: TextureMeta | null } | null = null;
 
   async load(file: File): Promise<void> {
     const seq = ++this.#loadSeq;
     this.phase = 'loading';
+    this.loadingFileName = file.name;
     this.error = null;
     let bytes: Uint8Array;
     try {
@@ -33,6 +35,7 @@ export class WadStore {
     this.#freeDoc();
     this.#map2dCache.clear();
     this.#mapStatsCache.clear();
+    this.#textureMetaCache = null;
     let doc: WadDocument;
     try {
       doc = WadDocument.load(bytes);
@@ -44,7 +47,6 @@ export class WadStore {
     try {
       this.summary = JSON.parse(doc.summary()) as WadSummary;
       this.mapNames = doc.mapNames();
-      this.textureMeta = JSON.parse(doc.textureMeta()) as TextureMeta | null;
     } catch (e) {
       // The Rust side emits valid JSON, but a read/parse failure must still fail
       // cleanly — free the handle and surface an error rather than stay stuck in
@@ -53,14 +55,37 @@ export class WadStore {
       return;
     }
     this.fileName = file.name;
+    this.loadingFileName = null;
     this.phase = 'loaded';
+  }
+
+  /**
+   * First texture's name and dimensions, computed once per load; null when the
+   * WAD has none. Lazy because it is only ever read by the Textures view, and
+   * parsing the texture set dominates open time on large WADs (#57).
+   */
+  textureMeta(): TextureMeta | null {
+    if (!this.#doc) return null;
+    // The object wrapper is the sentinel: `null` is a legitimate answer (a WAD
+    // with no textures) and must not re-trigger the wasm call on every read.
+    if (this.#textureMetaCache === null) {
+      let value: TextureMeta | null;
+      try {
+        value = JSON.parse(this.#doc.textureMeta()) as TextureMeta | null;
+      } catch {
+        value = null;
+      }
+      this.#textureMetaCache = { value };
+    }
+    return this.#textureMetaCache.value;
   }
 
   /** RGBA of the first texture, or null when there is none or the buffer is unusable. */
   textureRgba(): Uint8Array | null {
-    if (!this.#doc || !this.textureMeta) return null;
+    const meta = this.textureMeta();
+    if (!this.#doc || !meta) return null;
     const rgba = this.#doc.textureRgba();
-    const { width, height } = this.textureMeta;
+    const { width, height } = meta;
     return rgba.length === width * height * 4 ? rgba : null;
   }
 
@@ -110,10 +135,11 @@ export class WadStore {
     this.#freeDoc();
     this.#map2dCache.clear();
     this.#mapStatsCache.clear();
+    this.#textureMetaCache = null;
+    this.loadingFileName = null;
     this.phase = 'empty';
     this.summary = null;
     this.mapNames = [];
-    this.textureMeta = null;
     this.error = null;
     this.fileName = null;
   }
@@ -122,11 +148,12 @@ export class WadStore {
     this.#freeDoc();
     this.#map2dCache.clear();
     this.#mapStatsCache.clear();
+    this.#textureMetaCache = null;
+    this.loadingFileName = null;
     this.phase = 'error';
     this.error = message;
     this.summary = null;
     this.mapNames = [];
-    this.textureMeta = null;
     this.fileName = null;
   }
 

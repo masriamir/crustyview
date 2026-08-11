@@ -9,6 +9,7 @@
   import MapView from '../views/MapView.svelte';
   import TextureBrowser from '../views/TextureBrowser.svelte';
   import LumpBrowser from '../views/LumpBrowser.svelte';
+  import LoadingOverlay from '../views/LoadingOverlay.svelte';
   import { openWad } from '../stores/open';
   import { nav } from '../stores/nav.svelte';
   import { wad } from '../stores/wad.svelte';
@@ -18,6 +19,15 @@
     const file = e.dataTransfer?.files?.[0];
     if (file) void openWad(file);
   }
+
+  // Keep the previous WAD's view mounted while a replacement loads: tearing it
+  // down showed a one-frame `EmptyState` flash on every replacement (#57).
+  // `summary` still holds the outgoing WAD's data until the new one commits,
+  // and `Overview` reads only plain data, so nothing renders against the freed
+  // document handle.
+  const showContent = $derived(
+    wad.phase === 'loaded' || (wad.phase === 'loading' && wad.summary !== null),
+  );
 </script>
 
 <svelte:window ondragover={(e) => e.preventDefault()} ondrop={ondrop} />
@@ -25,23 +35,28 @@
 <div class="shell">
   <Header />
   <Sidebar />
-  <main class="main">
-    {#if wad.phase !== 'loaded'}
-      <EmptyState />
-    {:else if nav.section === 'overview'}
-      <Overview />
-    {:else if nav.section === 'maps'}
-      {#if nav.selectedMap}
-        <MapView name={nav.selectedMap} />
+  <div class="main-area">
+    <main class="main">
+      {#if !showContent}
+        <EmptyState />
+      {:else if nav.section === 'overview'}
+        <Overview />
+      {:else if nav.section === 'maps'}
+        {#if nav.selectedMap}
+          <MapView name={nav.selectedMap} />
+        {:else}
+          <MapList />
+        {/if}
+      {:else if nav.section === 'textures'}
+        <TextureBrowser />
       {:else}
-        <MapList />
+        <LumpBrowser />
       {/if}
-    {:else if nav.section === 'textures'}
-      <TextureBrowser />
-    {:else}
-      <LumpBrowser />
+    </main>
+    {#if wad.phase === 'loading' && showContent}
+      <LoadingOverlay />
     {/if}
-  </main>
+  </div>
   <StatusBar />
   <BottomNav />
 </div>
@@ -57,8 +72,13 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100dvh;
   }
-  .main {
+  .main-area {
     grid-area: main;
+    position: relative;
+    overflow: hidden;
+  }
+  .main {
+    height: 100%;
     overflow: auto;
     padding: 1.5rem;
   }

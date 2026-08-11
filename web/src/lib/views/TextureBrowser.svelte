@@ -3,8 +3,15 @@
 
   let canvas: HTMLCanvasElement;
 
+  // `wad.textureMeta()` reads a cache held in a non-reactive field, so it can't
+  // drive a derive on its own — depend on `phase` explicitly, same discipline as
+  // the status bar's stats derive.
+  const meta = $derived.by(() => {
+    void wad.phase;
+    return wad.textureMeta();
+  });
+
   $effect(() => {
-    const meta = wad.textureMeta;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -29,9 +36,7 @@
     contract change; until then this shows the first texture.
   </p>
   <p class="name">
-    {wad.textureMeta
-      ? `${wad.textureMeta.name} — ${wad.textureMeta.width}×${wad.textureMeta.height}`
-      : '— none —'}
+    {meta ? `${meta.name} — ${meta.width}×${meta.height}` : '— none —'}
   </p>
   <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
   <canvas bind:this={canvas} class="tex" role="img" aria-label="Composited first-texture preview"

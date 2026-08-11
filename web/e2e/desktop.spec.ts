@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import path from 'node:path';
 import {
   expectMapCanvasPainted,
   expectTextureCanvasPainted,
+  FIXTURES,
   gotoApp,
   haveFixtures,
   loadBrokenMapWad,
@@ -313,6 +315,39 @@ test.describe('desktop shell smoke', () => {
     // than by text, so the check survives the version reaching 1.x.
     await expect(page.locator('[role="status"] .build')).toHaveCount(0);
     await expect(page.getByRole('status')).toContainText('No WAD loaded');
+  });
+
+  test('replacing a WAD keeps the previous view mounted', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    await expect(page.locator('main')).toContainText('freedoom1.wad');
+
+    // Sample <main> every frame across the second load. Assert DOM *presence* of
+    // the Overview heading, not visibility: a slow CI runner may legitimately
+    // reveal the loading overlay on top of it, and that must not flake the test.
+    await page.evaluate(() => {
+      const w = window as unknown as { __sawTeardown: boolean; __stop: boolean };
+      w.__sawTeardown = false;
+      w.__stop = false;
+      const tick = () => {
+        const main = document.querySelector('main');
+        if (!main?.textContent?.includes('Overview')) w.__sawTeardown = true;
+        if (!w.__stop) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+
+    await page
+      .locator('header input[type="file"]')
+      .setInputFiles(path.join(FIXTURES, 'freedoom2.wad'));
+    await expect(page.locator('main')).toContainText('freedoom2.wad');
+
+    const sawTeardown = await page.evaluate(() => {
+      const w = window as unknown as { __sawTeardown: boolean; __stop: boolean };
+      w.__stop = true;
+      return w.__sawTeardown;
+    });
+    expect(sawTeardown).toBe(false);
   });
 });
 
