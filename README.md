@@ -1,7 +1,7 @@
 # crustyview
 
 [![CI](https://img.shields.io/github/actions/workflow/status/masriamir/crustyview/ci.yml?branch=main&label=CI)](https://github.com/masriamir/crustyview/actions/workflows/ci.yml)
-[![core coverage](https://img.shields.io/codecov/c/github/masriamir/crustyview?label=core%20coverage)](https://app.codecov.io/gh/masriamir/crustyview)
+[![host coverage](https://img.shields.io/codecov/c/github/masriamir/crustyview?label=host%20coverage)](https://app.codecov.io/gh/masriamir/crustyview)
 [![version](https://img.shields.io/github/v/tag/masriamir/crustyview?label=version&color=green)](https://github.com/masriamir/crustyview/releases)
 [![MSRV](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmasriamir%2Fcrustyview%2Fmain%2FCargo.toml&query=%24.workspace.package.rust-version&label=MSRV&color=blue)](Cargo.toml)
 [![crustywad](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmasriamir%2Fcrustyview%2Fmain%2Fcrates%2Fcrustyview-core%2FCargo.toml&query=%24.dependencies.crustywad&label=crustywad&color=orange)](https://github.com/masriamir/crustywad)
