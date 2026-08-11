@@ -3,6 +3,7 @@
   import Map2d from './map2d/Map2d.svelte';
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
+  import type { GridSize } from './map2d/grid';
   import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
   import {
     CLASSIC_LINE_SECTOR_DAMAGE,
@@ -18,6 +19,19 @@
   /** The mounted 2D map, for the view controls it exports (`refit`, `zoomFactor`). */
   let map2d = $state<Map2d>();
   const zoom = $derived(map2d?.zoomFactor() ?? 1);
+
+  /** What Map2d actually draws: `undefined` until the first draw, `null` when too dense. */
+  let drawnGridSize = $state<GridSize | null | undefined>(undefined);
+
+  // Three states, deliberately distinct: before the first draw nothing is known,
+  // so show the plain size rather than flash the below-the-floor label (#76).
+  const gridLabel = $derived(
+    drawnGridSize === undefined || drawnGridSize === mapPrefs.gridSize
+      ? `${mapPrefs.gridSize}`
+      : drawnGridSize === null
+        ? `${mapPrefs.gridSize} · zoom in`
+        : `${mapPrefs.gridSize}→${drawnGridSize}`,
+  );
 
   const counts = $derived(map2d?.categoryCounts() ?? null);
   const totalThings = $derived(
@@ -100,7 +114,7 @@
           aria-label="Show grid"
           onclick={() => mapPrefs.toggleGrid()}
         >
-          Grid · {mapPrefs.gridSize}
+          Grid · {gridLabel}
         </button>
         <button
           type="button"
@@ -198,7 +212,7 @@
     {/if}
   </div>
   {#if nav.mapMode === '2d'}
-    <Map2d {name} bind:this={map2d} />
+    <Map2d {name} bind:this={map2d} bind:drawnGridSize />
   {:else}
     <div class="placeholder"><p>The 3D viewport arrives with phase 3.</p></div>
   {/if}
