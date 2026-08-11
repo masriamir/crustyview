@@ -150,6 +150,28 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   - Deliberately **not** solved with an `ignore:` entry in `codecov.yml`. The omission is
     structural rather than chosen, and an `ignore:` would also silence genuinely measurable
     code added to that crate later — turning a visible gap into a permanent one.
+- **The second structural blind spot: no check here can see a Svelte timing/lifecycle bug.**
+  `svelte-check` proves types line up, `vitest` covers pure modules, and Playwright drives the
+  built app — none of them observes reactivity wiring. There is **no Svelte component-test
+  infrastructure**, and adding it is not a quick `@testing-library/svelte` install: every
+  component in the map area draws to a canvas, and `happy-dom` implements no 2D context, so
+  mounting one meaningfully needs a real browser. Tracked by **#129**.
+  - **Three defects shipped past a fully green gate** in two consecutive PRs, all found by
+    review rather than by a check: a label that could render an impossible `Grid · 64→32`
+    (synchronous pref update racing an rAF draw, #128); a failed map keeping the *previous*
+    map's label (an early return skipping an assignment, #128); and a live-region announcement
+    cancelled mid-gesture (its debounce cleanup was wired to the redraw `$effect`, which tracks
+    `transform` and so re-runs on every wheel tick — Svelte runs a cleanup before each re-run,
+    so the announcement was lost rather than delayed, #127).
+  - **The compensating controls are review and extraction**, and the second one is cheap:
+    pushing display logic out of components into pure modules moves it somewhere `vitest` can
+    reach. `gridLabel` and `gridDrawnSuffix` in `web/src/lib/views/map2d/grid.ts` were extracted
+    exactly this way and both immediately caught regressions. **Prefer a pure function over a
+    component-local `$derived` whenever the logic is worth a test.**
+  - **Reach for the E2E harness before concluding something is untestable.** One of the three
+    was already drivable: `web/e2e/helpers.ts` has `loadBrokenMapWad` (a PWAD whose `MAP01` is
+    missing `VERTEXES`), which is precisely the failed-assembly path that shipped broken.
+    Nobody looked.
 - **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
   throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
   upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
