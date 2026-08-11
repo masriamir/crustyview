@@ -7,6 +7,7 @@ import {
   MIN_GRID_PX,
   effectiveGridSize,
   gridLabel,
+  gridDrawnSuffix,
   type GridSize,
 } from './grid';
 
@@ -125,5 +126,32 @@ describe('gridLabel', () => {
 
   it('shows the zoom-in hint when drawn is null', () => {
     expect(gridLabel(32, null)).toBe('32 · zoom in');
+  });
+});
+
+describe('gridDrawnSuffix', () => {
+  it('says nothing when the chosen size is what gets drawn', () => {
+    expect(gridDrawnSuffix(32, 32)).toBe('');
+  });
+
+  it('says nothing when nothing is known yet', () => {
+    // No draw has resolved a transform, so there is nothing truthful to say.
+    expect(gridDrawnSuffix(32, undefined)).toBe('');
+  });
+
+  it('names the coarsened size when the drawn lattice is coarser', () => {
+    expect(gridDrawnSuffix(32, 128)).toBe(', drawn as 128');
+    expect(gridDrawnSuffix(1, 512)).toBe(', drawn as 512');
+  });
+
+  it('reports the below-the-floor state', () => {
+    expect(gridDrawnSuffix(32, null)).toBe(', too small to draw at this zoom');
+  });
+
+  it('says nothing for a stale finer drawn size', () => {
+    // `gridSize` updates synchronously on a keypress while `drawnGridSize` only
+    // catches up on the next rAF draw, so a press can be observed with a stale
+    // finer value. Coarsening never goes finer than the base (#76).
+    expect(gridDrawnSuffix(64, 32)).toBe('');
   });
 });
