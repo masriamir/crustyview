@@ -3,6 +3,13 @@
 All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
 
+## [0.1.2] - 2026-08-11
+
+### Documentation
+
+- Record the ruleset decisions and correct ADR-0004's branch-protection claim (#114)
+- Record what coverage cannot measure, and that the Codecov token is optional (#118)
+- Add CONTRIBUTING.md and require the lefthook install step (#119)
 ## [0.1.1] - 2026-08-10
 
 ### Bug Fixes
