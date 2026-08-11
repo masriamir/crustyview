@@ -22,21 +22,41 @@ jobs:
   pr-title:
     runs-on: ubuntu-latest
     steps:
-      # This is the PR's merge ref, so the validator judging a PR is the copy that PR
-      # ships. That was defensible while the check was advisory — a bypass needed no
-      # validator edit, since any PR could be merged over a red X. Now that this is a
-      # required check, the argument no longer holds and pinning to `base.sha` has become
-      # worth doing (#101). Until then the self-test below is the guard: it fails loudly
-      # if the validator is weakened.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # TWO checkouts, because two different questions are being asked (#101).
+      #
+      # `base` is the validator that JUDGES this PR. Checking out the PR's own merge ref
+      # — the default for a `pull_request` event, and what this job used to do — means a
+      # PR supplies the code that grades it, so it can relax the regex and go green.
+      # That was defensible while `pr-title` was advisory: any PR could be merged over a
+      # red X, so a bypass needed no validator edit at all and hardening this protected
+      # nothing. It became a required check on 2026-08-10, which closed that door and
+      # made this one worth closing too.
+      - name: Check out the base commit (the validator that judges this PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      # `pr` exists only so a PR that CHANGES the validator still gets its new copy
+      # exercised. Pinning to base alone would have quietly removed that: the proposed
+      # validator would run nowhere in CI, land on `main` unverified, and first fail on
+      # somebody else's PR — and in lefthook's commit-msg hook for every contributor.
+      - name: Check out the pull request (to exercise any change it makes)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: pr
       # The validator gates branch commits and PR titles alike, so a regression in it
-      # disarms both gates at once. Prove it still rejects what it must before trusting
-      # its verdict on this PR's title.
-      - name: Self-test the validator
-        run: scripts/test-conventional-subject.sh
+      # disarms both gates at once. Both suites locate their validator relative to their
+      # own directory, so each tests the copy sitting beside it.
+      - name: Self-test the base validator
+        run: base/scripts/test-conventional-subject.sh
+      - name: Self-test the PR's validator
+        run: pr/scripts/test-conventional-subject.sh
       - name: Validate PR title
         env:
           # Via the environment, never interpolated into the script: a PR title is
           # attacker-controlled text.
           PR_TITLE: ${{ github.event.pull_request.title }}
-        run: printf '%s\n' "$PR_TITLE" | python3 scripts/check-conventional-subject.py
+        # Deliberately the BASE copy. A PR that legitimately tightens the rules is
+        # therefore judged by the old ones until it merges — correct, not a bug: the
+        # rules a PR must satisfy are the ones already agreed on `main`.
+        run: printf '%s\n' "$PR_TITLE" | python3 base/scripts/check-conventional-subject.py
