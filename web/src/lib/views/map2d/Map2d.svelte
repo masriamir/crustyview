@@ -338,19 +338,32 @@
 
   function draw(): void {
     const el = canvas;
-    if (!el) return;
+    if (!el) {
+      drawnGridSize = undefined;
+      return;
+    }
     const ctx = el.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      drawnGridSize = undefined;
+      return;
+    }
     sizeCanvas(el, ctx);
     const colors = palette(el);
     ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, width, height);
     const map = data;
     const t = transform;
-    if (!map || !t) return;
+    if (!map || !t) {
+      drawnGridSize = undefined;
+      return;
+    }
     const gridStep = effectiveGridSize(mapPrefs.gridSize, t.scale);
-    // Assigned on every draw, including when the grid is hidden: the toolbar
-    // label reports what *would* be drawn, and the button is how you turn it on.
+    // Assigned whenever a draw actually resolves a transform (i.e. it gets past
+    // all three early returns above), including when the grid is hidden: the
+    // toolbar label reports what *would* be drawn, and the button is how you
+    // turn it on. Reset to `undefined` on every early return instead, so a bail
+    // (no canvas, no context, or no map/transform) reports "nothing known"
+    // rather than leaving a stale value from whatever was drawn last (#76).
     drawnGridSize = gridStep;
     if (mapPrefs.showGrid && gridStep !== null) drawGrid(ctx, t, colors.grid, gridStep);
     drawLines(ctx, map, t, colors);

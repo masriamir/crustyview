@@ -3,7 +3,7 @@
   import Map2d from './map2d/Map2d.svelte';
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
-  import type { GridSize } from './map2d/grid';
+  import { gridLabel, type GridSize } from './map2d/grid';
   import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
   import {
     CLASSIC_LINE_SECTOR_DAMAGE,
@@ -25,13 +25,7 @@
 
   // Three states, deliberately distinct: before the first draw nothing is known,
   // so show the plain size rather than flash the below-the-floor label (#76).
-  const gridLabel = $derived(
-    drawnGridSize === undefined || drawnGridSize === mapPrefs.gridSize
-      ? `${mapPrefs.gridSize}`
-      : drawnGridSize === null
-        ? `${mapPrefs.gridSize} · zoom in`
-        : `${mapPrefs.gridSize}→${drawnGridSize}`,
-  );
+  const gridLabelText = $derived(gridLabel(mapPrefs.gridSize, drawnGridSize));
 
   const counts = $derived(map2d?.categoryCounts() ?? null);
   const totalThings = $derived(
@@ -114,7 +108,7 @@
           aria-label="Show grid"
           onclick={() => mapPrefs.toggleGrid()}
         >
-          Grid · {gridLabel}
+          Grid · {gridLabelText}
         </button>
         <button
           type="button"

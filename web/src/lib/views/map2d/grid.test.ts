@@ -6,6 +6,7 @@ import {
   isGridSize,
   MIN_GRID_PX,
   effectiveGridSize,
+  gridLabel,
   type GridSize,
 } from './grid';
 
@@ -90,5 +91,39 @@ describe('effectiveGridSize', () => {
     for (const scale of [Number.NaN, 0, -1, -0.5]) {
       expect(effectiveGridSize(32, scale)).toBeNull();
     }
+  });
+
+  it('handles infinite scale without a Number.isFinite guard', () => {
+    // Deliberately unguarded: an infinite scale returns the base, exactly as the
+    // density guard this replaced did. Pinned so a refactor cannot drift it.
+    expect(effectiveGridSize(32, Number.POSITIVE_INFINITY)).toBe(32);
+    expect(effectiveGridSize(32, Number.NEGATIVE_INFINITY)).toBeNull();
+  });
+});
+
+describe('gridLabel', () => {
+  it('shows the plain size before the first draw (drawn undefined)', () => {
+    expect(gridLabel(32, undefined)).toBe('32');
+  });
+
+  it('shows the plain size when drawn as chosen', () => {
+    expect(gridLabel(32, 32)).toBe('32');
+  });
+
+  it('shows the plain size, not an arrow, when drawn is stale-finer than base (#76 regression)', () => {
+    // Reproduces the momentary state a synchronous `]` keypress produces before
+    // the rAF draw catches up: `mapPrefs.gridSize` is already 64 but
+    // `drawnGridSize` still holds the previous draw's 32. This must render as
+    // plain "64", never as the impossible "64→32". This case would fail against
+    // the old `drawn === base` (`===`) logic, which falls through to the arrow arm.
+    expect(gridLabel(64, 32)).toBe('64');
+  });
+
+  it('shows the arrow form when drawn is coarser than base', () => {
+    expect(gridLabel(32, 128)).toBe('32→128');
+  });
+
+  it('shows the zoom-in hint when drawn is null', () => {
+    expect(gridLabel(32, null)).toBe('32 · zoom in');
   });
 });

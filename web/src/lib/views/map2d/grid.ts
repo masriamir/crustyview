@@ -38,3 +38,21 @@ export function effectiveGridSize(base: GridSize, scale: number): GridSize | nul
   }
   return null;
 }
+
+/**
+ * The toolbar's three-state grid label: plain size, `→` coarsened, or a
+ * below-the-floor hint. `drawn` is what `Map2d` actually drew — `undefined`
+ * before the first draw, `null` when even the largest ladder member is too
+ * dense at this zoom (#76).
+ */
+export function gridLabel(base: GridSize, drawn: GridSize | null | undefined): string {
+  // `null` must be tested BEFORE any relational comparison: `null <= 32`
+  // coerces to true in JS and would silently take the wrong branch.
+  if (drawn === null) return `${base} · zoom in`;
+  // `<=` rather than `===`: `gridSize` updates synchronously on a keypress while
+  // `drawnGridSize` only catches up on the next rAF draw, so a press can be
+  // observed with a stale finer `drawn`. Coarsening never goes finer than the
+  // base, so anything at or below it means "drawn as chosen" (#76).
+  if (drawn === undefined || drawn <= base) return `${base}`;
+  return `${base}→${drawn}`;
+}
