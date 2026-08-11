@@ -24,7 +24,7 @@
     CLASSIC_LINE_SECTOR_SECRET,
     CLASSIC_LINE_TELEPORT,
   } from './lines';
-  import { effectiveGridSize, stepGridSize, type GridSize } from './grid';
+  import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
 
   interface Props {
     name: string;
@@ -109,6 +109,16 @@
   let dragging = $state(false);
   /** Polite live-region text for grid size changes ("Grid 64"). */
   let gridAnnouncement = $state('');
+  /** Debounce for the drawable-state announcement; 0 when none is pending. */
+  let gridAnnounceTimer = 0;
+  /**
+   * Whether the grid was drawable at the previous draw, or `null` when no
+   * baseline is established. `null` suppresses the next comparison, so opening
+   * a map — or re-showing the grid — settles silently instead of announcing.
+   */
+  let gridDrawable: boolean | null = null;
+  /** Long enough that a continuous wheel or pinch zoom announces once, at rest. */
+  const GRID_ANNOUNCE_DELAY_MS = 500;
 
   // `wad.map2d` caches per name behind non-reactive fields, so depend on `phase`
   // explicitly: loading another WAD must re-derive rather than serve a stale map.
@@ -367,6 +377,27 @@
     // (no canvas, no context, or no map/transform) reports "nothing known"
     // rather than leaving a stale value from whatever was drawn last (#76).
     drawnGridSize = gridStep;
+    if (mapPrefs.showGrid) {
+      const drawable = gridStep !== null;
+      // Only a change from an established baseline announces. The text is
+      // composed HERE rather than in the callback: a restart clears the previous
+      // timer, so the text that survives to fire is always the most recent
+      // transition's — which is where the zoom actually landed — and no separate
+      // "latest value" bookkeeping is needed (#127).
+      if (gridDrawable !== null && gridDrawable !== drawable) {
+        const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
+        if (gridAnnounceTimer !== 0) window.clearTimeout(gridAnnounceTimer);
+        gridAnnounceTimer = window.setTimeout(() => {
+          gridAnnounceTimer = 0;
+          gridAnnouncement = text;
+        }, GRID_ANNOUNCE_DELAY_MS);
+      }
+      gridDrawable = drawable;
+    } else {
+      // Hidden: there is no drawable state to track, and showing the grid again
+      // re-establishes the baseline silently rather than announcing on toggle.
+      gridDrawable = null;
+    }
     if (mapPrefs.showGrid && gridStep !== null) drawGrid(ctx, t, colors.grid, gridStep);
     drawLines(ctx, map, t, colors);
     if (mapPrefs.showSecretSectors)
@@ -560,12 +591,14 @@
     let shown = '';
     if (transform) {
       const drawn = effectiveGridSize(next, transform.scale);
-      shown =
-        drawn === null
-          ? ', too small to draw at this zoom'
-          : drawn === next
-            ? ''
-            : `, drawn as ${drawn}`;
+      shown = gridDrawnSuffix(next, drawn);
+      // This press announces immediately, so a debounced transition message must
+      // not land on top of it, and the baseline moves to what this describes.
+      if (gridAnnounceTimer !== 0) {
+        window.clearTimeout(gridAnnounceTimer);
+        gridAnnounceTimer = 0;
+      }
+      gridDrawable = drawn !== null;
     }
     // A clamped press still announces — with distinct wording, since identical
     // live-region text is skipped by both Svelte and screen readers.
@@ -662,6 +695,10 @@
     void theme.resolved;
     scheduleDraw();
     return () => {
+      if (gridAnnounceTimer !== 0) {
+        window.clearTimeout(gridAnnounceTimer);
+        gridAnnounceTimer = 0;
+      }
       if (frame === 0) return;
       cancelAnimationFrame(frame);
       frame = 0;
