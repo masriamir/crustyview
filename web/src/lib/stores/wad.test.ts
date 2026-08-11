@@ -66,14 +66,29 @@ describe('WadStore.textureMeta', () => {
     expect(calls.textureMeta).toBe(1);
   });
 
-  it('drops the cache on reset', async () => {
+  it('returns null without querying after reset clears the document', async () => {
     const store = new WadStore();
     await store.load(wadFile());
     expect(store.textureMeta()).not.toBeNull();
 
     store.reset();
-    expect(store.textureMeta()).toBeNull(); // no document to query
+    // `reset()` clears `#doc`; `textureMeta()` short-circuits on the
+    // null-document guard before ever consulting the cache, so this does
+    // NOT exercise cache invalidation — see the "re-queries after a
+    // replacement load" test below for that.
+    expect(store.textureMeta()).toBeNull();
     expect(calls.textureMeta).toBe(1);
+  });
+
+  it('re-queries after a replacement load', async () => {
+    const store = new WadStore();
+    await store.load(wadFile('a.wad'));
+    expect(store.textureMeta()).toEqual({ name: 'TEX1', width: 8, height: 8 });
+
+    textureMetaJson.value = '{"name":"TEX2","width":16,"height":16}';
+    await store.load(wadFile('b.wad'));
+    expect(store.textureMeta()).toEqual({ name: 'TEX2', width: 16, height: 16 });
+    expect(calls.textureMeta).toBe(2);
   });
 });
 

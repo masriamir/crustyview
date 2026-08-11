@@ -1,5 +1,9 @@
-//! Integration tests for [`crustyview_core::probe::probe_first_map`] and
-//! [`crustyview_core::probe::probe_first_texture`].
+//! Integration tests for [`crustyview_core::probe::probe_first_map`], the
+//! `Wad`-level texture probes ([`crustyview_core::probe::probe_first_texture`],
+//! [`crustyview_core::probe::probe_first_texture_meta`]), and the
+//! parsed-`TextureSet` entry points they share
+//! ([`crustyview_core::probe::first_texture_from_set`],
+//! [`crustyview_core::probe::texture_meta_from_set`]).
 
 mod common;
 

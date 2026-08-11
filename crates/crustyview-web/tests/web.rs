@@ -105,8 +105,10 @@ fn build_wad(lumps: &[(&str, Vec<u8>)]) -> Vec<u8> {
     out
 }
 
-/// A PWAD with one 8x8, zero-patch texture `TEX1` and an empty `PNAMES`.
-fn texture1_pwad() -> Vec<u8> {
+/// A `TEXTURE1` lump defining one 8x8, zero-patch texture named `TEX1`.
+/// Shared by fixtures that need a minimal-but-valid `TEXTURE1` alongside
+/// something else under test (a malformed `PLAYPAL`, an absent one, ...).
+fn texture1_8x8_zero_patch() -> Vec<u8> {
     let mut texture1 = Vec::new();
     texture1.extend_from_slice(&1i32.to_le_bytes()); // numtextures
     texture1.extend_from_slice(&8i32.to_le_bytes()); // offset to the one entry
@@ -116,6 +118,12 @@ fn texture1_pwad() -> Vec<u8> {
     texture1.extend_from_slice(&8i16.to_le_bytes()); // height
     texture1.extend_from_slice(&0i32.to_le_bytes()); // column_directory (dead)
     texture1.extend_from_slice(&0i16.to_le_bytes()); // patchcount
+    texture1
+}
+
+/// A PWAD with one 8x8, zero-patch texture `TEX1` and an empty `PNAMES`.
+fn texture1_pwad() -> Vec<u8> {
+    let texture1 = texture1_8x8_zero_patch();
     let pnames = 0i32.to_le_bytes().to_vec(); // numpatches = 0
     build_wad(&[("TEXTURE1", texture1), ("PNAMES", pnames)])
 }
@@ -190,15 +198,7 @@ fn texture_queries_stay_null_when_the_texture_set_has_no_textures() {
 /// whose length (7 bytes) is not a positive multiple of 768 — `Wad::playpal`
 /// parses strictly and fails on it with `GfxError::PlaypalSize`.
 fn texture1_with_malformed_playpal_pwad() -> Vec<u8> {
-    let mut texture1 = Vec::new();
-    texture1.extend_from_slice(&1i32.to_le_bytes()); // numtextures
-    texture1.extend_from_slice(&8i32.to_le_bytes()); // offset to the one entry
-    texture1.extend_from_slice(b"TEX1\0\0\0\0"); // name, 8 bytes
-    texture1.extend_from_slice(&0i32.to_le_bytes()); // masked (dead field)
-    texture1.extend_from_slice(&8i16.to_le_bytes()); // width
-    texture1.extend_from_slice(&8i16.to_le_bytes()); // height
-    texture1.extend_from_slice(&0i32.to_le_bytes()); // column_directory (dead)
-    texture1.extend_from_slice(&0i16.to_le_bytes()); // patchcount
+    let texture1 = texture1_8x8_zero_patch();
     let pnames = 0i32.to_le_bytes().to_vec(); // numpatches = 0
     let malformed_playpal = vec![0u8; 7]; // not a positive multiple of 768
     build_wad(&[
@@ -373,4 +373,7 @@ fn texture_rgba_composites_the_real_patch_through_the_cache() {
 
     let rgba = doc.texture_rgba();
     assert_eq!(rgba.len(), 8 * 8 * 4, "expected width * height * 4 bytes");
+
+    // Second call reuses the memoized set rather than re-parsing.
+    assert_eq!(doc.texture_rgba(), rgba, "cache must not change the answer");
 }
