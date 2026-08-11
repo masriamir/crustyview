@@ -17,3 +17,24 @@ export function stepGridSize(current: GridSize, direction: -1 | 1): GridSize {
 export function isGridSize(value: unknown): value is GridSize {
   return (GRID_SIZES as readonly unknown[]).includes(value);
 }
+
+/** Minimum on-screen spacing, in CSS px, below which a grid is too dense to draw. */
+export const MIN_GRID_PX = 8;
+
+/**
+ * The finest ladder member at or above `base` whose on-screen spacing clears
+ * [`MIN_GRID_PX`], or `null` when even the largest cannot.
+ *
+ * Powers of two nest, so every line drawn at the returned size is also a line of
+ * the `base` lattice — zooming in progressively reveals the finer ones. The
+ * caller's stored grid preference is never changed by this (#76).
+ */
+export function effectiveGridSize(base: GridSize, scale: number): GridSize | null {
+  for (const size of GRID_SIZES) {
+    if (size < base) continue;
+    // Positive test, so a NaN, zero, or negative scale satisfies nothing and
+    // falls through to null — the same shape as the guard this replaces.
+    if (size * scale >= MIN_GRID_PX) return size;
+  }
+  return null;
+}
