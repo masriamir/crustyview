@@ -63,6 +63,14 @@ pub fn probe_first_texture(wad: &Wad) -> Result<Option<TextureProbe>, GfxError> 
     let Some(set) = wad.texture_set()? else {
         return Ok(None);
     };
+    // Short-circuit on an empty texture set *before* touching `playpal()`: a
+    // malformed-but-present PLAYPAL lump makes `wad.playpal()` return
+    // `Err(GfxError::PlaypalSize)` in strict mode, and a WAD with no textures
+    // must still probe to `Ok(None)` regardless of PLAYPAL's validity (#57
+    // fix-round-1 — the parsed-set split must not change this).
+    if set.textures().is_empty() {
+        return Ok(None);
+    }
     let Some(playpal) = wad.playpal()? else {
         return Ok(None);
     };
