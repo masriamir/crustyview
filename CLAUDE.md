@@ -124,7 +124,11 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   The codebase is already uniform (`CLASSIC_THING_COLORS`, `color:` throughout); #74 shipped two
   British spellings into tooltip copy before review caught them, both because the strings were
   authored upstream and copied verbatim — so check spelling when *writing* copy, not only when
-  reviewing it.
+  reviewing it. **Exception: third-party API values, status strings, and library identifiers
+  keep their own spelling.** GitHub Actions' job-status literal is `cancelled` (British) — that
+  string appears verbatim in `ci.yml` and must not be "corrected", since doing so would describe
+  a status value that does not exist. This rule governs our own prose and identifiers, not other
+  people's vocabularies.
 
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
@@ -180,7 +184,7 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     rather than by a check, and none of which reached `main`: a label that could render an
     impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
     keeping the *previous* map's label (an early return skipping an assignment, #128); and a
-    live-region announcement cancelled mid-gesture (its debounce cleanup was wired to the redraw
+    live-region announcement canceled mid-gesture (its debounce cleanup was wired to the redraw
     `$effect`, which tracks `transform` and so re-runs on every wheel tick — Svelte runs a
     cleanup before each re-run, so the announcement was lost rather than delayed, #127). The
     first two were fixed before #128 merged; the third, before #127's PR opened.
@@ -233,7 +237,7 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   existed from the start but was inert while the repo was private on a free plan; it activated
   when the repo went public (2026-08-10), and `.github/workflows/copilot-review.yml` — which had
   substituted for it — was retired then (#106).
-- Three ruleset behaviours shape the review loop, and two of them replace manual steps:
+- Three ruleset behaviors shape the review loop, and two of them replace manual steps:
   - `review_on_push: true` — **pushing to a PR triggers a fresh review by itself.** Re-requesting
     by hand is unnecessary; only reach for the manual recipe below when a request appears stuck.
   - `dismiss_stale_reviews_on_push: true` — the previous review is dismissed rather than lingering

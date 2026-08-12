@@ -39,7 +39,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# Parse every argument and reject anything unrecognised. Matching only "$1"
+# Parse every argument and reject anything unrecognized. Matching only "$1"
 # would make a typo (`--dryrun`) or a wrapper that reorders arguments fall
 # through to a REAL release — which commits and tags. Failing closed is the
 # only safe default here.
