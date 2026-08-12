@@ -21,16 +21,17 @@ permissions:
 # reason the group key is shaped the way it is. A concurrency group admits one run at
 # a time regardless, and when a new run is queued GitHub cancels any run already
 # *pending* in that group. So a shared `main` group turns three rapid merges into
-# "run 1 in progress, run 2 cancelled, run 3 pending" — manufacturing the exact gap
+# "run 1 in progress, run 2 canceled, run 3 pending" — manufacturing the exact gap
 # this comment claims to prevent. Keying non-PR events on `github.sha` gives every
 # commit its own group, so `main` runs never queue behind each other and never
 # cancel. `github.event_name` keeps a `schedule` run from colliding with the `push`
 # run on the same SHA.
 #
 # For PRs the ref is stable across pushes, so successive heads share a group and the
-# superseded one is cancelled. A cancelled job reports `cancelled`, which does not
-# satisfy a required check; the superseding run posts fresh check runs under the same
-# names and the ruleset reads those.
+# superseded one is canceled. A canceled job reports the check-run conclusion
+# `cancelled` (GitHub's own spelling for that literal value — leave it alone; it is
+# not a typo to fix), which does not satisfy a required check; the superseding run
+# posts fresh check runs under the same names and the ruleset reads those.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

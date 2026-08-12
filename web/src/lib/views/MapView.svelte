@@ -4,7 +4,12 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { gridDrawnSuffix, gridLabel, type GridSize } from './map2d/grid';
-  import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
+  import {
+    CATEGORIES,
+    CATEGORY_DESCRIPTIONS,
+    CLASSIC_THING_COLORS,
+    type ThingCategory,
+  } from './map2d/things';
   import {
     CLASSIC_LINE_SECTOR_DAMAGE,
     CLASSIC_LINE_SECTOR_SECRET,
@@ -100,6 +105,7 @@
         <button
           type="button"
           class="tool"
+          title="Show thing markers — Player 1's start can stay visible on its own"
           aria-pressed={mapPrefs.showThings}
           aria-label="Show things"
           onclick={() => mapPrefs.toggleThings()}
@@ -109,6 +115,7 @@
         <button
           type="button"
           class="tool"
+          title="Show the grid — spacing in map units, [ and ] change it; drawn coarser when too dense at this zoom"
           aria-pressed={mapPrefs.showGrid}
           aria-label={`Show grid, ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, drawnGridSize)}`}
           onclick={() => mapPrefs.toggleGrid()}
@@ -118,6 +125,7 @@
         <button
           type="button"
           class="tool"
+          title="Color the map like the classic automap — instead of the theme's palette"
           aria-pressed={mapPrefs.style === 'classic'}
           aria-label="Classic Doom colors"
           onclick={() => mapPrefs.toggleStyle()}
@@ -137,6 +145,7 @@
         <button
           type="button"
           class="tool"
+          title="Fit the whole map in view — also 0, or a double-click on the map"
           aria-label="Fit the map to the view"
           onclick={() => map2d?.refit()}
         >
@@ -147,19 +156,26 @@
       {#if mapPrefs.showThings && totalThings > 0 && counts !== null}
         <div class="chips" role="group" aria-label="Thing category filters">
           {#each CATEGORIES as category (category.id)}
+            {@const count = counts[category.id]}
             <button
               type="button"
               class="chip"
-              aria-pressed={counts[category.id] === 0
-                ? undefined
-                : mapPrefs.isCategoryShown(category.id)}
-              disabled={counts[category.id] === 0}
-              onclick={() => mapPrefs.toggleCategory(category.id)}
+              aria-pressed={count === 0 ? undefined : mapPrefs.isCategoryShown(category.id)}
+              aria-disabled={count === 0 ? true : undefined}
+              title={count === 0
+                ? `No ${category.label.toLowerCase()} on this map`
+                : CATEGORY_DESCRIPTIONS[category.id]}
+              onclick={() => {
+                if (count > 0) mapPrefs.toggleCategory(category.id);
+              }}
             >
               <span class="swatch" style:background={swatchColor(category.id)} aria-hidden="true"
               ></span>
-              {category.label}
-              <span class="count">{counts[category.id]}</span>
+              {category.label}{#if count === 0}
+                <span class="visually-hidden">— No {category.label.toLowerCase()} on this map</span
+                >
+              {/if}
+              <span class="count">{count}</span>
             </button>
           {/each}
         </div>
@@ -170,6 +186,7 @@
             <button
               type="button"
               class="chip"
+              title="Linedefs carrying a teleport special — the sources; the Teleports chip marks the destinations"
               aria-pressed={mapPrefs.showTeleportLines}
               onclick={() => mapPrefs.toggleTeleportLines()}
             >
@@ -197,6 +214,7 @@
             <button
               type="button"
               class="chip"
+              title="Sectors that hurt the player — 5%, 10% or 20% damage per tick"
               aria-pressed={mapPrefs.showDamagingSectors}
               onclick={() => mapPrefs.toggleDamagingSectors()}
             >
@@ -295,9 +313,12 @@
   .chip[aria-pressed='false'] .swatch {
     opacity: 0.35;
   }
-  .chip:disabled {
-    opacity: 0.45;
-    cursor: default;
+  .chip[aria-disabled='true'] {
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+  .chip[aria-disabled='true'] .swatch {
+    opacity: 0.35;
   }
   .swatch {
     width: 0.75em;

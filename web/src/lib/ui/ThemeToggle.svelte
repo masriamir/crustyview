@@ -6,6 +6,7 @@
   class="toggle"
   type="button"
   onclick={() => theme.toggle()}
+  title={theme.resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
   aria-label={theme.resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 >
   {theme.resolved === 'dark' ? '☀' : '☾'}

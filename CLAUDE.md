@@ -107,6 +107,39 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   releases — one product version in `[workspace.package]` inherited by all three crates,
   one tag `v<version>`, one root `CHANGELOG.md`, cut locally by `just release` via git-cliff.
 
+## UI conventions
+- **A control's accessible name must contain its visible label — but a value readout in that
+  label is not part of the label.** The 2D map's Grid button shows `Grid · 32→128` while its
+  name is `Show grid, 32, drawn as 128`: the label is "Grid", and `· 32→128` is a value. Putting
+  it in the name verbatim would speak "middle dot" and "right arrow" and make the announcement
+  worse, so the name states the same value in words instead. Controls whose name comes from
+  their contents (the map chips) cannot diverge and need no thought here. The same button has a
+  third label state where the divergent part is a whole phrase, not just punctuation and a
+  number: visible `Grid · 32 · zoom in` against the name `Show grid, 32, too small to draw at
+  this zoom` — a harder sell under 2.5.3, and the case a future reader is more likely to stumble
+  on than the coarsened case above. Recorded by #74's audit; #51's accessibility ADR may absorb
+  it.
+- **American English spelling everywhere** — identifiers, comments, docs, user-visible copy,
+  commit messages. Take the American form of every `-ise`/`-ize`, `-our`/`-or`, `-re`/`-er` and
+  `-ae`/`-e` pair: `initialize`, `honor`, `center`, `artifact`, `color`, `behavior`, `analyze`.
+  The codebase is already uniform (`CLASSIC_THING_COLORS`, `color:` throughout); #74 shipped two
+  spelling slips into tooltip copy before review caught them, both because the strings were
+  authored upstream and copied verbatim — so check spelling when *writing* copy, not only when
+  reviewing it.
+- **Exception: third-party API values, status strings, and library identifiers keep their own
+  spelling.** GitHub Actions' job-status literal is `cancelled` (British) — that string appears
+  verbatim in `ci.yml` and must not be "corrected", since doing so would describe a status value
+  that does not exist. This rule governs our own prose and identifiers, not other people's
+  vocabularies.
+- **Why this section states the pattern instead of listing the forbidden spellings:** a rule that
+  quotes its own counter-examples necessarily contains the very words it forbids, which makes it
+  uniquely vulnerable to the sweep it prescribes. crustywad's identical rule, once phrased that
+  way, was corrupted by its own first sweep into `"honor" not "honor"` — the counter-example
+  silently destroyed and replaced with the correct word twice. So this section states the pattern
+  rather than the wrong word; after that change, none of its own examples is a forbidden
+  spelling, so a future sweep skipping backticked code spans (the literals the exception above
+  protects) will find nothing here to correct.
+
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
   `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
@@ -161,7 +194,7 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     rather than by a check, and none of which reached `main`: a label that could render an
     impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
     keeping the *previous* map's label (an early return skipping an assignment, #128); and a
-    live-region announcement cancelled mid-gesture (its debounce cleanup was wired to the redraw
+    live-region announcement canceled mid-gesture (its debounce cleanup was wired to the redraw
     `$effect`, which tracks `transform` and so re-runs on every wheel tick — Svelte runs a
     cleanup before each re-run, so the announcement was lost rather than delayed, #127). The
     first two were fixed before #128 merged; the third, before #127's PR opened.
@@ -214,7 +247,7 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   existed from the start but was inert while the repo was private on a free plan; it activated
   when the repo went public (2026-08-10), and `.github/workflows/copilot-review.yml` — which had
   substituted for it — was retired then (#106).
-- Three ruleset behaviours shape the review loop, and two of them replace manual steps:
+- Three ruleset behaviors shape the review loop, and two of them replace manual steps:
   - `review_on_push: true` — **pushing to a PR triggers a fresh review by itself.** Re-requesting
     by hand is unnecessary; only reach for the manual recipe below when a request appears stuck.
   - `dismiss_stale_reviews_on_push: true` — the previous review is dismissed rather than lingering

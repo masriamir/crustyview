@@ -13,7 +13,7 @@ permissions:
 # Same rule and same group shape as ci.yml — see the long explanation there. Short
 # version: `cancel-in-progress: false` alone does not protect `main`, because queuing a
 # run cancels whatever is already pending in its group. Keying non-PR events on
-# `github.sha` gives each commit its own group, so a `main` analysis is never cancelled
+# `github.sha` gives each commit its own group, so a `main` analysis is never canceled
 # and never leaves a gap in the code-scanning baseline. This workflow also runs on
 # `schedule`, which is why `github.event_name` is in the key.
 concurrency:

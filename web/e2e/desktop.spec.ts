@@ -389,6 +389,77 @@ test.describe('desktop shell smoke', () => {
     });
     expect(sawTeardown).toBe(false);
   });
+
+  test('every map-toolbar control has been considered for explanatory text', async ({ page }) => {
+    // Recorded by #74's audit: controls whose visible label is the whole story.
+    // A tooltip restating a clear label is noise, so these are deliberate.
+    const NO_TOOLTIP_NEEDED = ['Monsters', 'Weapons', 'Ammo', 'Keys'];
+
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    const groups = ['2D map view controls', 'Thing category filters', 'Line overlay filters'];
+    for (const group of groups) {
+      const buttons = await page.getByRole('group', { name: group }).getByRole('button').all();
+      // Guard the guard, per group: a cumulative floor across all three groups would
+      // still pass if any *one* group's selector silently matched nothing — this
+      // catches that failure regardless of which group it happens to.
+      //
+      // Measured, not assumed: both chip-group wrappers are conditionally rendered
+      // on map content — `Thing category filters` needs `showThings && totalThings >
+      // 0 && counts !== null`, and `Line overlay filters` needs at least one teleport
+      // line, secret sector, or damaging sector — so a legitimately-absent group is
+      // indistinguishable from a renamed one. This assertion only works because it
+      // pins freedoom1 E1M1, where all three groups render.
+      expect(
+        buttons.length,
+        `Toolbar group "${group}" matched no buttons — it was renamed or removed, so every ` +
+          `control inside it is going unchecked.`,
+      ).toBeGreaterThan(0);
+
+      for (const button of buttons) {
+        const label = (await button.innerText()).trim().replace(/\s+/g, ' ');
+        const title = await button.getAttribute('title');
+        // `startsWith`, not equality: a chip's text is its label followed by its
+        // count ("Monsters 53"), and the count changes with the map.
+        expect(
+          title !== null || NO_TOOLTIP_NEEDED.some((l) => label.startsWith(l)),
+          `Toolbar control "${label}" has no explanatory text and is not in #74's recorded ` +
+            `no-tooltip list. Add a title, or add it to NO_TOOLTIP_NEEDED if its label says everything.`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  test('a category with no things explains why it is unavailable', async ({ page }) => {
+    await gotoApp(page);
+    await loadWad(page, 'freedoom1.wad');
+    const sidebar = page.getByRole('navigation', { name: 'Sections' });
+    await sidebar.getByRole('button', { name: 'E1M1', exact: true }).click();
+    await expectMapCanvasPainted(page);
+
+    // Measured, not assumed: on freedoom1 E1M1, `teleports` is the only zero-count
+    // category (monsters 53, weapons 10, ammo 44, health 67, powerups 1, keys 1,
+    // teleports 0, decorations 104, other 12). E1M2 has none, so this pins E1M1.
+    const chip = page
+      .getByRole('group', { name: 'Thing category filters' })
+      .getByRole('button', { name: /^Teleports/ });
+
+    await expect(chip).toHaveAttribute('aria-disabled', 'true');
+    await expect(chip).toHaveAttribute('title', 'No teleports on this map');
+    // Proves the chip is not natively `disabled`: a real `disabled` button refuses
+    // focus outright, so this one taking it shows `aria-disabled` is doing the work
+    // instead. (Not `toBeEnabled()`: Playwright's isEnabled treats `aria-disabled="true"`
+    // as disabled too — `getAriaDisabled()` in playwright-core ORs the native
+    // `disabled` check with an explicit aria-disabled check for button-like roles —
+    // so it can't tell the two apart.)
+    await chip.focus();
+    await expect(chip).toBeFocused();
+    await expect(chip).toHaveAccessibleName(/No teleports on this map/);
+  });
 });
 
 test('sub-header-size file shows a clean error message', async ({ page }) => {

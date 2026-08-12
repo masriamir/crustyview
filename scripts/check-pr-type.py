@@ -94,7 +94,7 @@ def main():
                 f"`{title}`\n\n"
                 f"`{commit_type}:` is `skip = true` in `{cliff_path}`. Under squash-merge "
                 f"this PR contributes **no changelog entry and no version bump**, yet it "
-                f"changes files that ship to users or test their behaviour:\n\n"
+                f"changes files that ship to users or test their behavior:\n\n"
             )
             for path in hits:
                 summary.write(f"- `{path}`\n")
