@@ -113,8 +113,18 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   name is `Show grid, 32, drawn as 128`: the label is "Grid", and `· 32→128` is a value. Putting
   it in the name verbatim would speak "middle dot" and "right arrow" and make the announcement
   worse, so the name states the same value in words instead. Controls whose name comes from
-  their contents (the map chips) cannot diverge and need no thought here. Recorded by #74's
-  audit; #51's accessibility ADR may absorb it.
+  their contents (the map chips) cannot diverge and need no thought here. The same button has a
+  third label state where the divergent part is a whole phrase, not just punctuation and a
+  number: visible `Grid · 32 · zoom in` against the name `Show grid, 32, too small to draw at
+  this zoom` — a harder sell under 2.5.3, and the case a future reader is more likely to stumble
+  on than the coarsened case above. Recorded by #74's audit; #51's accessibility ADR may absorb
+  it.
+- **American English spelling everywhere** — `color` not `colour`, `armor` not `armour`,
+  `behavior` not `behaviour`. Identifiers, comments, docs, user-visible copy, commit messages.
+  The codebase is already uniform (`CLASSIC_THING_COLORS`, `color:` throughout); #74 shipped two
+  British spellings into tooltip copy before review caught them, both because the strings were
+  authored upstream and copied verbatim — so check spelling when *writing* copy, not only when
+  reviewing it.
 
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
