@@ -119,16 +119,26 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   this zoom` — a harder sell under 2.5.3, and the case a future reader is more likely to stumble
   on than the coarsened case above. Recorded by #74's audit; #51's accessibility ADR may absorb
   it.
-- **American English spelling everywhere** — `color` not `colour`, `armor` not `armour`,
-  `behavior` not `behaviour`. Identifiers, comments, docs, user-visible copy, commit messages.
+- **American English spelling everywhere** — identifiers, comments, docs, user-visible copy,
+  commit messages. Take the American form of every `-ise`/`-ize`, `-our`/`-or`, `-re`/`-er` and
+  `-ae`/`-e` pair: `initialize`, `honor`, `center`, `artifact`, `color`, `behavior`, `analyze`.
   The codebase is already uniform (`CLASSIC_THING_COLORS`, `color:` throughout); #74 shipped two
-  British spellings into tooltip copy before review caught them, both because the strings were
+  spelling slips into tooltip copy before review caught them, both because the strings were
   authored upstream and copied verbatim — so check spelling when *writing* copy, not only when
-  reviewing it. **Exception: third-party API values, status strings, and library identifiers
-  keep their own spelling.** GitHub Actions' job-status literal is `cancelled` (British) — that
-  string appears verbatim in `ci.yml` and must not be "corrected", since doing so would describe
-  a status value that does not exist. This rule governs our own prose and identifiers, not other
-  people's vocabularies.
+  reviewing it.
+- **Exception: third-party API values, status strings, and library identifiers keep their own
+  spelling.** GitHub Actions' job-status literal is `cancelled` (British) — that string appears
+  verbatim in `ci.yml` and must not be "corrected", since doing so would describe a status value
+  that does not exist. This rule governs our own prose and identifiers, not other people's
+  vocabularies.
+- **Why this section states the pattern instead of listing the forbidden spellings:** a rule that
+  quotes its own counter-examples necessarily contains the very words it forbids, which makes it
+  uniquely vulnerable to the sweep it prescribes. crustywad's identical rule, once phrased that
+  way, was corrupted by its own first sweep into `"honor" not "honor"` — the counter-example
+  silently destroyed and replaced with the correct word twice. So this section states the pattern
+  rather than the wrong word; after that change, none of its own examples is a forbidden
+  spelling, so a future sweep skipping backticked code spans (the literals the exception above
+  protects) will find nothing here to correct.
 
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
