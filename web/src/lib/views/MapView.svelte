@@ -120,7 +120,7 @@
         <button
           type="button"
           class="tool"
-          title="Colour the map like the classic automap — instead of the theme's palette"
+          title="Color the map like the classic automap — instead of the theme's palette"
           aria-pressed={mapPrefs.style === 'classic'}
           aria-label="Classic Doom colors"
           onclick={() => mapPrefs.toggleStyle()}
