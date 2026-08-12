@@ -107,6 +107,15 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   releases — one product version in `[workspace.package]` inherited by all three crates,
   one tag `v<version>`, one root `CHANGELOG.md`, cut locally by `just release` via git-cliff.
 
+## UI conventions
+- **A control's accessible name must contain its visible label — but a value readout in that
+  label is not part of the label.** The 2D map's Grid button shows `Grid · 32→128` while its
+  name is `Show grid, 32, drawn as 128`: the label is "Grid", and `· 32→128` is a value. Putting
+  it in the name verbatim would speak "middle dot" and "right arrow" and make the announcement
+  worse, so the name states the same value in words instead. Controls whose name comes from
+  their contents (the map chips) cannot diverge and need no thought here. Recorded by #74's
+  audit; #51's accessibility ADR may absorb it.
+
 ## Testing
 - `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
   `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
