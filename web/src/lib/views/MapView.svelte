@@ -3,7 +3,7 @@
   import Map2d from './map2d/Map2d.svelte';
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
-  import { gridLabel, type GridSize } from './map2d/grid';
+  import { gridDrawnSuffix, gridLabel, type GridSize } from './map2d/grid';
   import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
   import {
     CLASSIC_LINE_SECTOR_DAMAGE,
@@ -110,7 +110,7 @@
           type="button"
           class="tool"
           aria-pressed={mapPrefs.showGrid}
-          aria-label="Show grid"
+          aria-label={`Show grid, ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, drawnGridSize)}`}
           onclick={() => mapPrefs.toggleGrid()}
         >
           Grid · {gridLabelText}

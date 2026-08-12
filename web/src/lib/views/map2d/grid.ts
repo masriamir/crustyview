@@ -61,3 +61,22 @@ export function gridLabel(base: GridSize, drawn: GridSize | null | undefined): s
   if (drawn === undefined || drawn <= base) return `${base}`;
   return `${base}→${drawn}`;
 }
+
+/**
+ * The spoken clause describing what is actually drawn, appended after a grid
+ * size: `''` when the chosen size is what gets drawn, `, drawn as 128` when
+ * coarsened, `, too small to draw at this zoom` when nothing can be (#127).
+ *
+ * Shared by the toolbar button's accessible name and the map's live-region
+ * announcements, so the two cannot drift apart.
+ *
+ * `undefined` — nothing known yet — yields `''`: with no resolved draw there is
+ * nothing truthful to say about drawing.
+ */
+export function gridDrawnSuffix(base: GridSize, drawn: GridSize | null | undefined): string {
+  // `null` before any relational comparison, exactly as in `gridLabel`:
+  // `null <= 32` coerces to true and would take the wrong branch.
+  if (drawn === null) return ', too small to draw at this zoom';
+  if (drawn === undefined || drawn <= base) return '';
+  return `, drawn as ${drawn}`;
+}

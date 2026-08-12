@@ -150,6 +150,39 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   - Deliberately **not** solved with an `ignore:` entry in `codecov.yml`. The omission is
     structural rather than chosen, and an `ignore:` would also silence genuinely measurable
     code added to that crate later — turning a visible gap into a permanent one.
+- **The second structural blind spot: no check here can see a Svelte timing/lifecycle bug.**
+  `svelte-check` proves types line up, `vitest` covers pure modules, and Playwright drives the
+  built app — none of them observes reactivity wiring at unit granularity; Playwright can drive
+  it, but only through the whole built app, never a component in isolation. There is **no Svelte
+  component-test infrastructure**, and adding it is not a quick `@testing-library/svelte`
+  install: every component in the map area draws to a canvas, and `happy-dom` implements no 2D
+  context, so mounting one meaningfully needs a real browser. Tracked by **#129**.
+  - **Three defects passed a fully green gate** in two consecutive PRs, all caught by review
+    rather than by a check, and none of which reached `main`: a label that could render an
+    impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
+    keeping the *previous* map's label (an early return skipping an assignment, #128); and a
+    live-region announcement cancelled mid-gesture (its debounce cleanup was wired to the redraw
+    `$effect`, which tracks `transform` and so re-runs on every wheel tick — Svelte runs a
+    cleanup before each re-run, so the announcement was lost rather than delayed, #127). The
+    first two were fixed before #128 merged; the third, before #127's PR opened.
+  - **The compensating controls are review and extraction**, and the second one is cheap:
+    pushing display logic out of components into pure modules moves it somewhere `vitest` can
+    reach. `gridLabel`'s tests caught the #128 stale-value regression, and `gridDrawnSuffix` in
+    `web/src/lib/views/map2d/grid.ts` was written test-first for the same reason — its
+    implementation passed on the first attempt, so extraction *prevented* a regression there
+    rather than catching one. **Prefer a pure function over a component-local `$derived`
+    whenever the logic is worth a test.**
+  - **Reach for the E2E harness before concluding something is untestable — but check what a
+    fixture actually reproduces before citing it as evidence.** `web/e2e/helpers.ts` has
+    `loadBrokenMapWad`, a PWAD whose `MAP01` is missing `VERTEXES` — a real failed-assembly
+    fixture, but not, on its own, a test for the stale-label defect above. `openWad` calls
+    `nav.reset()` before loading (`web/src/lib/stores/open.ts:11`), which unmounts `MapView` and
+    destroys its `drawnGridSize` state, so no label survives a WAD switch; and the fixture's one
+    map fails on a fresh load, so there is never a previous map's label to keep. Reproducing that
+    defect needs a **two-map** PWAD (one good, one missing `VERTEXES`) and an **in-place sidebar
+    map switch** — which keeps the `MapView` instance alive — performed *within* one WAD, since
+    `openWad` resets navigation on every load. `loadBrokenMapWad` is a fine template for building
+    that fixture; it is not itself the test.
 - **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
   throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
   upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
