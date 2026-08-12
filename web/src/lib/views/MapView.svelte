@@ -100,6 +100,7 @@
         <button
           type="button"
           class="tool"
+          title="Show thing markers — Player 1's start can stay visible on its own"
           aria-pressed={mapPrefs.showThings}
           aria-label="Show things"
           onclick={() => mapPrefs.toggleThings()}
@@ -109,6 +110,7 @@
         <button
           type="button"
           class="tool"
+          title="Grid spacing in map units — drawn coarser when the chosen size is too dense at this zoom"
           aria-pressed={mapPrefs.showGrid}
           aria-label={`Show grid, ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, drawnGridSize)}`}
           onclick={() => mapPrefs.toggleGrid()}
@@ -118,6 +120,7 @@
         <button
           type="button"
           class="tool"
+          title="Colour the map like the classic automap — instead of the theme's palette"
           aria-pressed={mapPrefs.style === 'classic'}
           aria-label="Classic Doom colors"
           onclick={() => mapPrefs.toggleStyle()}
@@ -137,6 +140,7 @@
         <button
           type="button"
           class="tool"
+          title="Fit the whole map in view — also 0, or a double-click on the map"
           aria-label="Fit the map to the view"
           onclick={() => map2d?.refit()}
         >
@@ -170,6 +174,7 @@
             <button
               type="button"
               class="chip"
+              title="Linedefs carrying a teleport special — the sources; the Teleports chip marks the destinations"
               aria-pressed={mapPrefs.showTeleportLines}
               onclick={() => mapPrefs.toggleTeleportLines()}
             >
@@ -197,6 +202,7 @@
             <button
               type="button"
               class="chip"
+              title="Sectors that hurt the player — nukage, slime, and lava"
               aria-pressed={mapPrefs.showDamagingSectors}
               onclick={() => mapPrefs.toggleDamagingSectors()}
             >

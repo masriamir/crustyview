@@ -10,7 +10,7 @@
   <h1>crustyview</h1>
   {#if wad.phase === 'loaded' && wad.fileName}<span class="file">{wad.fileName}</span>{/if}
   <span class="spacer"></span>
-  <button type="button" class="open" onclick={() => input.click()}>Open</button>
+  <button type="button" class="open" title="Open a WAD file — replaces the one currently loaded" onclick={() => input.click()}>Open</button>
   <input
     bind:this={input}
     type="file"
