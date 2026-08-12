@@ -402,9 +402,17 @@ test.describe('desktop shell smoke', () => {
     await expectMapCanvasPainted(page);
 
     const groups = ['2D map view controls', 'Thing category filters', 'Line overlay filters'];
-    let checked = 0;
     for (const group of groups) {
       const buttons = await page.getByRole('group', { name: group }).getByRole('button').all();
+      // Guard the guard, per group: a cumulative floor across all three groups would
+      // still pass if any *one* group's selector silently matched nothing — this
+      // catches that failure regardless of which group it happens to.
+      expect(
+        buttons.length,
+        `Toolbar group "${group}" matched no buttons — it was renamed or removed, so every ` +
+          `control inside it is going unchecked.`,
+      ).toBeGreaterThan(0);
+
       for (const button of buttons) {
         const label = (await button.innerText()).trim().replace(/\s+/g, ' ');
         const title = await button.getAttribute('title');
@@ -415,11 +423,8 @@ test.describe('desktop shell smoke', () => {
           `Toolbar control "${label}" has no explanatory text and is not in #74's recorded ` +
             `no-tooltip list. Add a title, or add it to NO_TOOLTIP_NEEDED if its label says everything.`,
         ).toBe(true);
-        checked += 1;
       }
     }
-    // Guard the guard: a selector that silently matched nothing would pass vacuously.
-    expect(checked).toBeGreaterThan(10);
   });
 
   test('a category with no things explains why it is unavailable', async ({ page }) => {
@@ -438,9 +443,9 @@ test.describe('desktop shell smoke', () => {
 
     await expect(chip).toHaveAttribute('aria-disabled', 'true');
     await expect(chip).toHaveAttribute('title', 'No teleports on this map');
-    // `aria-disabled`, not `disabled`, is what makes the reason reachable by keyboard:
-    // a real `disabled` button refuses focus outright, so prove this one still takes
-    // it. (Not `toBeEnabled()`: Playwright's isEnabled treats `aria-disabled="true"`
+    // Proves the chip is not natively `disabled`: a real `disabled` button refuses
+    // focus outright, so this one taking it shows `aria-disabled` is doing the work
+    // instead. (Not `toBeEnabled()`: Playwright's isEnabled treats `aria-disabled="true"`
     // as disabled too — `getAriaDisabled()` in playwright-core ORs the native
     // `disabled` check with an explicit aria-disabled check for button-like roles —
     // so it can't tell the two apart.)
