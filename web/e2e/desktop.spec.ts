@@ -407,6 +407,13 @@ test.describe('desktop shell smoke', () => {
       // Guard the guard, per group: a cumulative floor across all three groups would
       // still pass if any *one* group's selector silently matched nothing — this
       // catches that failure regardless of which group it happens to.
+      //
+      // Measured, not assumed: both chip-group wrappers are conditionally rendered
+      // on map content — `Thing category filters` needs `showThings && totalThings >
+      // 0 && counts !== null`, and `Line overlay filters` needs at least one teleport
+      // line, secret sector, or damaging sector — so a legitimately-absent group is
+      // indistinguishable from a renamed one. This assertion only works because it
+      // pins freedoom1 E1M1, where all three groups render.
       expect(
         buttons.length,
         `Toolbar group "${group}" matched no buttons — it was renamed or removed, so every ` +

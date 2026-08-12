@@ -115,7 +115,7 @@
         <button
           type="button"
           class="tool"
-          title="Grid spacing in map units — drawn coarser when the chosen size is too dense at this zoom"
+          title="Show the grid — spacing in map units, [ and ] change it; drawn coarser when too dense at this zoom"
           aria-pressed={mapPrefs.showGrid}
           aria-label={`Show grid, ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, drawnGridSize)}`}
           onclick={() => mapPrefs.toggleGrid()}
@@ -156,27 +156,26 @@
       {#if mapPrefs.showThings && totalThings > 0 && counts !== null}
         <div class="chips" role="group" aria-label="Thing category filters">
           {#each CATEGORIES as category (category.id)}
+            {@const count = counts[category.id]}
             <button
               type="button"
               class="chip"
-              aria-pressed={counts[category.id] === 0
-                ? undefined
-                : mapPrefs.isCategoryShown(category.id)}
-              aria-disabled={counts[category.id] === 0 ? true : undefined}
-              title={counts[category.id] === 0
+              aria-pressed={count === 0 ? undefined : mapPrefs.isCategoryShown(category.id)}
+              aria-disabled={count === 0 ? true : undefined}
+              title={count === 0
                 ? `No ${category.label.toLowerCase()} on this map`
                 : CATEGORY_DESCRIPTIONS[category.id]}
               onclick={() => {
-                if (counts[category.id] > 0) mapPrefs.toggleCategory(category.id);
+                if (count > 0) mapPrefs.toggleCategory(category.id);
               }}
             >
               <span class="swatch" style:background={swatchColor(category.id)} aria-hidden="true"
               ></span>
-              {category.label}{#if counts[category.id] === 0}
+              {category.label}{#if count === 0}
                 <span class="visually-hidden">— No {category.label.toLowerCase()} on this map</span
                 >
               {/if}
-              <span class="count">{counts[category.id]}</span>
+              <span class="count">{count}</span>
             </button>
           {/each}
         </div>
@@ -215,7 +214,7 @@
             <button
               type="button"
               class="chip"
-              title="Sectors that hurt the player — nukage, slime, and lava"
+              title="Sectors that hurt the player — 5%, 10% or 20% damage per tick"
               aria-pressed={mapPrefs.showDamagingSectors}
               onclick={() => mapPrefs.toggleDamagingSectors()}
             >
@@ -315,8 +314,11 @@
     opacity: 0.35;
   }
   .chip[aria-disabled='true'] {
-    opacity: 0.45;
-    cursor: default;
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+  .chip[aria-disabled='true'] .swatch {
+    opacity: 0.35;
   }
   .swatch {
     width: 0.75em;

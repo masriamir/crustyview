@@ -49,12 +49,12 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
  * and a tooltip restating a clear label is noise (#74).
  *
  * Three of these encode facts that live in `TABLE` and nowhere on screen — that
- * `health` also holds armour, that `other` is where player starts and every
+ * `health` also holds armor, that `other` is where player starts and every
  * Strife thing land, and which end of a teleport `teleports` refers to.
  */
 export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
-  health: 'Health and armour pickups — bonuses and the megasphere included',
-  powerups: 'Spheres and artifacts — invulnerability, berserk, radiation suit, and the like',
+  health: 'Health and armor pickups — bonuses and the megasphere included',
+  powerups: 'Spheres and artifacts — including the computer map and light-amp visor',
   teleports: 'Teleport destination pads — the sources are under Teleport lines',
   decorations: 'Scenery and set dressing — corpses, lamps, and the exploding barrel',
   other:
