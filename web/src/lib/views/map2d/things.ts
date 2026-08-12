@@ -43,6 +43,24 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
   other: '#c7c7cc',
 };
 
+/**
+ * Hover/description text for categories whose membership is not obvious from the
+ * label. Deliberately partial: monsters, weapons, ammo and keys are self-evident,
+ * and a tooltip restating a clear label is noise (#74).
+ *
+ * Three of these encode facts that live in `TABLE` and nowhere on screen — that
+ * `health` also holds armour, that `other` is where player starts and every
+ * Strife thing land, and which end of a teleport `teleports` refers to.
+ */
+export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
+  health: 'Health and armour pickups — bonuses and the megasphere included',
+  powerups: 'Spheres and artifacts — invulnerability, berserk, radiation suit, and the like',
+  teleports: 'Teleport destination pads — the sources are under Teleport lines',
+  decorations: 'Non-interactive scenery — corpses, lamps, and set dressing',
+  other:
+    'Unclassified things — player and deathmatch starts land here, as does everything in a Strife WAD',
+};
+
 /** The table's key space: every category except the `other` fallback. */
 type TableCategory = Exclude<ThingCategory, 'other'>;
 

@@ -4,7 +4,12 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { gridDrawnSuffix, gridLabel, type GridSize } from './map2d/grid';
-  import { CATEGORIES, CLASSIC_THING_COLORS, type ThingCategory } from './map2d/things';
+  import {
+    CATEGORIES,
+    CATEGORY_DESCRIPTIONS,
+    CLASSIC_THING_COLORS,
+    type ThingCategory,
+  } from './map2d/things';
   import {
     CLASSIC_LINE_SECTOR_DAMAGE,
     CLASSIC_LINE_SECTOR_SECRET,
@@ -157,12 +162,20 @@
               aria-pressed={counts[category.id] === 0
                 ? undefined
                 : mapPrefs.isCategoryShown(category.id)}
-              disabled={counts[category.id] === 0}
-              onclick={() => mapPrefs.toggleCategory(category.id)}
+              aria-disabled={counts[category.id] === 0 ? true : undefined}
+              title={counts[category.id] === 0
+                ? `No ${category.label.toLowerCase()} on this map`
+                : CATEGORY_DESCRIPTIONS[category.id]}
+              onclick={() => {
+                if (counts[category.id] > 0) mapPrefs.toggleCategory(category.id);
+              }}
             >
               <span class="swatch" style:background={swatchColor(category.id)} aria-hidden="true"
               ></span>
-              {category.label}
+              {category.label}{#if counts[category.id] === 0}
+                <span class="visually-hidden">— No {category.label.toLowerCase()} on this map</span
+                >
+              {/if}
               <span class="count">{counts[category.id]}</span>
             </button>
           {/each}
@@ -301,7 +314,7 @@
   .chip[aria-pressed='false'] .swatch {
     opacity: 0.35;
   }
-  .chip:disabled {
+  .chip[aria-disabled='true'] {
     opacity: 0.45;
     cursor: default;
   }
