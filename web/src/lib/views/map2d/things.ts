@@ -56,7 +56,7 @@ export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
   health: 'Health and armour pickups — bonuses and the megasphere included',
   powerups: 'Spheres and artifacts — invulnerability, berserk, radiation suit, and the like',
   teleports: 'Teleport destination pads — the sources are under Teleport lines',
-  decorations: 'Non-interactive scenery — corpses, lamps, and set dressing',
+  decorations: 'Scenery and set dressing — corpses, lamps, and the exploding barrel',
   other:
     'Unclassified things — player and deathmatch starts land here, as does everything in a Strife WAD',
 };
