@@ -48,9 +48,11 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
  * label. Deliberately partial: monsters, weapons, ammo and keys are self-evident,
  * and a tooltip restating a clear label is noise (#74).
  *
- * Three of these encode facts that live in `TABLE` and nowhere on screen — that
- * `health` also holds armor, that `other` is where player starts and every
- * Strife thing land, and which end of a teleport `teleports` refers to.
+ * Every one of these encodes something that lives in `TABLE` and nowhere on
+ * screen: that `health` also holds armor; that `powerups` includes the computer
+ * map and light-amp visor; which end of a teleport `teleports` refers to; that
+ * `decorations` contains the exploding barrel; and that `other` is where player
+ * starts land, along with everything in a Strife WAD.
  */
 export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
   health: 'Health and armor pickups — bonuses and the megasphere included',
