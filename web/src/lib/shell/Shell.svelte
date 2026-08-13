@@ -28,6 +28,13 @@
   const showContent = $derived(
     wad.phase === 'loaded' || (wad.phase === 'loading' && wad.summary !== null),
   );
+
+  // Inertness is tied to the overlay being *visible*, not to the load. The
+  // overlay is deliberately invisible for its first 250ms, and making the
+  // content behind it unusable during that window is the exact bug that delay
+  // prevents (#57, #125).
+  let overlayRevealed = $state(false);
+  const showOverlay = $derived(wad.phase === 'loading' && showContent);
 </script>
 
 <svelte:window ondragover={(e) => e.preventDefault()} ondrop={ondrop} />
@@ -36,7 +43,7 @@
   <Header />
   <Sidebar />
   <div class="main-area">
-    <main class="main">
+    <main class="main" inert={showOverlay && overlayRevealed}>
       {#if !showContent}
         <EmptyState />
       {:else if nav.section === 'overview'}
@@ -53,8 +60,8 @@
         <LumpBrowser />
       {/if}
     </main>
-    {#if wad.phase === 'loading' && showContent}
-      <LoadingOverlay />
+    {#if showOverlay}
+      <LoadingOverlay bind:revealed={overlayRevealed} />
     {/if}
   </div>
   <StatusBar />
