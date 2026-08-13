@@ -19,3 +19,7 @@ web/src/wasm/
 web/playwright-report/
 web/test-results/
 /.freedoom/
+
+# vitest browser mode
+web/.vitest-attachments/
+web/src/**/__screenshots__/

@@ -91,9 +91,10 @@ fmt:
 
 # Fast local SUBSET of CI (not a mirror) — `gh pr checks` is the source of truth
 ci:
-    # Skips wasm-test, web-build, coverage, sweep-freedoom and web-e2e, so a green
-    # run here is necessary but not sufficient. `just --list` shows only the last
-    # comment line above a recipe, which is why the detail lives in the body.
+    # Skips wasm-test, web-build, coverage, sweep-freedoom, web-e2e and
+    # web-browser-test, so a green run here is necessary but not sufficient.
+    # `just --list` shows only the last comment line above a recipe, which is
+    # why the detail lives in the body.
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     cargo clippy -p crustyview-web --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
@@ -266,4 +267,12 @@ e2e: build-web
 
 # One-time: install the Playwright Chromium browser
 e2e-install:
+    cd web && npx playwright install chromium
+
+# Vitest browser tier: real headless Chromium (wasm built first; browser: `just test-browser-install` once)
+test-browser: web-wasm
+    cd web && npm run test:browser
+
+# One-time: install the Playwright Chromium browser for the Vitest browser tier
+test-browser-install:
     cd web && npx playwright install chromium
