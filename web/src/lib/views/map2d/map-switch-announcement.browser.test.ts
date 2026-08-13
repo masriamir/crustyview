@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
 import type { Map2d as Map2dPayload } from '../../format';
 import { installMapSizing, painted } from './browser-test-helpers';
+import { effectiveGridSize } from './grid';
+import { fitTransform } from './transform';
 
 /**
  * #131: selecting a different map must not announce the grid's drawable state.
@@ -45,7 +47,7 @@ const BASE_GRID = 32;
 const PRESSES_TO_CROSS = 6;
 const FRAME_MS = 20;
 const GRID_ANNOUNCE_DELAY_MS = 500;
-/** Identical for both maps — which is exactly what step 3 exploits. */
+/** Identical for both maps — which is exactly what step 2's `toBe('')` guards. */
 const TOO_SMALL = `Grid ${BASE_GRID}, too small to draw at this zoom`;
 
 installMapSizing();
@@ -82,6 +84,19 @@ describe('grid announcement across a map switch', () => {
     expect(await painted(canvas), 'the map must paint before timers are faked').toBe(true);
     const live = screen.container.querySelector('p.visually-hidden[role="status"]') as HTMLElement;
     expect(live, 'Map2d should render a live region').not.toBeNull();
+
+    // Measure the geometry rather than trusting it. Both maps share this span so
+    // that MAP01 ends undrawable while MAP02 starts drawable — if that stops
+    // holding, the switch is no longer a state difference and step 2 would pass
+    // for the wrong reason. Named preconditions make that drift legible instead
+    // of surfacing as a bare string mismatch three assertions later.
+    const box = screen.container.querySelector('.map2d') as HTMLElement;
+    const fit = fitTransform(mapNamed('MAP01').bounds, box.clientWidth, box.clientHeight);
+    expect(effectiveGridSize(BASE_GRID, fit.scale), 'both maps must start drawable').not.toBeNull();
+    expect(
+      effectiveGridSize(BASE_GRID, fit.scale / 1.1 ** PRESSES_TO_CROSS),
+      `${PRESSES_TO_CROSS} zoom-out presses must cross the drawability floor`,
+    ).toBeNull();
 
     vi.useFakeTimers({
       toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],

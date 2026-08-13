@@ -407,6 +407,7 @@
       announcedFor = name;
       gridDrawable = null;
       gridAnnouncement = '';
+      gridAnnounceText = '';
       if (gridAnnounceTimer !== 0) {
         window.clearTimeout(gridAnnounceTimer);
         gridAnnounceTimer = 0;
@@ -756,7 +757,7 @@
 
   // Not the redraw effect's teardown: that effect tracks `transform` and so re-runs
   // on every wheel tick, pinch move, pan and zoom keypress, and Svelte runs an
-  // effect's cleanup before each re-run. Cancelling there killed the pending
+  // effect's cleanup before each re-run. Canceling there killed the pending
   // announcement mid-gesture — the exact case it exists to cover (#127).
   onDestroy(() => {
     if (gridAnnounceTimer !== 0) {
