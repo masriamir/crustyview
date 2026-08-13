@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { playwright } from '@vitest/browser-playwright';
 
@@ -34,7 +34,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'happy-dom',
           include: ['src/**/*.test.ts'],
-          exclude: ['src/**/*.browser.test.ts'],
+          exclude: [...configDefaults.exclude, 'src/**/*.browser.test.ts'],
         },
       },
       {

@@ -191,7 +191,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   of, *and* fake timers, together — the combination no earlier tier offered. `web/vite.config.ts`
   now defines a second Vitest project (`browser`) that runs `web/src/**/*.browser.test.ts` under
   real headless Chromium via `@vitest/browser-playwright`; CI runs it as the `web-browser-test` job.
-  Tracked by **#129**.
+  Run it locally with `just test-browser` (one-time browser install: `just test-browser-install`,
+  mirroring the `e2e`/`e2e-install` pair — `just setup` installs no browsers). Tracked by **#129**.
   - **Three defects passed a fully green gate** in two consecutive PRs, all caught by review
     rather than by a check, and none of which reached `main`: a label that could render an
     impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
@@ -217,11 +218,20 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     rather than catching one. **Prefer a pure function over a component-local `$derived` whenever
     the logic is worth a test; reach for the browser tier only once the bug genuinely depends on
     real timing or a real canvas.**
-  - **What the browser tier still does not cover:** it only sees what someone writes a test for.
-    It is not a net that acquires coverage on its own — the three defects above all shipped
-    before it existed and were caught by review, not by any check, and a differently-shaped
-    lifecycle bug can slip through the same way today if nobody thinks to write a
-    `*.browser.test.ts` for it.
+  - **What the browser tier still does not cover:** it only sees what someone writes a test for,
+    and the specific gap is the *mounting shape* — both #128 defects are boundary bugs
+    (`drawnGridSize` flowing up to `MapView`; a map switch that keeps the `MapView` instance
+    alive), not single-component ones. Every example on this branch mounts one component with
+    fixed props and never rerenders or mounts a parent, so `rerender` and parent-mounting are
+    unproven in this tier — the next person to need either hits it cold. It is not a net that
+    acquires coverage on its own — the three defects above all shipped before it existed and were
+    caught by review, not by any check, and a differently-shaped lifecycle bug can slip through
+    the same way today if nobody thinks to write a `*.browser.test.ts` for it.
+  - **The #128 stale-label defect is now cheap to reproduce, without a fixture.** `render()` from
+    `vitest-browser-svelte` returns a `rerender` function, so a mocked `wad` store returning a
+    good map for `MAP01` and an error for `MAP02`, plus `rerender({ name: 'MAP02' })`, reproduces
+    it directly — no PWAD, no built app. Reach for that first; fall back to the E2E harness below
+    only for what the browser tier genuinely cannot reach (a real WAD, a real sidebar).
   - **Reach for the E2E harness before concluding something is untestable — but check what a
     fixture actually reproduces before citing it as evidence.** `web/e2e/helpers.ts` has
     `loadBrokenMapWad`, a PWAD whose `MAP01` is missing `VERTEXES` — a real failed-assembly
@@ -229,10 +239,11 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     `nav.reset()` before loading (`web/src/lib/stores/open.ts:11`), which unmounts `MapView` and
     destroys its `drawnGridSize` state, so no label survives a WAD switch; and the fixture's one
     map fails on a fresh load, so there is never a previous map's label to keep. Reproducing that
-    defect needs a **two-map** PWAD (one good, one missing `VERTEXES`) and an **in-place sidebar
-    map switch** — which keeps the `MapView` instance alive — performed *within* one WAD, since
-    `openWad` resets navigation on every load. `loadBrokenMapWad` is a fine template for building
-    that fixture; it is not itself the test.
+    defect through the full app needs a **two-map** PWAD (one good, one missing `VERTEXES`) and an
+    **in-place sidebar map switch** — which keeps the `MapView` instance alive — performed
+    *within* one WAD, since `openWad` resets navigation on every load. `loadBrokenMapWad` is a
+    fine template for building that fixture; it is not itself the test, and the browser-tier route
+    above is the cheaper path to the same defect.
 - **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
   throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
   upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
@@ -286,6 +297,11 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     `analyze` (app `github-actions`, the job) and `CodeQL` (app `github-advanced-security`,
     the code-scanning result) are **different checks** — the latter is absent entirely when
     no analysis uploads, so requiring it blocks rather than silently passes.
+  - **`web-browser-test`** — deferred, not declined, unlike `web-e2e`'s permanent exclusion
+    as a smoke signal. It is the compensating control for the Svelte timing/lifecycle blind
+    spot exactly as `wasm-test` is for the wasm one, and a compensating control that cannot
+    block a merge is not a control — so it belongs in the required list once it has run
+    green for a while. Adding it to the ruleset is a separate, explicit action.
 - Three ruleset parameters that look like defaults but are decisions (#108):
   - **`bypass_actors`: admin, mode `always`** — load-bearing, do not narrow. `just release`
     pushes the release commit **directly to `main`** with `git push --follow-tags` (ADR-0004),
@@ -340,8 +356,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 - Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
   as needed. CI command: `just ci` — a fast **subset** of the CI jobs (fmt, clippy native
   *and* wasm, test, wasm build, deny), not a mirror: it does not run `wasm-test`,
-  `web-build`, `coverage`, `sweep-freedoom`, or `web-e2e`, so a green `just ci` is
-  necessary but not sufficient. `gh pr checks` remains the source of truth. Owner/repo:
+  `web-build`, `coverage`, `sweep-freedoom`, `web-e2e`, or `web-browser-test`, so a green
+  `just ci` is necessary but not sufficient. `gh pr checks` remains the source of truth. Owner/repo:
   `masriamir/crustyview`.
 - A PR is ready for human review only when **all** Copilot threads are resolved **and** all
   CI checks pass (`gh pr checks`). The ruleset now enforces both — unresolved threads and the
