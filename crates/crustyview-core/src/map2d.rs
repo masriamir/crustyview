@@ -16,17 +16,48 @@ const ML_SECRET: u32 = 0x0020;
 /// walk-over/monster teleports (39/97/125/126) plus Boom's switch (174/195),
 /// silent (207–210), line-to-line (243/244, 262–267), and silent monster-only
 /// (268/269) variants. Only meaningful in the Doom special number space;
-/// Hexen/UDMF spaces are #67.
+/// Hexen variants are in [`HEXEN_TELEPORT_SPECIALS`].
 const TELEPORT_SPECIALS: [i32; 20] = [
     39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267, 268,
     269,
 ];
 
+/// Hexen/ZDoom action specials that make a line a teleport *source*.
+/// `74` `Teleport_NewMap` and `75` `Teleport_EndGame` are deliberately absent —
+/// they exit the level rather than teleporting within it. `76` `TeleportOther`
+/// relocates a different actor, so it classifies but never yields a link.
+const HEXEN_TELEPORT_SPECIALS: [i32; 4] = [70, 71, 76, 215];
+
+/// UDMF namespaces that keep the Doom special number space.
+const DOOM_NAMESPACES: [&str; 3] = ["doom", "heretic", "strife"];
+/// UDMF namespaces that use the Hexen special number space.
+const HEXEN_NAMESPACES: [&str; 2] = ["hexen", "zdoom"];
+
 /// Whether `special` marks a teleport source in `format`'s special space.
 /// A dead teleporter (tag 0) still classifies — the special is what makes the
 /// line a source; whether it works in-game is not map2d's concern.
-fn is_teleport_special(special: i32, format: MapFormat) -> bool {
-    format == MapFormat::Doom && TELEPORT_SPECIALS.contains(&special)
+///
+/// `namespace` is the map's UDMF `namespace` declaration and is only consulted
+/// for [`MapFormat::Udmf`], whose special space depends on it. An unrecognized
+/// namespace classifies nothing rather than guessing at a numbering: a missing
+/// teleport mark is a gap, a wrong one is a lie.
+fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>) -> bool {
+    match format {
+        MapFormat::Doom => TELEPORT_SPECIALS.contains(&special),
+        MapFormat::Hexen => HEXEN_TELEPORT_SPECIALS.contains(&special),
+        MapFormat::Udmf => match namespace {
+            Some(ns) if DOOM_NAMESPACES.contains(&ns) => TELEPORT_SPECIALS.contains(&special),
+            Some(ns) if HEXEN_NAMESPACES.contains(&ns) => {
+                HEXEN_TELEPORT_SPECIALS.contains(&special)
+            }
+            _ => false,
+        },
+        // Doom 64 has its own special space, and crustywad exposes only the raw
+        // number with no semantics — classifying it would mean asserting values
+        // no source in this repo can confirm. Tracked separately. Future formats
+        // are treated conservatively as unclassified.
+        MapFormat::Doom64 | _ => false,
+    }
 }
 
 /// Vanilla damaging-floor sector specials: 4/11/16 (−20%), 5 (−10%), 7 (−5%).
@@ -172,6 +203,8 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         .ok_or_else(|| sanitize(&format!("no map named {name}")))?;
     let map = assemble_view(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
     let format = map.format();
+    // Only meaningful for UDMF; `None` for every binary format.
+    let namespace = map.namespace();
     // Classify every sector once; each line then looks up its two sides.
     let sector_marks: Vec<(bool, bool)> = map
         .sectors()
@@ -219,7 +252,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
                 x2: b.x,
                 y2: b.y,
                 kind,
-                teleport: is_teleport_special(l.special.special, format),
+                teleport: is_teleport_special(l.special.special, format, namespace),
                 secret_sector: right_secret || left_secret,
                 damaging_sector: right_damaging || left_damaging,
             })
@@ -383,27 +416,55 @@ mod tests {
 
     #[test]
     fn teleport_specials_classify_by_format() {
-        let listed = [
-            39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267,
-            268, 269,
-        ];
-        for special in listed {
+        for special in TELEPORT_SPECIALS {
             assert!(
-                is_teleport_special(special, MapFormat::Doom),
-                "special {special} should classify on Doom-format maps"
+                is_teleport_special(special, MapFormat::Doom, None),
+                "special {special} is a Doom teleport"
             );
         }
-        for special in [0, 1, 40, 173, 196, 206, 211, 242, 245, 261, 270] {
+        for special in [0, 1, 38, 40, 96, 98, 270] {
             assert!(
-                !is_teleport_special(special, MapFormat::Doom),
+                !is_teleport_special(special, MapFormat::Doom, None),
                 "special {special} is not a teleport"
             );
         }
-        for format in [MapFormat::Hexen, MapFormat::Udmf, MapFormat::Doom64] {
+        // Doom numbers are meaningless in the Hexen space and vice versa.
+        assert!(!is_teleport_special(39, MapFormat::Hexen, None));
+        assert!(!is_teleport_special(70, MapFormat::Doom, None));
+        for special in HEXEN_TELEPORT_SPECIALS {
             assert!(
-                !is_teleport_special(39, format) && !is_teleport_special(97, format),
-                "{format:?} has a different special number space"
+                is_teleport_special(special, MapFormat::Hexen, None),
+                "special {special} is a Hexen teleport"
             );
+        }
+        // Level exits, not in-map teleports.
+        for special in [74, 75] {
+            assert!(
+                !is_teleport_special(special, MapFormat::Hexen, None),
+                "special {special} exits the level rather than teleporting within it"
+            );
+        }
+        // Doom64 has its own space, which crustywad exposes no semantics for.
+        assert!(!is_teleport_special(39, MapFormat::Doom64, None));
+        assert!(!is_teleport_special(70, MapFormat::Doom64, None));
+    }
+
+    #[test]
+    fn udmf_classifies_by_namespace() {
+        // The base namespaces keep their binary format's special space.
+        for ns in ["doom", "heretic", "strife"] {
+            assert!(is_teleport_special(39, MapFormat::Udmf, Some(ns)));
+            assert!(!is_teleport_special(70, MapFormat::Udmf, Some(ns)));
+        }
+        for ns in ["hexen", "zdoom"] {
+            assert!(is_teleport_special(70, MapFormat::Udmf, Some(ns)));
+            assert!(!is_teleport_special(39, MapFormat::Udmf, Some(ns)));
+        }
+        // An unrecognized or absent namespace classifies nothing rather than
+        // guessing: a missing mark is a gap, a wrong one is a lie.
+        for ns in [Some("eternity"), Some("vavoom"), Some(""), None] {
+            assert!(!is_teleport_special(39, MapFormat::Udmf, ns));
+            assert!(!is_teleport_special(70, MapFormat::Udmf, ns));
         }
     }
 
