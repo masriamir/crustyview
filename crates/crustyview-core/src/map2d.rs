@@ -7,7 +7,7 @@ use crate::assemble::assemble_view;
 use crate::error::sanitize;
 use crustywad::Wad;
 use crustywad::map::{Map, MapFormat, SidedefIdx};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -336,21 +336,22 @@ fn connected_components(lines: &[LinkLine], idxs: &[usize]) -> Vec<Vec<usize>> {
         by_point.entry(point_key(l.start)).or_default().push(i);
         by_point.entry(point_key(l.end)).or_default().push(i);
     }
-    let mut visited = vec![false; lines.len()];
+    // Scoped to this group, not to every linedef in the map: a map with many
+    // lines and few teleport sources would otherwise pay an O(linedefs)
+    // allocation per target group, which matters in wasm (#147 review).
+    let mut visited: HashSet<usize> = HashSet::with_capacity(idxs.len());
     let mut components = Vec::new();
     for &start in idxs {
-        if visited[start] {
+        if !visited.insert(start) {
             continue;
         }
-        visited[start] = true;
         let mut component = vec![start];
         let mut stack = vec![start];
         while let Some(i) = stack.pop() {
             let l = &lines[i];
             for point in [point_key(l.start), point_key(l.end)] {
                 for &j in by_point.get(&point).into_iter().flatten() {
-                    if !visited[j] {
-                        visited[j] = true;
+                    if visited.insert(j) {
                         component.push(j);
                         stack.push(j);
                     }
@@ -785,7 +786,10 @@ mod tests {
 
     /// A PWAD with a *working* teleporter: a four-line pad (special 97,
     /// tag 1) facing a plain room (sector 0), linking to sector 1 (also
-    /// tag 1), which is its own boundary. Every other link test hand-builds
+    /// tag 1), which is its own boundary. The destination carries a type-14
+    /// teleport landing, so the bytes describe something that would actually
+    /// function in-game — and so the fixture also exercises `type_id` through
+    /// the projection, which the hand-built tests cannot. Every other link test hand-builds
     /// `LinkLine`s directly, so this is the only thing that exercises
     /// `teleport_links_for`'s wiring of `l.special.args`, `l.id`, and
     /// `l.right`/`l.left` end to end through `map2d()` (#66 review) —
@@ -842,9 +846,16 @@ mod tests {
             b
         };
         let sectors: Vec<u8> = [sector(0), sector(1)].concat();
+        // THINGS: x, y (i16), angle, type, flags (u16). A type-14 teleport
+        // landing inside the destination sector, which is what makes this a
+        // teleporter rather than four lines pointing at empty floor.
+        let things: Vec<u8> = [[250u16, 250, 90, 14, 7]]
+            .iter()
+            .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
+            .collect();
         build_pwad(&[
             ("MAP01", &[]),
-            ("THINGS", &[]),
+            ("THINGS", &things),
             ("LINEDEFS", &linedefs),
             ("SIDEDEFS", &sidedefs),
             ("VERTEXES", &vertexes),
