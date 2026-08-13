@@ -1228,10 +1228,16 @@ mod tests {
         // this under `MapFormat::Hexen` with hand-set ids exercised a
         // configuration the real assembly pipeline cannot produce (#66
         // review).
-        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, 9, 0, 0, 0], Some(1));
+        // `args[0]` is deliberately a *live* id (7) rather than 0, and a decoy
+        // line carries that id. An earlier version left it 0, so a mutant
+        // reading `args[0]` hit the "unset" guard and produced no link at all —
+        // the test still failed, but on emptiness rather than on following the
+        // wrong field. With a live decoy it fails on a wrong *coordinate*,
+        // which is what the name claims.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [7, 9, 0, 0, 0], Some(1));
         source.id = 1;
-        let mut decoy = line((500.0, 500.0), (600.0, 500.0), 0, [9, 0, 0, 0, 0], Some(2));
-        decoy.id = 0;
+        let mut decoy = line((500.0, 500.0), (600.0, 500.0), 0, [0; 5], Some(2));
+        decoy.id = 7;
         let mut target = line((100.0, 0.0), (100.0, 100.0), 0, [0; 5], Some(2));
         target.id = 9;
         let links = build_teleport_links(&LinkInputs {
