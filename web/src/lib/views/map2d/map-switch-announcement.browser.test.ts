@@ -96,15 +96,20 @@ describe('grid announcement across a map switch', () => {
     // 2. Switching maps must not. MAP01 ends undrawable and MAP02 starts
     //    drawable, so this is a real state difference — it would announce
     //    without the reset.
+    //
+    //    Asserting the region is *empty*, rather than merely unchanged, is what
+    //    guards the same-string trap: both maps produce the byte-identical
+    //    "too small" text, so a stale value left here would make the next
+    //    genuine crossing a no-op write that the DOM — and therefore the
+    //    screen reader — never sees. Verified: dropping `gridAnnouncement = ''`
+    //    from the reset fails this assertion.
     await screen.rerender({ name: 'MAP02' });
     settleFrame();
     await vi.advanceTimersByTimeAsync(GRID_ANNOUNCE_DELAY_MS + FRAME_MS);
     expect(live.textContent, 'a map switch is not a grid transition').toBe('');
 
-    // 3. And a genuine transition on MAP02 announces again. This is the step
-    //    that catches the same-string trap: the text here is byte-identical to
-    //    step 1's, so without clearing the live region in the reset, the DOM
-    //    would not change and nothing would be spoken.
+    // 3. And a genuine transition on MAP02 announces again — proving the reset
+    //    suppressed the switch without disabling announcements on the new map.
     pressZoomOut(canvas, PRESSES_TO_CROSS);
     settleFrame();
     await vi.advanceTimersByTimeAsync(GRID_ANNOUNCE_DELAY_MS + FRAME_MS);
