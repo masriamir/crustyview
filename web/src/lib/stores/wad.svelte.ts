@@ -16,7 +16,13 @@ export class WadStore {
   #mapStatsCache = new Map<string, MapStats | null>();
   #textureMetaCache: { value: TextureMeta | null } | null = null;
 
-  async load(file: File): Promise<void> {
+  /**
+   * Load a WAD, replacing any currently open one. Resolves `true` only when this
+   * call committed — i.e. reached `phase = 'loaded'`. A superseded or failed load
+   * resolves `false`, which is what lets `openWad` correct navigation without a
+   * stale call clobbering a newer one's state.
+   */
+  async load(file: File): Promise<boolean> {
     const seq = ++this.#loadSeq;
     this.phase = 'loading';
     this.loadingFileName = file.name;
@@ -26,11 +32,11 @@ export class WadStore {
       bytes = new Uint8Array(await file.arrayBuffer());
     } catch {
       if (seq === this.#loadSeq) this.#fail('Could not read the file.');
-      return;
+      return false;
     }
     // A newer load() started while we awaited the bytes — let it own the state
     // (don't clobber it or free its handle). Everything below here is synchronous.
-    if (seq !== this.#loadSeq) return;
+    if (seq !== this.#loadSeq) return false;
     // Free any previously-held WAD before replacing it.
     this.#freeDoc();
     this.#map2dCache.clear();
@@ -41,7 +47,7 @@ export class WadStore {
       doc = WadDocument.load(bytes);
     } catch (e) {
       this.#fail(e instanceof Error ? e.message : 'Not a valid WAD.');
-      return;
+      return false;
     }
     this.#doc = doc;
     try {
@@ -52,11 +58,12 @@ export class WadStore {
       // cleanly — free the handle and surface an error rather than stay stuck in
       // `loading` with a retained WadDocument.
       this.#fail(e instanceof Error ? e.message : 'Could not read the WAD.');
-      return;
+      return false;
     }
     this.fileName = file.name;
     this.loadingFileName = null;
     this.phase = 'loaded';
+    return true;
   }
 
   /**
