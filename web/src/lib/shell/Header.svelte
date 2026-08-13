@@ -69,9 +69,10 @@
   }
   @media (max-width: 48rem) {
     h1 {
-      /* 32px makes the wordmark 180px, which overflows a 360px viewport once
-         the Open button (70px), the toggle (44px) and three 1rem gaps are
-         counted. 16px is the next grid-clean size down. */
+      /* 32px makes the wordmark 180px and the whole header 356px, measured —
+         which pushes the theme toggle off-screen at or below ~340px, and at
+         360px fits only by eating the header's own padding while taking half
+         the width. 16px is the next grid-clean size down. */
       font-size: 16px;
     }
     .file {
