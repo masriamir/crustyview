@@ -37,7 +37,15 @@
   }
   h1 {
     margin: 0;
-    font-size: 1.1rem;
+    /* Px437 has an exact 16-unit grid: only multiples of 16px land on whole
+       pixels. 32px is the desktop size; see the compact override below. */
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 1;
+    /* The DOM text stays `crustyview` — the product's name everywhere else —
+       so the capitals are presentation, not a rename. */
+    text-transform: uppercase;
   }
   .file {
     font-family: var(--font-mono);
@@ -60,6 +68,12 @@
     font-weight: 600;
   }
   @media (max-width: 48rem) {
+    h1 {
+      /* 32px makes the wordmark 180px, which overflows a 360px viewport once
+         the Open button (70px), the toggle (44px) and three 1rem gaps are
+         counted. 16px is the next grid-clean size down. */
+      font-size: 16px;
+    }
     .file {
       display: none;
     }
