@@ -9,7 +9,7 @@ import { fitTransform } from './transform';
  *
  * The grid's "too small to draw" announcement is debounced by 500 ms so a zoom
  * that overshoots and corrects announces once, at wherever it lands. The
- * original wiring cancelled that pending timer from the redraw `$effect`'s
+ * original wiring canceled that pending timer from the redraw `$effect`'s
  * teardown — an effect that tracks `transform`, so it re-runs on every zoom
  * tick, and Svelte runs an effect's cleanup before each re-run. A gesture that
  * kept going past the crossing therefore lost the announcement entirely instead
@@ -64,14 +64,26 @@ const FRAME_MS = 20;
 const BASE_GRID: GridSize = 32;
 /** `512 x scale < 8` from a fit scale of 0.0276 at 1.1 per press. */
 const PRESSES_TO_CROSS = 6;
-/** The rest of the gesture: zoom ticks that arrive while the announcement is pending. */
+/**
+ * The rest of the gesture: zoom ticks that arrive while the announcement is
+ * pending. `CONTINUED_TICKS * FRAME_MS` must stay well under the debounce, so
+ * the ticks land on a timer that is still armed. It cannot manufacture a false
+ * pass — under the broken wiring the first tick clears the timer and nothing
+ * ever fires — but at 500 ms or more of ticks the timer would fire during the
+ * loop and the final assertion would then hold for a much weaker reason.
+ */
 const CONTINUED_TICKS = 4;
 const TOO_SMALL = `Grid ${BASE_GRID}, too small to draw at this zoom`;
 
 // `.map2d` takes its size from the layout around it, which a mounted-alone
 // component does not have. Pin the box the fit is computed from so the zoom
-// arithmetic below is the same on every machine. Scoped Svelte styles keep the
-// authored class name, so this plain selector still matches.
+// arithmetic below is the same on every machine. Sizing `document.body` instead
+// would NOT work: the canvas is absolutely positioned and out of flow, leaving
+// the container collapsed onto its 12rem `min-height`, which starts the grid
+// already undrawable and makes the whole test vacuous. Scoped Svelte styles keep
+// the authored class name, so this plain selector still matches. Never removed,
+// deliberately: browser mode gives each test file its own page, and the selector
+// names a class only this component uses.
 const sizing = document.createElement('style');
 sizing.textContent = '.map2d { width: 800px; height: 600px; }';
 document.head.append(sizing);
@@ -156,9 +168,13 @@ function fakeTimers(): void {
 }
 
 /**
- * `-` zooms out by one step. The handler is on the canvas, so the key is
- * dispatched there; `[` / `]` are deliberately not used, since `adjustGridSize`
- * announces immediately and would bypass the debounce under test.
+ * `-` zooms out by one step. The handler is declared on the canvas, so that is
+ * where the key is dispatched — though delivery does not actually depend on it:
+ * Svelte delegates `keydown` to the mount root and the event bubbles, so focus
+ * is not what routes it. The `focus()` call below just keeps the gesture honest
+ * to how a user reaches these keys. `[` / `]` are deliberately not used, since
+ * `adjustGridSize` announces immediately and would bypass the debounce under
+ * test.
  */
 function pressZoomOut(canvas: HTMLCanvasElement, times = 1): void {
   canvas.focus();

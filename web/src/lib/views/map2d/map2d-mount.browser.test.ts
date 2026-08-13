@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Map2d as Map2dPayload } from '../../format';
 
 /**
@@ -32,10 +32,20 @@ vi.mock('../../stores/wad.svelte', () => ({
 const { render } = await import('vitest-browser-svelte');
 const Map2d = (await import('./Map2d.svelte')).default;
 
-beforeEach(() => {
-  document.body.style.width = '800px';
-  document.body.style.height = '600px';
-});
+/** One keypress zoom step, mirroring `Map2d`'s own constant. */
+const ZOOM_STEP = 1.1;
+
+// Size the component's own box, NOT `document.body`: the canvas is absolutely
+// positioned and out of flow, so a body height leaves `.map2d` collapsed onto
+// its 12rem `min-height` and every test computes its fit from ~192px. Copy this
+// rule, not a body style. Svelte's scoped styles keep the authored class name,
+// so this plain selector matches, and the component sets `min-height` rather
+// than `height`, so there is no specificity fight. Appended for the lifetime of
+// the file: browser-mode gives each test file its own page, and the selector
+// names a class only this component uses.
+const sizing = document.createElement('style');
+sizing.textContent = '.map2d { width: 800px; height: 600px; }';
+document.head.append(sizing);
 
 /** Wait for the ResizeObserver -> fit -> rAF draw chain to settle. */
 async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
@@ -66,12 +76,28 @@ describe('Map2d in the browser tier', () => {
 
   it('exposes its view controls to a caller', async () => {
     const screen = await render(Map2d, { name: 'MAP01' });
+    const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
     const api = screen.component as unknown as {
       zoomFactor: () => number;
       categoryCounts: () => Record<string, number> | null;
     };
-    await new Promise((r) => setTimeout(r, 100));
-    expect(typeof api.zoomFactor()).toBe('number');
-    expect(api.categoryCounts()).not.toBeNull();
+    // `zoomFactor()` returns its 1 fallback both before a fit resolves and right
+    // after one, so its type — or its value on its own — cannot tell "fitted"
+    // from "never fitted". A readout that MOVES can: the zoom keys no-op while
+    // `transform` is null, so a press that lands proves the fit resolved.
+    // Waiting on a real paint is what makes the press land; a fixed sleep would
+    // only be waiting on the same thing, less reliably.
+    expect(await painted(canvas), 'the map must fit and paint before it can zoom').toBe(true);
+    canvas.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '-', bubbles: true, cancelable: true }),
+    );
+    await expect.poll(() => api.zoomFactor()).toBeCloseTo(1 / ZOOM_STEP, 5);
+
+    const counts = api.categoryCounts();
+    expect(counts, 'counts resolve as soon as the map does').not.toBeNull();
+    expect(
+      Object.values(counts as Record<string, number>).reduce((a, b) => a + b, 0),
+      'every thing in the map is counted into some category',
+    ).toBe(MAP.things.length);
   });
 });
