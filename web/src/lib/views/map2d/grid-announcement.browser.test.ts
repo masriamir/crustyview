@@ -89,10 +89,11 @@ sizing.textContent = '.map2d { width: 800px; height: 600px; }';
 document.head.append(sizing);
 
 beforeEach(() => {
-  // Tests in a file share a page and `mapPrefs` persists, so state the two
-  // preferences this test depends on rather than inheriting whatever ran
-  // before. Assigned rather than toggled: the setters persist to
-  // `localStorage`, and a test should not leave preferences behind.
+  // `mapPrefs` is a singleton and tests in a file share one page, so state the
+  // two preferences these tests depend on rather than inheriting whatever ran
+  // before. Assigned directly rather than through `toggleGrid`/`setGridSize`
+  // because those call `#persist()`: a bare assignment is still reactive but
+  // writes nothing to `localStorage`, so no test leaves preferences behind.
   mapPrefs.showGrid = true;
   mapPrefs.gridSize = BASE_GRID;
 });
