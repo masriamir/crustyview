@@ -72,9 +72,10 @@ fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>)
             }
             _ => false,
         },
-        // Two distinct reasons share this arm, merged because `MapFormat` is
-        // `#[non_exhaustive]` (so the wildcard is mandatory) and splitting them
-        // trips `clippy::match_same_arms` under `-D warnings`:
+        // Covers two distinct cases, and `MapFormat` is `#[non_exhaustive]` so
+        // the wildcard is mandatory either way. Naming `Doom64` beside it reads
+        // as redundant and has already misled two reviewers, so the rationale
+        // lives here rather than in the pattern:
         //
         // 1. **Doom 64** has its own special space, and crustywad exposes only
         //    the raw number with no semantics — classifying it would mean
@@ -83,7 +84,7 @@ fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>)
         //    no lint, nothing to prompt a revisit. Unclassified is the right
         //    default (a missing mark is a gap, a wrong one is a lie), but it is
         //    invisible, so check this match by hand when the crustywad pin bumps.
-        MapFormat::Doom64 | _ => false,
+        _ => false,
     }
 }
 
@@ -226,8 +227,16 @@ fn sector_points(inp: &LinkInputs, idx: usize) -> Vec<(f64, f64)> {
 /// vertices, or `None` when it has none. A cheap superset of "inside the
 /// sector" — not point-in-polygon containment, which this module
 /// deliberately never computes (#49) — used only to *choose among* several
-/// same-tag sector candidates in [`resolve`], so it can only narrow a blind
-/// pick, never make one worse.
+/// same-tag sector candidates in [`resolve`].
+///
+/// "Never worse" is meant specifically against the lowest-index fallback it
+/// replaces, and holds because the preference only diverges from that fallback
+/// when the lowest-index candidate's bbox contains *no* landing — and a sector
+/// with no landing anywhere in its bounding box certainly has none inside it,
+/// so it cannot be where the engine sends the player. It is **not** a
+/// guarantee of correctness: a bbox is a superset, so for a concave or holed
+/// sector a landing can sit inside the box but outside the floor, and the
+/// candidate chosen that way may still be the wrong one.
 fn sector_bbox(inp: &LinkInputs, idx: usize) -> Option<(f64, f64, f64, f64)> {
     let points = sector_points(inp, idx);
     if points.is_empty() {
@@ -846,9 +855,11 @@ mod tests {
             b
         };
         let sectors: Vec<u8> = [sector(0), sector(1)].concat();
-        // THINGS: x, y (i16), angle, type, flags (u16). A type-14 teleport
-        // landing inside the destination sector, which is what makes this a
-        // teleporter rather than four lines pointing at empty floor.
+        // THINGS: x, y, angle, type, flags. On disk x/y are `i16`; these
+        // coordinates are positive, so the `u16` little-endian encoding below
+        // is byte-identical — a negative coordinate would need `i16` here.
+        // The type-14 teleport landing inside the destination sector is what
+        // makes this a teleporter rather than four lines pointing at floor.
         let things: Vec<u8> = [[250u16, 250, 90, 14, 7]]
             .iter()
             .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())

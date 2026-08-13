@@ -44,9 +44,12 @@ installMapSizing();
 /** The canvas's pixels, once it has painted. */
 async function snapshot(): Promise<string> {
   const screen = await render(Map2d, { name: 'MAP01' });
-  const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
-  expect(await painted(canvas)).toBe(true);
-  return canvas.toDataURL();
+  const canvas = screen.container.querySelector('canvas');
+  // Assert before casting: without this a missing canvas throws an opaque null
+  // dereference inside `painted()` instead of naming what went wrong.
+  expect(canvas, 'Map2d should render a canvas').not.toBeNull();
+  expect(await painted(canvas as HTMLCanvasElement)).toBe(true);
+  return (canvas as HTMLCanvasElement).toDataURL();
 }
 
 describe('teleport links', () => {
