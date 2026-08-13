@@ -52,10 +52,17 @@ fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>)
             }
             _ => false,
         },
-        // Doom 64 has its own special space, and crustywad exposes only the raw
-        // number with no semantics — classifying it would mean asserting values
-        // no source in this repo can confirm. Tracked separately. Future formats
-        // are treated conservatively as unclassified.
+        // Two distinct reasons share this arm, merged because `MapFormat` is
+        // `#[non_exhaustive]` (so the wildcard is mandatory) and splitting them
+        // trips `clippy::match_same_arms` under `-D warnings`:
+        //
+        // 1. **Doom 64** has its own special space, and crustywad exposes only
+        //    the raw number with no semantics — classifying it would mean
+        //    asserting values no source in this repo can confirm (#146).
+        // 2. **Any future crustywad format** lands here *silently* — no E0004,
+        //    no lint, nothing to prompt a revisit. Unclassified is the right
+        //    default (a missing mark is a gap, a wrong one is a lie), but it is
+        //    invisible, so check this match by hand when the crustywad pin bumps.
         MapFormat::Doom64 | _ => false,
     }
 }
