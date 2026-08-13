@@ -103,3 +103,34 @@ describe('WadStore.loadingFileName', () => {
     expect(store.fileName).toBe('incoming.wad');
   });
 });
+
+describe('WadStore.load return value', () => {
+  it('resolves true when the load commits', async () => {
+    const store = new WadStore();
+    await expect(store.load(wadFile())).resolves.toBe(true);
+    expect(store.phase).toBe('loaded');
+  });
+
+  it('resolves false when the WAD is invalid', async () => {
+    const store = new WadStore();
+    const { WadDocument } = await import('../../wasm/crustyview_web.js');
+    vi.mocked(WadDocument.load).mockImplementationOnce(() => {
+      throw new Error('Not a valid WAD.');
+    });
+
+    await expect(store.load(wadFile())).resolves.toBe(false);
+    expect(store.phase).toBe('error');
+  });
+
+  it('resolves false for a superseded load and true for the winner', async () => {
+    // This is the case `openWad` gates on: a stale load must not report success
+    // and reset navigation out from under the load that actually committed.
+    const store = new WadStore();
+    const first = store.load(wadFile('a.wad'));
+    const second = store.load(wadFile('b.wad'));
+
+    expect(await first).toBe(false);
+    expect(await second).toBe(true);
+    expect(store.fileName).toBe('b.wad');
+  });
+});

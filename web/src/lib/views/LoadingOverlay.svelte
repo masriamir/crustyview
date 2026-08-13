@@ -1,10 +1,35 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { wad } from '../stores/wad.svelte';
+
+  interface Props {
+    /**
+     * True once this overlay is actually painted, so a caller can make the
+     * content underneath inert (#125) without doing so while it is still
+     * invisible and usable (#57).
+     */
+    revealed?: boolean;
+  }
+  let { revealed = $bindable(false) }: Props = $props();
+
+  // The reveal is a CSS animation with a 250ms delay, so `animationstart` is
+  // the only signal that cannot drift from what is on screen — a timer could
+  // not fire at all through the synchronous tail of a load, which is exactly
+  // why the delay is a CSS animation in the first place.
+  function onanimationstart(): void {
+    revealed = true;
+  }
+
+  // `onDestroy`, not an `$effect` teardown: Svelte runs an effect's cleanup
+  // before every re-run rather than only at unmount (#127).
+  onDestroy(() => {
+    revealed = false;
+  });
 </script>
 
 <!-- Visual only. The status bar's `role="status"` region already announces the
      load; announcing it twice would talk over the rest of the bar. -->
-<div class="overlay" aria-hidden="true">
+<div class="overlay" aria-hidden="true" {onanimationstart}>
   <p>Loading{wad.loadingFileName ? ` ${wad.loadingFileName}` : ''}…</p>
 </div>
 
