@@ -1291,6 +1291,29 @@ mod tests {
     }
 
     #[test]
+    fn a_tagged_sector_with_no_boundary_lines_yields_no_link() {
+        // A sector can carry a teleport's tag while no linedef faces it — a
+        // malformed or orphaned tag. There is then no geometry to aim at, so
+        // both `sector_bbox` (the landing preference) and `centroid` (the
+        // fallback) find no points and the source draws nothing rather than
+        // guessing at a position.
+        let (mut lines, mut sectors, things) = pad_inputs();
+        lines.truncate(4); // drop the destination sector's boundary lines
+        sectors.truncate(3); // sector 2 keeps tag 1, but nothing faces it now
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(
+            result.is_empty(),
+            "a tag matching a sector with no geometry draws nothing"
+        );
+    }
+
+    #[test]
     fn several_sectors_sharing_a_tag_resolve_to_the_lowest_index() {
         // No candidate sector's bounding box contains a teleport landing
         // (thing 14), so this exercises the fallback path — lowest index
