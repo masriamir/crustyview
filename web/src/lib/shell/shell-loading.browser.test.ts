@@ -53,8 +53,11 @@ describe('main content while a WAD loads', () => {
       .poll(() => (main as HTMLElement).hasAttribute('inert'), { timeout: 3000 })
       .toBe(true);
 
-    // The 250ms delay is the requirement, not an implementation detail: an
-    // always-inert implementation would satisfy the poll above at ~0ms.
+    // The 250ms delay is the requirement, not an implementation detail. This is
+    // the only assertion that catches a reveal firing *too early* — one that is
+    // still deferred past mount, so the check above passes, but no longer waits
+    // out the delay. Verified: dropping the delay to 0ms leaves both assertions
+    // above green and fails here at ~126ms.
     expect(performance.now() - started).toBeGreaterThan(200);
   });
 });
