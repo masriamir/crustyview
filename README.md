@@ -39,7 +39,9 @@ silently does nothing.
 Dual-licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option
 (`license = "MIT OR Apache-2.0"`). GitHub's sidebar reports this as "NOASSERTION" because its
 detector does not resolve dual licenses — the crate manifests carry the authoritative
-declaration.
+declaration. The header wordmark bundles a modified subset of a third-party font under its
+own CC BY-SA 4.0 license — see
+[`web/src/assets/fonts/NOTICE.md`](web/src/assets/fonts/NOTICE.md) for attribution.
 
 ---
 

@@ -513,6 +513,10 @@ test.describe('header wordmark', () => {
     await expect(h1).toHaveText('crustyview');
     await expect(h1).toHaveCSS('text-transform', 'uppercase');
     await expect(h1).toHaveCSS('font-size', '32px');
+    // Regular weight only — an h1 defaults to bold, and the face ships only a
+    // regular weight, so a bold declaration would smear the pixel grid with
+    // synthetic emboldening while leaving the wordmark's width unchanged.
+    await expect(h1).toHaveCSS('font-weight', '400');
 
     // 10 glyphs x 0.5625 em x 32px = 180px, only if our font actually drew them.
     const width = await h1.evaluate((el) => el.getBoundingClientRect().width);
@@ -520,7 +524,7 @@ test.describe('header wordmark', () => {
     expect(width).toBeLessThan(181);
 
     // Diagnostic: separates "never loaded" from "loaded but not applied".
-    const loaded = await page.evaluate(() => document.fonts.check('32px "Px437 IBM VGA"'));
+    const loaded = await page.evaluate(() => document.fonts.check('32px "Web437 IBM VGA"'));
     expect(loaded, 'the subset font should be loaded').toBe(true);
   });
 });

@@ -1,9 +1,9 @@
-/* Px437 IBM VGA 9x16 by VileR, CC BY-SA 4.0 — see
-   src/assets/fonts/NOTICE.md. Subset to the wordmark's letters in both cases:
-   the title is uppercased with `text-transform`, so the capitals are what the
-   browser actually draws. */
+/*! Web437 IBM VGA 9x16 by VileR — Creative Commons Attribution-ShareAlike 4.0
+   International (CC BY-SA 4.0), https://creativecommons.org/licenses/by-sa/4.0/.
+   Modified from the original: subset to the wordmark's letters in both cases.
+   Full attribution and the subsetting command: src/assets/fonts/NOTICE.md. */
 @font-face {
-  font-family: 'Px437 IBM VGA';
+  font-family: 'Web437 IBM VGA';
   src: url('./assets/fonts/px437-ibm-vga-9x16-subset.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
@@ -46,7 +46,7 @@
   --map2d-player: #1f7a4d;
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-display: 'Px437 IBM VGA', var(--font-ui);
+  --font-display: 'Web437 IBM VGA', var(--font-ui);
   --radius: 6px;
   --transition: 150ms ease;
   --touch-target: 44px;

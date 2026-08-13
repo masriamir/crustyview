@@ -1,6 +1,6 @@
 # Third-party font
 
-`px437-ibm-vga-9x16-subset.woff2` is a **subset** of **Px437 IBM VGA 9x16** from
+`px437-ibm-vga-9x16-subset.woff2` is a **subset** of **Web437 IBM VGA 9x16** from
 [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) v2.2,
 by **VileR**.
 
@@ -12,8 +12,9 @@ by **VileR**.
 This file has been **modified**: the glyph set was subset to the ten letters of the
 `crustyview` wordmark in both cases, and the format converted to WOFF2. Subsetting is a
 transformation rather than a format change, so this file is Adapted Material and remains
-under CC BY-SA 4.0 — it is **not** covered by the repository's MIT license. ShareAlike is
-scoped to this file and does not extend to the surrounding source.
+under CC BY-SA 4.0 — it is **not** covered by the repository's own license (MIT OR
+Apache-2.0). ShareAlike is scoped to this file and does not extend to the surrounding
+source.
 
 Reproduce it with:
 

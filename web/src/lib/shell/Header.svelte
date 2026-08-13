@@ -37,7 +37,7 @@
   }
   h1 {
     margin: 0;
-    /* Px437 has an exact 16-unit grid: only multiples of 16px land on whole
+    /* Web437 has an exact 16-unit grid: only multiples of 16px land on whole
        pixels. 32px is the desktop size; see the compact override below. */
     font-family: var(--font-display);
     font-size: 32px;
