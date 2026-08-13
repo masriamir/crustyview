@@ -3,6 +3,7 @@ import { flushSync } from 'svelte';
 import type { Map2d as Map2dPayload } from '../../format';
 import { effectiveGridSize, type GridSize } from './grid';
 import { fitTransform } from './transform';
+import { installMapSizing, painted } from './browser-test-helpers';
 
 /**
  * Regression test for #127, in the browser tier (#129).
@@ -82,16 +83,9 @@ const TOO_SMALL = `Grid ${BASE_GRID}, too small to draw at this zoom`;
 
 // `.map2d` takes its size from the layout around it, which a mounted-alone
 // component does not have. Pin the box the fit is computed from so the zoom
-// arithmetic below is the same on every machine. Sizing `document.body` instead
-// would NOT work: the canvas is absolutely positioned and out of flow, leaving
-// the container collapsed onto its 12rem `min-height`, which starts the grid
-// already undrawable and makes the whole test vacuous. Scoped Svelte styles keep
-// the authored class name, so this plain selector still matches. Never removed,
-// deliberately: browser mode gives each test file its own page, and the selector
-// names a class only this component uses.
-const sizing = document.createElement('style');
-sizing.textContent = '.map2d { width: 800px; height: 600px; }';
-document.head.append(sizing);
+// arithmetic below is the same on every machine. See browser-test-helpers.ts
+// for why this targets `.map2d` and not `document.body`.
+installMapSizing();
 
 beforeEach(() => {
   // `mapPrefs` is a singleton and tests in a file share one page, so state the
@@ -106,23 +100,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
-
-/** Wait for the ResizeObserver -> fit -> rAF draw chain to settle. */
-async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
-  for (let i = 0; i < 60; i++) {
-    await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const ctx = canvas.getContext('2d');
-    if (!ctx || canvas.width === 0) continue;
-    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const [r0, g0, b0, a0] = data;
-    for (let p = 4; p < data.length; p += 4) {
-      if (data[p] !== r0 || data[p + 1] !== g0 || data[p + 2] !== b0 || data[p + 3] !== a0) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 interface Mounted {
   canvas: HTMLCanvasElement;
