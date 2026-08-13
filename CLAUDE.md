@@ -183,13 +183,15 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   - Deliberately **not** solved with an `ignore:` entry in `codecov.yml`. The omission is
     structural rather than chosen, and an `ignore:` would also silence genuinely measurable
     code added to that crate later — turning a visible gap into a permanent one.
-- **The second structural blind spot: no check here can see a Svelte timing/lifecycle bug.**
-  `svelte-check` proves types line up, `vitest` covers pure modules, and Playwright drives the
-  built app — none of them observes reactivity wiring at unit granularity; Playwright can drive
-  it, but only through the whole built app, never a component in isolation. There is **no Svelte
-  component-test infrastructure**, and adding it is not a quick `@testing-library/svelte`
-  install: every component in the map area draws to a canvas, and `happy-dom` implements no 2D
-  context, so mounting one meaningfully needs a real browser. Tracked by **#129**.
+- **The second structural blind spot now has a compensating tier: `npm run test:browser`.**
+  `svelte-check` proves types line up, `npm test` (the `happy-dom` tier) covers pure modules, and
+  Playwright drives the built app — none of them observes reactivity wiring at unit granularity;
+  Playwright can drive it, but only through the whole built app, never a component in isolation.
+  Reproducing a lifecycle bug needs a real canvas 2D context, which `happy-dom` implements none
+  of, *and* fake timers, together — the combination no earlier tier offered. `vitest.config.ts`
+  now defines a second project (`browser`) that runs `src/**/*.browser.test.ts` under real
+  headless Chromium via `@vitest/browser-playwright`; CI runs it as the `web-browser-test` job.
+  Tracked by **#129**.
   - **Three defects passed a fully green gate** in two consecutive PRs, all caught by review
     rather than by a check, and none of which reached `main`: a label that could render an
     impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
@@ -197,14 +199,29 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     live-region announcement canceled mid-gesture (its debounce cleanup was wired to the redraw
     `$effect`, which tracks `transform` and so re-runs on every wheel tick — Svelte runs a
     cleanup before each re-run, so the announcement was lost rather than delayed, #127). The
-    first two were fixed before #128 merged; the third, before #127's PR opened.
-  - **The compensating controls are review and extraction**, and the second one is cheap:
-    pushing display logic out of components into pure modules moves it somewhere `vitest` can
-    reach. `gridLabel`'s tests caught the #128 stale-value regression, and `gridDrawnSuffix` in
+    first two were fixed before #128 merged; the third, before #127's PR opened. All three
+    predate the browser tier; it exists because of them.
+  - **Reach for the browser tier when the bug is about *when* something happens, not what it
+    computes:** effect wiring, cleanup timing, rAF-driven draws. `grid-announcement.browser.test.ts`
+    is the worked example — it zooms out until the grid crosses below its 8px drawable floor,
+    keeps zooming, and asserts the debounced announcement still arrives; verified to fail when
+    #127's original (buggy) wiring is restored. `map2d-mount.browser.test.ts` is the template to
+    crib a new test from — it mounts the real `Map2d` against a mocked `wad` store, sizes it, and
+    asserts both that it paints more than a background fill and that the fit actually resolved.
+  - **Reach for extraction first when the logic is pure** — it stays the first thing to try
+    because it is the only option that also improves the code it tests, and it is cheaper than a
+    browser test: no Chromium boot, and it lands in the fast `happy-dom` tier instead. `gridLabel`'s
+    tests caught the #128 stale-value regression, and `gridDrawnSuffix` in
     `web/src/lib/views/map2d/grid.ts` was written test-first for the same reason — its
     implementation passed on the first attempt, so extraction *prevented* a regression there
-    rather than catching one. **Prefer a pure function over a component-local `$derived`
-    whenever the logic is worth a test.**
+    rather than catching one. **Prefer a pure function over a component-local `$derived` whenever
+    the logic is worth a test; reach for the browser tier only once the bug genuinely depends on
+    real timing or a real canvas.**
+  - **What the browser tier still does not cover:** it only sees what someone writes a test for.
+    It is not a net that acquires coverage on its own — the three defects above all shipped
+    before it existed and were caught by review, not by any check, and a differently-shaped
+    lifecycle bug can slip through the same way today if nobody thinks to write a
+    `*.browser.test.ts` for it.
   - **Reach for the E2E harness before concluding something is untestable — but check what a
     fixture actually reproduces before citing it as evidence.** `web/e2e/helpers.ts` has
     `loadBrokenMapWad`, a PWAD whose `MAP01` is missing `VERTEXES` — a real failed-assembly
