@@ -497,3 +497,30 @@ test('theme toggle persists across reload', async ({ page }) => {
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', flipped);
 });
+
+// Outside the fixture-gated `describe` above: the header renders before any
+// WAD is opened, so gating this on Freedoom would make it skip silently on a
+// machine without fixtures.
+test.describe('header wordmark', () => {
+  test('renders in the pixel font, not a fallback', async ({ page }) => {
+    await gotoApp(page);
+    await page.evaluate(() => document.fonts.ready);
+
+    const h1 = page.getByRole('heading', { name: 'crustyview' });
+    await expect(h1).toBeVisible();
+
+    // The DOM text is the product name; the capitals are presentation only.
+    await expect(h1).toHaveText('crustyview');
+    await expect(h1).toHaveCSS('text-transform', 'uppercase');
+    await expect(h1).toHaveCSS('font-size', '32px');
+
+    // 10 glyphs x 0.5625 em x 32px = 180px, only if our font actually drew them.
+    const width = await h1.evaluate((el) => el.getBoundingClientRect().width);
+    expect(width).toBeGreaterThan(179);
+    expect(width).toBeLessThan(181);
+
+    // Diagnostic: separates "never loaded" from "loaded but not applied".
+    const loaded = await page.evaluate(() => document.fonts.check('32px "Px437 IBM VGA"'));
+    expect(loaded, 'the subset font should be loaded').toBe(true);
+  });
+});

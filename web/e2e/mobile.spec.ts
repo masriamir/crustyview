@@ -82,3 +82,28 @@ test.describe('mobile shell smoke', () => {
     expect(pageErrors).toEqual([]);
   });
 });
+
+// Outside the fixture-gated `describe` above: the header renders before any
+// WAD is opened, so gating this on Freedoom would make it skip silently on a
+// machine without fixtures.
+test.describe('header wordmark', () => {
+  test('the compact header fits without overflowing', async ({ page }) => {
+    // 390px (the project default) has enough slack that a 32px wordmark fits,
+    // so this assertion would be vacuous there. 360px is where it bites.
+    await page.setViewportSize({ width: 360, height: 800 });
+    await gotoApp(page);
+    await page.evaluate(() => document.fonts.ready);
+
+    const h1 = page.getByRole('heading', { name: 'crustyview' });
+    await expect(h1).toHaveCSS('font-size', '16px');
+
+    // At 32px the wordmark is 180px, which overflows 360px once the Open
+    // button (70px), the theme toggle (44px) and three 1rem gaps are counted.
+    const header = page.locator('header.header');
+    const { scrollWidth, clientWidth } = await header.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+});
