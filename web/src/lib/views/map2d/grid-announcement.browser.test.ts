@@ -58,7 +58,12 @@ const { mapPrefs } = await import('../../stores/mapPrefs.svelte');
 /** Mirrors of the component's own constants — a drift here is a real failure. */
 const ZOOM_STEP = 1.1;
 const GRID_ANNOUNCE_DELAY_MS = 500;
-/** One faked animation frame; sinon's fake `requestAnimationFrame` runs at 16 ms. */
+/**
+ * How far to advance per gesture tick. Sinon's fake `requestAnimationFrame`
+ * fires on a 16 ms cadence, so 20 ms is a deliberate margin over one frame —
+ * it guarantees at least one rAF callback runs per tick rather than landing
+ * exactly on a frame boundary. Not a mirror of any constant in the component.
+ */
 const FRAME_MS = 20;
 
 const BASE_GRID: GridSize = 32;
