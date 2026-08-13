@@ -146,6 +146,14 @@ rows/cells behind these two browsers, and both must stay responsive on phones.
   no texture-art chrome — the flavor stays in the accents, the focus stays on
   the data.
 
+  > **Amendment (2026-08-13, #56):** narrows the "no pixel fonts" clause. The
+  > header `h1` wordmark now sets a single pixel display font
+  > (`--font-display`, a self-hosted Web437 IBM VGA 9x16 subset) — the header
+  > title only. The original constraint still holds everywhere else: body
+  > copy, the sidebar tree, the status bar, and map chrome (lump names, sizes,
+  > offsets, coordinates) remain on `--font-ui` / `--font-mono` as decided
+  > above.
+
 ### Mobile — compact width is a first-class layout
 
 Below the compact breakpoint (~768 px), the shell swaps — not shrinks:

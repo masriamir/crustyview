@@ -1,3 +1,17 @@
+/*! Web437 IBM VGA 9x16 by VileR — Creative Commons Attribution-ShareAlike 4.0
+   International (CC BY-SA 4.0), https://creativecommons.org/licenses/by-sa/4.0/.
+   Modified from the original: subset to the wordmark's letters in both cases.
+   Full attribution and the subsetting command: src/assets/fonts/NOTICE.md. */
+@font-face {
+  font-family: 'Web437 IBM VGA';
+  src: url('./assets/fonts/px437-ibm-vga-9x16-subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  /* One word, ~888 bytes, same origin — blocking paint on it buys nothing, and
+     a brief fallback beats an invisible title. */
+  font-display: swap;
+}
+
 /* ---- Design tokens (ADR-0003) — components consume tokens only. ---- */
 :root {
   color-scheme: light;
@@ -32,6 +46,7 @@
   --map2d-player: #1f7a4d;
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: 'Web437 IBM VGA', var(--font-ui);
   --radius: 6px;
   --transition: 150ms ease;
   --touch-target: 44px;

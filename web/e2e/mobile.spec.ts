@@ -82,3 +82,34 @@ test.describe('mobile shell smoke', () => {
     expect(pageErrors).toEqual([]);
   });
 });
+
+// Outside the fixture-gated `describe` above: the header renders before any
+// WAD is opened, so gating this on Freedoom would make it skip silently on a
+// machine without fixtures.
+test.describe('header wordmark', () => {
+  test('the compact header fits without overflowing', async ({ page }) => {
+    // At 32px the header needs 356px, so 360px and the project's default
+    // 390px both fit and the assertion could never fail there. 320px is the
+    // standard minimum mobile width and sits well inside the failing region.
+    await page.setViewportSize({ width: 320, height: 800 });
+    await gotoApp(page);
+    // Await inside the page: `document.fonts.ready` resolves to a FontFaceSet,
+    // which does not cross the Playwright boundary as a useful value.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+
+    const h1 = page.getByRole('heading', { name: 'crustyview' });
+    await expect(h1).toHaveCSS('font-size', '16px');
+
+    // At 32px the wordmark is 180px and the header needs 356px in total,
+    // which pushes the theme toggle off-screen on any viewport at or below
+    // ~340px.
+    const header = page.locator('header.header');
+    const { scrollWidth, clientWidth } = await header.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+});
