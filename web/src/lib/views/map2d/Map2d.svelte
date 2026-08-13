@@ -126,6 +126,11 @@
    */
   let gridDrawable: boolean | null = null;
   /**
+   * The map the announcement baseline belongs to. Plain `let`, like
+   * `gridDrawable` — only ever read and written inside `draw()`.
+   */
+  let announcedFor: string | null = null;
+  /**
    * Debounce window: collapses a rapid re-crossing of the drawable boundary
    * (e.g. a pinch that overshoots and corrects) into a single announcement of
    * wherever the zoom ends up. Ticks that don't cross back don't restart it,
@@ -390,6 +395,24 @@
     // (no canvas, no context, or no map/transform) reports "nothing known"
     // rather than leaving a stale value from whatever was drawn last (#76).
     drawnGridSize = gridStep;
+    // A map switch is not a grid transition. `Map2d` is reused across an
+    // in-place switch, so the outgoing map's baseline would otherwise compare
+    // against the incoming map's initial state and report a change that never
+    // happened to the grid — and only from the second map onward, since the
+    // first has no baseline at all. Clearing the live region is load-bearing,
+    // not tidiness: both maps produce the identical "too small" string, so a
+    // stale value would make the next genuine crossing a no-op write that
+    // announces nothing (#131).
+    if (name !== announcedFor) {
+      announcedFor = name;
+      gridDrawable = null;
+      gridAnnouncement = '';
+      gridAnnounceText = '';
+      if (gridAnnounceTimer !== 0) {
+        window.clearTimeout(gridAnnounceTimer);
+        gridAnnounceTimer = 0;
+      }
+    }
     if (mapPrefs.showGrid) {
       const drawable = gridStep !== null;
       const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
@@ -734,7 +757,7 @@
 
   // Not the redraw effect's teardown: that effect tracks `transform` and so re-runs
   // on every wheel tick, pinch move, pan and zoom keypress, and Svelte runs an
-  // effect's cleanup before each re-run. Cancelling there killed the pending
+  // effect's cleanup before each re-run. Canceling there killed the pending
   // announcement mid-gesture — the exact case it exists to cover (#127).
   onDestroy(() => {
     if (gridAnnounceTimer !== 0) {
