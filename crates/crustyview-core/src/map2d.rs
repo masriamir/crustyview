@@ -6,7 +6,7 @@
 use crate::assemble::assemble_view;
 use crate::error::sanitize;
 use crustywad::Wad;
-use crustywad::map::{MapFormat, SidedefIdx};
+use crustywad::map::{Map, MapFormat, SidedefIdx};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -27,6 +27,12 @@ const TELEPORT_SPECIALS: [i32; 20] = [
 /// they exit the level rather than teleporting within it. `76` `TeleportOther`
 /// relocates a different actor, so it classifies but never yields a link.
 const HEXEN_TELEPORT_SPECIALS: [i32; 4] = [70, 71, 76, 215];
+
+/// Doom-space teleport specials whose `args[0]` names a destination **sector**.
+const DOOM_SECTOR_TELEPORTS: [i32; 12] = [39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 268, 269];
+/// Doom-space teleport specials whose `args[0]` names a destination **linedef**
+/// (Boom's line-to-line variants).
+const DOOM_LINE_TELEPORTS: [i32; 8] = [243, 244, 262, 263, 264, 265, 266, 267];
 
 /// UDMF namespaces that keep the Doom special number space.
 const DOOM_NAMESPACES: [&str; 3] = ["doom", "heretic", "strife"];
@@ -65,6 +71,183 @@ fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>)
         //    invisible, so check this match by hand when the crustywad pin bumps.
         MapFormat::Doom64 | _ => false,
     }
+}
+
+/// A teleport source and its destination, in map units. Grouped: one link per
+/// (destination, source sector), so a four-line teleporter pad draws once
+/// rather than four times.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct TeleportLink {
+    /// The source pad's center.
+    pub from: [f64; 2],
+    /// Where it lands.
+    pub to: [f64; 2],
+}
+
+/// The minimal view of a linedef that link building needs. A projection rather
+/// than crustywad's `MapLinedef` so the builder is a pure function over owned
+/// data — every case, including Hexen, is testable without WAD bytes.
+pub(crate) struct LinkLine {
+    pub start: (f64, f64),
+    pub end: (f64, f64),
+    pub special: i32,
+    pub args: [i32; 5],
+    pub id: i32,
+    /// Sector indices behind the right and left sidedefs.
+    pub sectors: (Option<usize>, Option<usize>),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct LinkSector {
+    pub tag: i32,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct LinkThing {
+    pub id: i32,
+    pub x: f64,
+    pub y: f64,
+}
+
+pub(crate) struct LinkInputs<'a> {
+    pub lines: &'a [LinkLine],
+    pub sectors: &'a [LinkSector],
+    pub things: &'a [LinkThing],
+    pub format: MapFormat,
+    pub namespace: Option<&'a str>,
+}
+
+/// What a teleport source points at, before it is resolved to a point.
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+enum LinkTarget {
+    /// A sector carrying this tag.
+    Sector(i32),
+    /// A linedef carrying this tag in `args[0]` (Boom line-to-line).
+    LineByTag(i32),
+    /// A linedef carrying this id (Hexen `215`).
+    LineById(i32),
+    /// A thing carrying this tid (Hexen `70`/`71`).
+    Thing(i32),
+}
+
+/// Where a teleport source points, or `None` when the special yields no link.
+/// Never reads beyond `args[1]`: the per-special sector-tag fallback arguments
+/// sit at a different index in each Hexen special, and a wrong index mislinks
+/// silently rather than failing.
+fn link_target(line: &LinkLine, format: MapFormat, namespace: Option<&str>) -> Option<LinkTarget> {
+    if !is_teleport_special(line.special, format, namespace) {
+        return None;
+    }
+    let doom_space = matches!(format, MapFormat::Doom)
+        || matches!(namespace, Some(ns) if DOOM_NAMESPACES.contains(&ns));
+    if doom_space {
+        if DOOM_SECTOR_TELEPORTS.contains(&line.special) {
+            return Some(LinkTarget::Sector(line.args[0]));
+        }
+        if DOOM_LINE_TELEPORTS.contains(&line.special) {
+            return Some(LinkTarget::LineByTag(line.args[0]));
+        }
+        return None;
+    }
+    match line.special {
+        70 | 71 => Some(LinkTarget::Thing(line.args[0])),
+        215 => Some(LinkTarget::LineById(line.args[1])),
+        // `76` TeleportOther relocates a different actor than the one crossing,
+        // so a source->destination link would misrepresent it.
+        _ => None,
+    }
+}
+
+/// The midpoint of a line.
+fn midpoint(l: &LinkLine) -> [f64; 2] {
+    [
+        f64::midpoint(l.start.0, l.end.0),
+        f64::midpoint(l.start.1, l.end.1),
+    ]
+}
+
+/// The mean of every endpoint of `lines`, or `None` when there are none.
+fn centroid(points: &[(f64, f64)]) -> Option<[f64; 2]> {
+    if points.is_empty() {
+        return None;
+    }
+    // A map's point count is bounded by its lump sizes (at most tens of
+    // thousands of vertices), nowhere near f64's 52-bit mantissa.
+    #[allow(clippy::cast_precision_loss)]
+    let n = points.len() as f64;
+    let (sx, sy) = points
+        .iter()
+        .fold((0.0, 0.0), |(ax, ay), (x, y)| (ax + x, ay + y));
+    Some([sx / n, sy / n])
+}
+
+/// Resolve a target to a point. Lowest index wins when several candidates
+/// share a tag: deterministic, and close to engine behavior. Tag/id `0` never
+/// matches — it is the binary "no tag" value, so all four zero-valued variants
+/// share this arm (`match_same_arms` would otherwise flag it split in two, and
+/// this repo runs clippy with `-D warnings`).
+fn resolve(target: LinkTarget, inp: &LinkInputs) -> Option<[f64; 2]> {
+    match target {
+        LinkTarget::Sector(0)
+        | LinkTarget::LineByTag(0)
+        | LinkTarget::LineById(0)
+        | LinkTarget::Thing(0) => None,
+        LinkTarget::Sector(tag) => {
+            let idx = inp.sectors.iter().position(|s| s.tag == tag)?;
+            // A sector's boundary vertices are the endpoints of every line with
+            // a sidedef facing it, either side. No polygon, so the
+            // self-referencing-sector problem never arises (#49).
+            let points: Vec<(f64, f64)> = inp
+                .lines
+                .iter()
+                .filter(|l| l.sectors.0 == Some(idx) || l.sectors.1 == Some(idx))
+                .flat_map(|l| [l.start, l.end])
+                .collect();
+            centroid(&points)
+        }
+        LinkTarget::LineByTag(tag) => inp
+            .lines
+            .iter()
+            .find(|l| l.args[0] == tag && !DOOM_LINE_TELEPORTS.contains(&l.special))
+            .map(midpoint),
+        LinkTarget::LineById(id) => inp.lines.iter().find(|l| l.id == id).map(midpoint),
+        LinkTarget::Thing(tid) => inp.things.iter().find(|t| t.id == tid).map(|t| [t.x, t.y]),
+    }
+}
+
+/// A link group's key: its target, the source sector behind the grouped
+/// lines (when they share one), and a per-line fallback that keeps a
+/// sideless line from being merged into an unrelated group (see
+/// [`build_teleport_links`]).
+type LinkGroupKey = (LinkTarget, Option<usize>, usize);
+
+/// Build one link per (destination, source sector). The source point is the
+/// centroid of that group's line endpoints, so a four-line pad draws a single
+/// link from its middle rather than four overlapping ones.
+pub(crate) fn build_teleport_links(inp: &LinkInputs) -> Vec<TeleportLink> {
+    // Keyed by (target, source sector). A line with neither sidedef groups
+    // alone under its own index, so it still draws rather than being dropped.
+    let mut groups: Vec<(LinkGroupKey, Vec<(f64, f64)>)> = Vec::new();
+    for (i, l) in inp.lines.iter().enumerate() {
+        let Some(target) = link_target(l, inp.format, inp.namespace) else {
+            continue;
+        };
+        let sector = l.sectors.0.or(l.sectors.1);
+        let key = (target, sector, if sector.is_some() { 0 } else { i });
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, pts)) => pts.extend([l.start, l.end]),
+            None => groups.push((key, vec![l.start, l.end])),
+        }
+    }
+    groups
+        .into_iter()
+        .filter_map(|((target, _, _), pts)| {
+            Some(TeleportLink {
+                from: centroid(&pts)?,
+                to: resolve(target, inp)?,
+            })
+        })
+        .collect()
 }
 
 /// Vanilla damaging-floor sector specials: 4/11/16 (−20%), 5 (−10%), 7 (−5%).
@@ -189,6 +372,10 @@ pub struct Map2d {
     pub secret_sectors: usize,
     /// Count of sectors classifying as damaging.
     pub damaging_sectors: usize,
+    /// Teleport source-to-destination links, one per teleporter. Omitted from
+    /// JSON when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<TeleportLink>,
 }
 
 /// Flatten the named map group for 2D drawing.
@@ -265,6 +452,7 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
             })
         })
         .collect();
+    let teleport_links = teleport_links_for(&map, format, namespace);
     let things: Vec<Thing2d> = map
         .things()
         .iter()
@@ -283,6 +471,56 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         things,
         secret_sectors,
         damaging_sectors,
+        links: teleport_links,
+    })
+}
+
+/// Project `map`'s linedefs, sectors, and things into the minimal shape
+/// [`build_teleport_links`] needs, then build the links. Split out of
+/// [`map2d`] to keep that function under clippy's line-count lint.
+fn teleport_links_for(map: &Map, format: MapFormat, namespace: Option<&str>) -> Vec<TeleportLink> {
+    let vertices = map.vertices();
+    let sidedefs = map.sidedefs();
+    let link_lines: Vec<LinkLine> = map
+        .linedefs()
+        .iter()
+        .filter_map(|l| {
+            let a = vertices.get(l.start.0)?;
+            let b = vertices.get(l.end.0)?;
+            let sector_of = |side: Option<SidedefIdx>| {
+                side.and_then(|idx| sidedefs.get(idx.0))
+                    .map(|sd| sd.sector.0)
+            };
+            Some(LinkLine {
+                start: (a.x, a.y),
+                end: (b.x, b.y),
+                special: l.special.special,
+                args: l.special.args,
+                id: l.id,
+                sectors: (sector_of(l.right), sector_of(l.left)),
+            })
+        })
+        .collect();
+    let link_sectors: Vec<LinkSector> = map
+        .sectors()
+        .iter()
+        .map(|s| LinkSector { tag: s.tag })
+        .collect();
+    let link_things: Vec<LinkThing> = map
+        .things()
+        .iter()
+        .map(|t| LinkThing {
+            id: t.id,
+            x: t.x,
+            y: t.y,
+        })
+        .collect();
+    build_teleport_links(&LinkInputs {
+        lines: &link_lines,
+        sectors: &link_sectors,
+        things: &link_things,
+        format,
+        namespace,
     })
 }
 
@@ -322,6 +560,11 @@ fn bounds_of(lines: &[Line2d], things: &[Thing2d]) -> Bounds {
 }
 
 #[cfg(test)]
+// The link tests below assert exact `TeleportLink` coordinates computed from
+// centroids/midpoints of hand-picked, power-of-two-friendly inputs — the
+// arithmetic is exact in `f64`, so strict equality is the right check, not a
+// fragile one.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
     use crate::fixtures::{broken_pwad, build_pwad, dangling_blockmap_pwad, tiny_pwad};
@@ -590,5 +833,229 @@ mod tests {
         assert!(!json.contains("\"damaging_sector\":false"));
         assert!(json.contains("\"secret_sectors\":2"));
         assert!(json.contains("\"damaging_sectors\":2"));
+    }
+
+    fn line(
+        start: (f64, f64),
+        end: (f64, f64),
+        special: i32,
+        args: [i32; 5],
+        sector: Option<usize>,
+    ) -> LinkLine {
+        LinkLine {
+            start,
+            end,
+            special,
+            args,
+            id: 0,
+            sectors: (sector, None),
+        }
+    }
+
+    /// A classic pad: four lines around a square, all the same special and tag,
+    /// all facing sector 1. The destination is sector 2, tagged 1.
+    fn pad_inputs() -> (Vec<LinkLine>, Vec<LinkSector>, Vec<LinkThing>) {
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((64.0, 0.0), (64.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((64.0, 64.0), (0.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((0.0, 64.0), (0.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            // The destination sector's own boundary — not a teleport source.
+            line((200.0, 200.0), (300.0, 200.0), 0, [0; 5], Some(2)),
+            line((300.0, 200.0), (300.0, 300.0), 0, [0; 5], Some(2)),
+            line((300.0, 300.0), (200.0, 300.0), 0, [0; 5], Some(2)),
+            line((200.0, 300.0), (200.0, 200.0), 0, [0; 5], Some(2)),
+        ];
+        let sectors = vec![
+            LinkSector { tag: 0 },
+            LinkSector { tag: 0 },
+            LinkSector { tag: 1 },
+        ];
+        (lines, sectors, Vec::new())
+    }
+
+    #[test]
+    fn a_four_line_pad_yields_one_link_from_its_center() {
+        let (lines, sectors, things) = pad_inputs();
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            1,
+            "four lines of one pad collapse to one link"
+        );
+        assert_eq!(result[0].from, [32.0, 32.0], "the pad's center");
+        assert_eq!(result[0].to, [250.0, 250.0], "the tagged sector's center");
+    }
+
+    #[test]
+    fn a_pad_whose_lines_face_outward_still_yields_one_link() {
+        // Same pad, but every line's facing sidedef is on the other side. The
+        // grouping must not depend on which way the pad's lines face.
+        let (mut lines, sectors, things) = pad_inputs();
+        for l in lines.iter_mut().take(4) {
+            l.sectors = (None, Some(1));
+        }
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from, [32.0, 32.0]);
+    }
+
+    #[test]
+    fn an_unmatched_or_zero_tag_yields_no_link() {
+        let (mut lines, sectors, things) = pad_inputs();
+        for l in lines.iter_mut().take(4) {
+            l.args = [99, 0, 0, 0, 0]; // no sector carries tag 99
+        }
+        let unmatched = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(unmatched.is_empty(), "an unmatched tag draws nothing");
+
+        for l in lines.iter_mut().take(4) {
+            l.args = [0; 5]; // tag 0 is the binary "no tag" value
+        }
+        let zero = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(zero.is_empty(), "tag 0 never matches");
+    }
+
+    #[test]
+    fn several_sectors_sharing_a_tag_resolve_to_the_lowest_index() {
+        let (lines, mut sectors, things) = pad_inputs();
+        sectors.push(LinkSector { tag: 1 }); // a second sector tagged 1
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].to, [250.0, 250.0], "sector 2 wins over sector 3");
+    }
+
+    #[test]
+    fn boom_line_to_line_targets_a_line_by_tag() {
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 243, [7, 0, 0, 0, 0], Some(1)),
+            line((100.0, 0.0), (100.0, 100.0), 0, [7, 0, 0, 0, 0], Some(2)),
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from, [32.0, 0.0], "the source line's midpoint");
+        assert_eq!(result[0].to, [100.0, 50.0], "the target line's midpoint");
+    }
+
+    #[test]
+    fn hexen_teleport_targets_a_thing_by_tid_exactly() {
+        let lines = vec![line((0.0, 0.0), (64.0, 0.0), 70, [5, 0, 0, 0, 0], Some(1))];
+        let things = vec![
+            LinkThing {
+                id: 4,
+                x: 10.0,
+                y: 10.0,
+            },
+            LinkThing {
+                id: 5,
+                x: 300.0,
+                y: 400.0,
+            },
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 2],
+            things: &things,
+            format: MapFormat::Hexen,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].to,
+            [300.0, 400.0],
+            "Hexen names its destination thing, so the link is exact"
+        );
+    }
+
+    #[test]
+    fn hexen_teleport_other_classifies_but_never_links() {
+        let lines = vec![line((0.0, 0.0), (64.0, 0.0), 76, [5, 0, 0, 0, 0], Some(1))];
+        let things = vec![LinkThing {
+            id: 5,
+            x: 300.0,
+            y: 400.0,
+        }];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 2],
+            things: &things,
+            format: MapFormat::Hexen,
+            namespace: None,
+        });
+        assert!(
+            is_teleport_special(76, MapFormat::Hexen, None),
+            "TeleportOther is still a teleport source"
+        );
+        assert!(
+            result.is_empty(),
+            "but it relocates another actor, so a source->destination link would misrepresent it"
+        );
+    }
+
+    #[test]
+    fn teleport_line_matches_the_line_id_not_the_tag() {
+        // The decoy carries tag 9 in args[0]; the real target carries id 9.
+        // An implementation reading the wrong field picks the decoy.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, 9, 0, 0, 0], Some(1));
+        source.id = 1;
+        let mut decoy = line((500.0, 500.0), (600.0, 500.0), 0, [9, 0, 0, 0, 0], Some(2));
+        decoy.id = 0;
+        let mut target = line((100.0, 0.0), (100.0, 100.0), 0, [0; 5], Some(2));
+        target.id = 9;
+        let links = build_teleport_links(&LinkInputs {
+            lines: &[source, decoy, target],
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Hexen,
+            namespace: None,
+        });
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].to, [100.0, 50.0], "matched on id, not on args[0]");
+    }
+
+    #[test]
+    fn tiny_pwad_teleports_have_no_destination() {
+        let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
+        assert_eq!(m.lines.iter().filter(|l| l.teleport).count(), 2);
+        assert!(
+            m.links.is_empty(),
+            "its teleport lines are tagged 1 but nothing carries that tag"
+        );
     }
 }
