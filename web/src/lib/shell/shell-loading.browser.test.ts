@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { flushSync } from 'svelte';
 
 /**
  * #125: the content behind `LoadingOverlay` must stop being keyboard-reachable
@@ -6,20 +7,14 @@ import { describe, it, expect, vi } from 'vitest';
  * point: the overlay is deliberately `visibility: hidden` for its first 250ms
  * (#57), so inertness that starts with the load would leave the app dead but
  * visible on every load, which is the bug that delay exists to prevent.
+ *
+ * The mock below is rune-backed (`__fixtures__/wad-mock.svelte.ts`) rather
+ * than a plain object literal, because the second test needs to mutate
+ * `wad.phase` mid-test and have `Shell`'s `$derived`s actually re-run — a
+ * plain object handed to `vi.mock`'s inline factory cannot do that; runes
+ * are unavailable in a bare `.ts` module.
  */
-vi.mock('../stores/wad.svelte', () => ({
-  wad: {
-    phase: 'loading',
-    // Non-null so Shell's `showContent` is true: the outgoing WAD's view stays
-    // mounted while the replacement loads, which is what the overlay covers.
-    summary: { kind: 'PWAD', lump_count: 6, map_count: 1, game: null },
-    mapNames: ['MAP01'],
-    fileName: 'outgoing.wad',
-    loadingFileName: 'incoming.wad',
-    error: null,
-    mapStats: () => null,
-  },
-}));
+vi.mock('../stores/wad.svelte', async () => await import('./__fixtures__/wad-mock.svelte'));
 
 // Unlike the map2d browser tests, mounting the whole `Shell` also mounts
 // `StatusBar`, which calls the real wasm module's `version()` unconditionally
@@ -30,9 +25,17 @@ vi.mock('../../wasm/crustyview_web.js', () => ({ version: () => '0.0.0-test' }))
 
 const { render } = await import('vitest-browser-svelte');
 const Shell = (await import('./Shell.svelte')).default;
+const { wad, resetWadMock } = await import('./__fixtures__/wad-mock.svelte');
 
 // No sizing helper here, unlike the map2d tests: `Shell` is `height: 100dvh`,
 // so it sizes itself from the viewport, and nothing under test draws to canvas.
+
+// `wad` is a module-level singleton shared by every test in this file (the
+// second test mutates it mid-run), so restore its starting values before
+// each test rather than relying on test order.
+beforeEach(() => {
+  resetWadMock();
+});
 
 describe('main content while a WAD loads', () => {
   it('goes inert only once the overlay has actually revealed', async () => {
@@ -59,5 +62,35 @@ describe('main content while a WAD loads', () => {
     // out the delay. Verified: dropping the delay to 0ms leaves both assertions
     // above green and fails here at ~126ms.
     expect(performance.now() - started).toBeGreaterThan(200);
+  });
+
+  it('clears inertness when the first overlay unmounts, so a second load does not start already-inert', async () => {
+    const screen = await render(Shell);
+    const main = screen.container.querySelector('main.main');
+    expect(main, 'Shell should render a main element').not.toBeNull();
+
+    await expect
+      .poll(() => (main as HTMLElement).hasAttribute('inert'), { timeout: 3000 })
+      .toBe(true);
+
+    // First load commits. `showOverlay` goes false, `LoadingOverlay` unmounts,
+    // and its `onDestroy` must clear `overlayRevealed` — that is the only thing
+    // standing between this and the next assertion passing for the wrong reason.
+    wad.phase = 'loaded';
+    await expect.poll(() => (main as HTMLElement).hasAttribute('inert')).toBe(false);
+
+    // Second load starts. `flushSync` forces `Shell`'s `$derived`s and the
+    // resulting `inert` attribute to settle synchronously, so this checks the
+    // state at the instant the load begins — before the new overlay has had
+    // any chance to reveal. If `onDestroy` did not reset `overlayRevealed`,
+    // `showOverlay && overlayRevealed` is already `true && true` here, and
+    // `main` goes dead while the new overlay is still `visibility: hidden`
+    // (#57) — on every load after the first, not just the second.
+    wad.phase = 'loading';
+    flushSync();
+    expect(
+      (main as HTMLElement).hasAttribute('inert'),
+      'main must not be inert immediately at the start of a second load',
+    ).toBe(false);
   });
 });
