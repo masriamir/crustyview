@@ -7,6 +7,7 @@ use crate::assemble::assemble_view;
 use crate::error::sanitize;
 use crustywad::Wad;
 use crustywad::map::{Map, MapFormat, SidedefIdx};
+use std::collections::HashMap;
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -74,8 +75,11 @@ fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>)
 }
 
 /// A teleport source and its destination, in map units. Grouped: one link per
-/// (destination, source sector), so a four-line teleporter pad draws once
-/// rather than four times.
+/// connected cluster of source lines that share a destination — a pad's four
+/// lines touch at their corners and so form one cluster, while two disjoint
+/// pads that happen to share a destination tag share no vertices and stay
+/// two clusters, so they draw two links rather than collapsing into a single
+/// phantom link drawn from a point between them (#66 review).
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub struct TeleportLink {
     /// The source pad's center.
@@ -166,7 +170,12 @@ fn midpoint(l: &LinkLine) -> [f64; 2] {
     ]
 }
 
-/// The mean of every endpoint of `lines`, or `None` when there are none.
+/// The mean of every point in `points`, or `None` when there are none. Used
+/// both for a source pad's centroid (a cluster's line endpoints) and, for a
+/// sector destination, as the mean of every boundary vertex — a
+/// vertex-multiplicity mean, not a true area centroid, so for a concave or
+/// donut-shaped sector the result can land outside the sector's floor. That
+/// is a known, accepted approximation (#49), not an oversight.
 fn centroid(points: &[(f64, f64)]) -> Option<[f64; 2]> {
     if points.is_empty() {
         return None;
@@ -181,17 +190,32 @@ fn centroid(points: &[(f64, f64)]) -> Option<[f64; 2]> {
     Some([sx / n, sy / n])
 }
 
-/// Resolve a target to a point. Lowest index wins when several candidates
-/// share a tag: deterministic, and close to engine behavior. Tag/id `0` never
-/// matches — it is the binary "no tag" value, so all four zero-valued variants
-/// share this arm (`match_same_arms` would otherwise flag it split in two, and
-/// this repo runs clippy with `-D warnings`).
-fn resolve(target: LinkTarget, inp: &LinkInputs) -> Option<[f64; 2]> {
+/// Resolve a target to a point, given the index of one line from its source
+/// cluster — excluded from a linedef search so a teleporter line can't
+/// resolve to itself. Boom's own `P_FindLine` does the same exclusion by
+/// index rather than by special, which matters for a bidirectional pair of
+/// line-to-line teleporters: both lines carry the *same* teleport special,
+/// so excluding "any other teleport-special line" (as an earlier version of
+/// this function did) would wrongly exclude the real target too.
+///
+/// Lowest index wins when several sectors share a tag: deterministic, and
+/// close to engine behavior.
+fn resolve(target: LinkTarget, source: usize, inp: &LinkInputs) -> Option<[f64; 2]> {
+    // Tag/tid `0` is Doom/Hexen's "no tag" sentinel. A UDMF line with no `id`
+    // assigned defaults to `-1` (crustywad's documented sentinel for
+    // `MapLinedef::id`), so `LineById` guards `<= 0` to catch both. Checked
+    // ahead of the match, rather than as a second `None`-returning arm in it,
+    // because `clippy::match_same_arms` (a hard error here, `-D warnings`)
+    // flags two arms with identical bodies — the same reason
+    // [`is_teleport_special`]'s `Doom64 | _` arm is merged.
+    let unset = match target {
+        LinkTarget::Sector(t) | LinkTarget::LineByTag(t) | LinkTarget::Thing(t) => t == 0,
+        LinkTarget::LineById(id) => id <= 0,
+    };
+    if unset {
+        return None;
+    }
     match target {
-        LinkTarget::Sector(0)
-        | LinkTarget::LineByTag(0)
-        | LinkTarget::LineById(0)
-        | LinkTarget::Thing(0) => None,
         LinkTarget::Sector(tag) => {
             let idx = inp.sectors.iter().position(|s| s.tag == tag)?;
             // A sector's boundary vertices are the endpoints of every line with
@@ -208,46 +232,107 @@ fn resolve(target: LinkTarget, inp: &LinkInputs) -> Option<[f64; 2]> {
         LinkTarget::LineByTag(tag) => inp
             .lines
             .iter()
-            .find(|l| l.args[0] == tag && !DOOM_LINE_TELEPORTS.contains(&l.special))
-            .map(midpoint),
-        LinkTarget::LineById(id) => inp.lines.iter().find(|l| l.id == id).map(midpoint),
+            .enumerate()
+            .find(|(i, l)| *i != source && l.args[0] == tag)
+            .map(|(_, l)| midpoint(l)),
+        LinkTarget::LineById(id) => inp
+            .lines
+            .iter()
+            .enumerate()
+            .find(|(i, l)| *i != source && l.id == id)
+            .map(|(_, l)| midpoint(l)),
         LinkTarget::Thing(tid) => inp.things.iter().find(|t| t.id == tid).map(|t| [t.x, t.y]),
     }
 }
 
-/// A link group's key: its target, the source sector behind the grouped
-/// lines (when they share one), and a per-line fallback that keeps a
-/// sideless line from being merged into an unrelated group (see
-/// [`build_teleport_links`]).
-type LinkGroupKey = (LinkTarget, Option<usize>, usize);
+/// A hashable key for an endpoint: the bit pattern of its two `f64`
+/// coordinates. Two lines share an endpoint only when they reference the
+/// exact same vertex, so bit-exact equality — not a tolerance — is the right
+/// notion of "shared" here; this key only exists to let that exact point
+/// live in a [`HashMap`].
+fn point_key(p: (f64, f64)) -> (u64, u64) {
+    (p.0.to_bits(), p.1.to_bits())
+}
 
-/// Build one link per (destination, source sector). The source point is the
-/// centroid of that group's line endpoints, so a four-line pad draws a single
-/// link from its middle rather than four overlapping ones.
+/// Partition `idxs` (all indices into `lines`, all sharing one [`LinkTarget`])
+/// into connected components: lines that share an endpoint, transitively. A
+/// teleporter pad is a closed loop, so its four lines share corners and land
+/// in one component; two disjoint pads that happen to share a destination
+/// tag share no vertices, so they land in two components rather than
+/// collapsing into one link drawn from a point between them (#66 review).
+fn connected_components(lines: &[LinkLine], idxs: &[usize]) -> Vec<Vec<usize>> {
+    let mut by_point: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
+    for &i in idxs {
+        let l = &lines[i];
+        by_point.entry(point_key(l.start)).or_default().push(i);
+        by_point.entry(point_key(l.end)).or_default().push(i);
+    }
+    let mut visited = vec![false; lines.len()];
+    let mut components = Vec::new();
+    for &start in idxs {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut component = vec![start];
+        let mut stack = vec![start];
+        while let Some(i) = stack.pop() {
+            let l = &lines[i];
+            for point in [point_key(l.start), point_key(l.end)] {
+                for &j in by_point.get(&point).into_iter().flatten() {
+                    if !visited[j] {
+                        visited[j] = true;
+                        component.push(j);
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
+}
+
+/// Build one link per connected cluster of source lines that share a
+/// destination. The source point is the centroid of that cluster's line
+/// endpoints, so a four-line pad draws a single link from its middle rather
+/// than four overlapping ones — and two disjoint pads sharing a destination
+/// tag draw two links rather than one phantom link between them.
 pub(crate) fn build_teleport_links(inp: &LinkInputs) -> Vec<TeleportLink> {
-    // Keyed by (target, source sector). A line with neither sidedef groups
-    // alone under its own index, so it still draws rather than being dropped.
-    let mut groups: Vec<(LinkGroupKey, Vec<(f64, f64)>)> = Vec::new();
+    // Every source line's index, grouped by what it targets.
+    let mut by_target: Vec<(LinkTarget, Vec<usize>)> = Vec::new();
     for (i, l) in inp.lines.iter().enumerate() {
         let Some(target) = link_target(l, inp.format, inp.namespace) else {
             continue;
         };
-        let sector = l.sectors.0.or(l.sectors.1);
-        let key = (target, sector, if sector.is_some() { 0 } else { i });
-        match groups.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, pts)) => pts.extend([l.start, l.end]),
-            None => groups.push((key, vec![l.start, l.end])),
+        match by_target.iter_mut().find(|(t, _)| *t == target) {
+            Some((_, idxs)) => idxs.push(i),
+            None => by_target.push((target, vec![i])),
         }
     }
-    groups
-        .into_iter()
-        .filter_map(|((target, _, _), pts)| {
-            Some(TeleportLink {
-                from: centroid(&pts)?,
-                to: resolve(target, inp)?,
-            })
-        })
-        .collect()
+    let mut links = Vec::new();
+    for (target, idxs) in by_target {
+        for component in connected_components(inp.lines, &idxs) {
+            // Any member's index works as "self" to exclude when the target
+            // is a linedef: every line in one component describes the same
+            // physical source pad.
+            let Some(&source) = component.first() else {
+                continue;
+            };
+            let Some(to) = resolve(target, source, inp) else {
+                continue;
+            };
+            let points: Vec<(f64, f64)> = component
+                .iter()
+                .flat_map(|&i| [inp.lines[i].start, inp.lines[i].end])
+                .collect();
+            let Some(from) = centroid(&points) else {
+                continue;
+            };
+            links.push(TeleportLink { from, to });
+        }
+    }
+    links
 }
 
 /// Vanilla damaging-floor sector specials: 4/11/16 (−20%), 5 (−10%), 7 (−5%).
@@ -700,6 +785,21 @@ mod tests {
     }
 
     #[test]
+    fn every_doom_teleport_special_names_a_destination_kind() {
+        // Nothing else catches a special added to `TELEPORT_SPECIALS` without
+        // a matching entry in `DOOM_SECTOR_TELEPORTS` or
+        // `DOOM_LINE_TELEPORTS`: `link_target` would silently return `None`
+        // for it — no compile error, no lint, no failing test until this one
+        // (#66 review).
+        for s in TELEPORT_SPECIALS {
+            assert!(
+                DOOM_SECTOR_TELEPORTS.contains(&s) || DOOM_LINE_TELEPORTS.contains(&s),
+                "special {s} is classified as a teleport but names no destination kind"
+            );
+        }
+    }
+
+    #[test]
     fn udmf_classifies_by_namespace() {
         // The base namespaces keep their binary format's special space.
         for ns in ["doom", "heretic", "strife"] {
@@ -913,6 +1013,45 @@ mod tests {
     }
 
     #[test]
+    fn two_disjoint_pads_sharing_a_sector_and_destination_yield_two_links() {
+        // Two physically separate pads, same special/tag, both facing the
+        // same source sector, both aimed at the same destination. Grouping
+        // by (destination, source sector) alone would merge them into one
+        // link from the midpoint between the two pads, where no teleporter
+        // exists (#66 review) — grouping must instead cluster by shared
+        // geometry, so this must yield two links, not one phantom one.
+        let (mut lines, sectors, things) = pad_inputs();
+        lines.extend([
+            line((1000.0, 0.0), (1064.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1064.0, 0.0), (1064.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1064.0, 64.0), (1000.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1000.0, 64.0), (1000.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+        ]);
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            2,
+            "two disjoint pads must not collapse into one link"
+        );
+        let froms: Vec<[f64; 2]> = result.iter().map(|l| l.from).collect();
+        assert!(froms.contains(&[32.0, 32.0]), "the first pad's own center");
+        assert!(
+            froms.contains(&[1032.0, 32.0]),
+            "the second pad's own center, not a point between the two pads"
+        );
+        assert!(
+            result.iter().all(|l| l.to == [250.0, 250.0]),
+            "both pads share the same destination"
+        );
+    }
+
+    #[test]
     fn an_unmatched_or_zero_tag_yields_no_link() {
         let (mut lines, sectors, things) = pad_inputs();
         for l in lines.iter_mut().take(4) {
@@ -942,8 +1081,19 @@ mod tests {
 
     #[test]
     fn several_sectors_sharing_a_tag_resolve_to_the_lowest_index() {
-        let (lines, mut sectors, things) = pad_inputs();
-        sectors.push(LinkSector { tag: 1 }); // a second sector tagged 1
+        let (mut lines, mut sectors, things) = pad_inputs();
+        sectors.push(LinkSector { tag: 1 }); // a second sector (index 3) tagged 1
+        // Give the decoy sector real boundary geometry, far from sector 2's,
+        // so a wrong ("highest index wins") implementation would resolve to
+        // a visibly different point rather than merely fail to find one —
+        // an empty decoy sector would make this test pass by producing no
+        // link at all instead of discriminating on position.
+        lines.extend([
+            line((1000.0, 1000.0), (1100.0, 1000.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1000.0), (1100.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1100.0), (1000.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1000.0, 1100.0), (1000.0, 1000.0), 0, [0; 5], Some(3)),
+        ]);
         let result = build_teleport_links(&LinkInputs {
             lines: &lines,
             sectors: &sectors,
@@ -971,6 +1121,43 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].from, [32.0, 0.0], "the source line's midpoint");
         assert_eq!(result[0].to, [100.0, 50.0], "the target line's midpoint");
+    }
+
+    #[test]
+    fn a_bidirectional_boom_line_pair_yields_two_links() {
+        // The idiomatic two-way Boom line teleporter: both lines carry the
+        // *same* teleport special and the same tag, each naming the other as
+        // its destination. Excluding "any other teleport-special line" from
+        // candidacy (as an earlier version of `resolve` did) would exclude
+        // the real target too, since it is itself a 243 line.
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 243, [7, 0, 0, 0, 0], Some(1)),
+            line((100.0, 0.0), (100.0, 100.0), 243, [7, 0, 0, 0, 0], Some(2)),
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            2,
+            "each line is its own source, targeting the other"
+        );
+        assert!(
+            result
+                .iter()
+                .any(|l| l.from == [32.0, 0.0] && l.to == [100.0, 50.0]),
+            "line 1 points at line 2's midpoint"
+        );
+        assert!(
+            result
+                .iter()
+                .any(|l| l.from == [100.0, 50.0] && l.to == [32.0, 0.0]),
+            "line 2 points at line 1's midpoint"
+        );
     }
 
     #[test]
@@ -1032,6 +1219,15 @@ mod tests {
     fn teleport_line_matches_the_line_id_not_the_tag() {
         // The decoy carries tag 9 in args[0]; the real target carries id 9.
         // An implementation reading the wrong field picks the decoy.
+        //
+        // Format is UDMF/zdoom, not binary Hexen: crustywad assembles every
+        // binary Hexen/Doom linedef with `id = 0` (there is no on-disk line
+        // id field to read), so special 215 can never functionally match on
+        // a real *binary* Hexen map — only on UDMF's `hexen`/`zdoom`
+        // namespaces, where `id` is an actual per-line UDMF field. Testing
+        // this under `MapFormat::Hexen` with hand-set ids exercised a
+        // configuration the real assembly pipeline cannot produce (#66
+        // review).
         let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, 9, 0, 0, 0], Some(1));
         source.id = 1;
         let mut decoy = line((500.0, 500.0), (600.0, 500.0), 0, [9, 0, 0, 0, 0], Some(2));
@@ -1042,11 +1238,54 @@ mod tests {
             lines: &[source, decoy, target],
             sectors: &[LinkSector { tag: 0 }; 3],
             things: &[],
-            format: MapFormat::Hexen,
-            namespace: None,
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
         });
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].to, [100.0, 50.0], "matched on id, not on args[0]");
+    }
+
+    #[test]
+    fn a_line_id_target_never_resolves_to_the_source_line_itself() {
+        // A malformed UDMF/zdoom map where a teleport line's own id happens
+        // to equal the id it targets. The source-index exclusion (not a
+        // special-based one — see `resolve`'s doc comment) must stop it
+        // linking to itself; the only candidate line here IS the source.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, 5, 0, 0, 0], Some(1));
+        source.id = 5;
+        let result = build_teleport_links(&LinkInputs {
+            lines: &[source],
+            sectors: &[LinkSector { tag: 0 }],
+            things: &[],
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
+        });
+        assert!(
+            result.is_empty(),
+            "the only line carrying id 5 is the source itself"
+        );
+    }
+
+    #[test]
+    fn udmf_no_id_sentinel_never_matches_via_line_id() {
+        // crustywad documents UDMF's "no id" sentinel as -1 (Doom/Hexen's is
+        // 0), and every UDMF line that omits `id` gets that same -1 — so two
+        // id-less lines must never link to each other via special 215.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, -1, 0, 0, 0], Some(1));
+        source.id = -1;
+        let mut other = line((100.0, 0.0), (100.0, 100.0), 0, [0; 5], Some(2));
+        other.id = -1;
+        let result = build_teleport_links(&LinkInputs {
+            lines: &[source, other],
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
+        });
+        assert!(
+            result.is_empty(),
+            "-1 is UDMF's unset sentinel, not a real shared id"
+        );
     }
 
     #[test]
