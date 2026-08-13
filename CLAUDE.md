@@ -301,7 +301,9 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     as a smoke signal. It is the compensating control for the Svelte timing/lifecycle blind
     spot exactly as `wasm-test` is for the wasm one, and a compensating control that cannot
     block a merge is not a control — so it belongs in the required list once it has run
-    green for a while. Adding it to the ruleset is a separate, explicit action.
+    green for a while. Adding it to the ruleset is a separate, explicit action, tracked
+    by **#140** — which also carries the two ruleset traps (`PUT` not `PATCH`, and
+    `skipped`-satisfies-required) and the one flake to watch for first.
 - Three ruleset parameters that look like defaults but are decisions (#108):
   - **`bypass_actors`: admin, mode `always`** — load-bearing, do not narrow. `just release`
     pushes the release commit **directly to `main`** with `git push --follow-tags` (ADR-0004),
