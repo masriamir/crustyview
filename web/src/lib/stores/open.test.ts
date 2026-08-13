@@ -38,9 +38,12 @@ describe('openWad', () => {
   });
 
   it('resets navigation again once the load commits', async () => {
-    // The pre-load reset cannot cover navigation the user performs *during* the
-    // load — clicking a map from the outgoing WAD's list (#123). Only a load
-    // that committed corrects it.
+    // The pre-load reset cannot cover navigation performed *during* the load.
+    // No UI can do that today — `Sidebar` and `BottomNav` disable everything
+    // unless `wad.phase === 'loaded'` — so this pins the invariant rather than
+    // a reachable bug (#123, whose original repro did not exist). It is what
+    // stops a future change enabling navigation during loads from stranding
+    // the user on a map name from the outgoing WAD.
     const done = openWad(new File(['x'], 'a.wad'));
     expect(nav.reset).toHaveBeenCalledTimes(1);
     pendingLoads[0](true);
