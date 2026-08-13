@@ -188,9 +188,9 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   Playwright drives the built app — none of them observes reactivity wiring at unit granularity;
   Playwright can drive it, but only through the whole built app, never a component in isolation.
   Reproducing a lifecycle bug needs a real canvas 2D context, which `happy-dom` implements none
-  of, *and* fake timers, together — the combination no earlier tier offered. `vitest.config.ts`
-  now defines a second project (`browser`) that runs `src/**/*.browser.test.ts` under real
-  headless Chromium via `@vitest/browser-playwright`; CI runs it as the `web-browser-test` job.
+  of, *and* fake timers, together — the combination no earlier tier offered. `web/vite.config.ts`
+  now defines a second Vitest project (`browser`) that runs `web/src/**/*.browser.test.ts` under
+  real headless Chromium via `@vitest/browser-playwright`; CI runs it as the `web-browser-test` job.
   Tracked by **#129**.
   - **Three defects passed a fully green gate** in two consecutive PRs, all caught by review
     rather than by a check, and none of which reached `main`: a label that could render an
