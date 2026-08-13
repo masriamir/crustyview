@@ -504,7 +504,11 @@ test('theme toggle persists across reload', async ({ page }) => {
 test.describe('header wordmark', () => {
   test('renders in the pixel font, not a fallback', async ({ page }) => {
     await gotoApp(page);
-    await page.evaluate(() => document.fonts.ready);
+    // Await inside the page: `document.fonts.ready` resolves to a FontFaceSet,
+    // which does not cross the Playwright boundary as a useful value.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
 
     const h1 = page.getByRole('heading', { name: 'crustyview' });
     await expect(h1).toBeVisible();

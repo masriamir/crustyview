@@ -93,7 +93,11 @@ test.describe('header wordmark', () => {
     // standard minimum mobile width and sits well inside the failing region.
     await page.setViewportSize({ width: 320, height: 800 });
     await gotoApp(page);
-    await page.evaluate(() => document.fonts.ready);
+    // Await inside the page: `document.fonts.ready` resolves to a FontFaceSet,
+    // which does not cross the Playwright boundary as a useful value.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
 
     const h1 = page.getByRole('heading', { name: 'crustyview' });
     await expect(h1).toHaveCSS('font-size', '16px');
