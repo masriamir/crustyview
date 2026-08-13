@@ -88,17 +88,19 @@ test.describe('mobile shell smoke', () => {
 // machine without fixtures.
 test.describe('header wordmark', () => {
   test('the compact header fits without overflowing', async ({ page }) => {
-    // 390px (the project default) has enough slack that a 32px wordmark fits,
-    // so this assertion would be vacuous there. 360px is where it bites.
-    await page.setViewportSize({ width: 360, height: 800 });
+    // At 32px the header needs 356px, so 360px and the project's default
+    // 390px both fit and the assertion could never fail there. 320px is the
+    // standard minimum mobile width and sits well inside the failing region.
+    await page.setViewportSize({ width: 320, height: 800 });
     await gotoApp(page);
     await page.evaluate(() => document.fonts.ready);
 
     const h1 = page.getByRole('heading', { name: 'crustyview' });
     await expect(h1).toHaveCSS('font-size', '16px');
 
-    // At 32px the wordmark is 180px, which overflows 360px once the Open
-    // button (70px), the theme toggle (44px) and three 1rem gaps are counted.
+    // At 32px the wordmark is 180px and the header needs 356px in total,
+    // which pushes the theme toggle off-screen on any viewport at or below
+    // ~340px.
     const header = page.locator('header.header');
     const { scrollWidth, clientWidth } = await header.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
