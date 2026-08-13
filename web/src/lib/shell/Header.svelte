@@ -37,10 +37,13 @@
   }
   h1 {
     margin: 0;
-    /* Web437 has an exact 16-unit grid: only multiples of 16px land on whole
-       pixels. 32px is the desktop size; see the compact override below. */
+    /* Web437 has an exact 16-unit grid, so the design targets multiples of 16px
+       — 2rem is 32px at the default root. Deliberately `rem` and not `px`: a
+       reader who raises their browser's default font size gets the title with
+       everything else, and the cost is only that an off-grid root softens the
+       glyph edges on 1x displays. See the compact override below. */
     font-family: var(--font-display);
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 400;
     line-height: 1;
     /* The DOM text stays `crustyview` — the product's name everywhere else —
@@ -69,11 +72,11 @@
   }
   @media (max-width: 48rem) {
     h1 {
-      /* 32px makes the wordmark 180px and the whole header 356px, measured —
+      /* At 2rem the wordmark is 180px and the whole header 356px, measured —
          which pushes the theme toggle off-screen at or below ~340px, and at
          360px fits only by eating the header's own padding while taking half
-         the width. 16px is the next grid-clean size down. */
-      font-size: 16px;
+         the width. 1rem is the next grid-clean size down. */
+      font-size: 1rem;
     }
     .file {
       display: none;
