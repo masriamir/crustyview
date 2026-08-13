@@ -327,7 +327,9 @@
     ctx.save();
     ctx.strokeStyle = color;
     ctx.setLineDash(TELEPORT_DASH);
-    ctx.lineWidth = 1;
+    // Same width as the source lines: these are one overlay under one chip, and
+    // a thinner stroke made the links read as a separate, lesser thing.
+    ctx.lineWidth = OVERLAY_WIDTH;
     ctx.stroke(path);
     ctx.restore();
   }
