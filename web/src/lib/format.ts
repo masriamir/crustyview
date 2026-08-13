@@ -32,6 +32,8 @@ export interface Map2d {
   things: { x: number; y: number; angle: number; type_id: number }[];
   secret_sectors: number;
   damaging_sectors: number;
+  /** Teleport source-to-destination links, one per teleporter. */
+  links?: Array<{ from: [number, number]; to: [number, number] }>;
 }
 
 /** Failure envelope `WadDocument.map2d(name)` returns instead of map JSON. */

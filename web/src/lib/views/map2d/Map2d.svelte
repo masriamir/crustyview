@@ -308,6 +308,30 @@
     ctx.lineDashOffset = 0;
   }
 
+  /** Teleport source-to-destination links (#66). Same token as the source
+   *  lines: they read as one overlay, toggled by one chip. */
+  function drawTeleportLinks(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    color: string,
+  ): void {
+    if (!map.links?.length) return;
+    const path = new Path2D();
+    for (const link of map.links) {
+      const from = mapToScreen(t, link.from[0], link.from[1]);
+      const to = mapToScreen(t, link.to[0], link.to[1]);
+      path.moveTo(from.x, from.y);
+      path.lineTo(to.x, to.y);
+    }
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.setLineDash(TELEPORT_DASH);
+    ctx.lineWidth = 1;
+    ctx.stroke(path);
+    ctx.restore();
+  }
+
   function drawThings(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
@@ -467,12 +491,14 @@
         dashOffset: DAMAGE_DASH_OFFSET,
         marked: (l) => l.damaging_sector === true,
       });
-    if (mapPrefs.showTeleportLines)
+    if (mapPrefs.showTeleportLines) {
       drawLineOverlay(ctx, map, t, {
         color: colors.lineTeleport,
         dash: TELEPORT_DASH,
         marked: (l) => l.teleport === true,
       });
+      drawTeleportLinks(ctx, map, t, colors.lineTeleport);
+    }
     if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
     if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }
