@@ -26,6 +26,12 @@ const withPlayer1: Map2dPayload = {
   things: [{ x: 256, y: 256, angle: 90, type_id: 1 }],
 };
 
+const AT = { x: 256, y: 256, angle: 0 };
+const withCoop: Map2dPayload = { ...BASE, things: [{ ...AT, type_id: 2 }] };
+const withDeathmatch: Map2dPayload = { ...BASE, things: [{ ...AT, type_id: 11 }] };
+/** Type 2001 is a shotgun: `weapons`, and so still drawn as a 3 px rect. */
+const withWeapon: Map2dPayload = { ...BASE, things: [{ ...AT, type_id: 2001 }] };
+
 let payload: Map2dPayload = BASE;
 
 vi.mock('../../stores/wad.svelte', () => ({
@@ -54,15 +60,51 @@ async function snapshot(): Promise<string> {
   return (canvas as HTMLCanvasElement).toDataURL();
 }
 
+/** Raw pixels of the painted canvas. */
+async function pixels(): Promise<Uint8ClampedArray> {
+  const screen = await render(Map2d, { name: 'MAP01' });
+  const canvas = screen.container.querySelector('canvas');
+  expect(canvas, 'Map2d should render a canvas').not.toBeNull();
+  const el = canvas as HTMLCanvasElement;
+  expect(await painted(el)).toBe(true);
+  const ctx = el.getContext('2d');
+  expect(ctx, 'the canvas should have a 2D context').not.toBeNull();
+  return (ctx as CanvasRenderingContext2D).getImageData(0, 0, el.width, el.height).data;
+}
+
+/** How many pixels the marker paints, measured against the same map without it. */
+async function markerArea(map: Map2dPayload): Promise<number> {
+  payload = BASE;
+  const before = await pixels();
+  payload = map;
+  const after = await pixels();
+  let n = 0;
+  for (let p = 0; p < after.length; p += 4) {
+    if (
+      after[p] !== before[p] ||
+      after[p + 1] !== before[p + 1] ||
+      after[p + 2] !== before[p + 2] ||
+      after[p + 3] !== before[p + 3]
+    ) {
+      n++;
+    }
+  }
+  return n;
+}
+
 // `mapPrefs` is a module singleton, so a test that flips a preference and walks
 // away leaves it flipped for whatever runs next in this file. Restore rather
 // than reset-to-default: the point is to leave no trace, not to assert one.
 const showThingsDefault = mapPrefs.showThings;
 const alwaysShowPlayerStartDefault = mapPrefs.alwaysShowPlayerStart;
+const coopShownDefault = mapPrefs.showCategories.coop;
+const deathmatchShownDefault = mapPrefs.showCategories.deathmatch;
 afterEach(() => {
   payload = BASE;
   mapPrefs.showThings = showThingsDefault;
   mapPrefs.alwaysShowPlayerStart = alwaysShowPlayerStartDefault;
+  mapPrefs.showCategories.coop = coopShownDefault;
+  mapPrefs.showCategories.deathmatch = deathmatchShownDefault;
 });
 
 describe('the player 1 arrow', () => {
@@ -86,5 +128,65 @@ describe('the player 1 arrow', () => {
     payload = withPlayer1;
     const withIt = await snapshot();
     expect(withIt, 'with both controls off nothing should mark the start').toBe(without);
+  });
+});
+
+describe.each([
+  { label: 'co-op', category: 'coop' as const, map: () => withCoop },
+  { label: 'deathmatch', category: 'deathmatch' as const, map: () => withDeathmatch },
+])('$label start markers', ({ category, map }) => {
+  it('paint an arrow, not the 3 px dot every other category gets', async () => {
+    mapPrefs.showThings = true;
+    mapPrefs.showCategories[category] = true;
+
+    const arrow = await markerArea(map());
+    const dot = await markerArea(withWeapon);
+    // Self-calibrating, so it holds at any device pixel ratio: whatever a 3 px
+    // rect costs on this canvas, a 7 px arrow must cost more.
+    expect(arrow, 'a start marker should be larger than an ordinary thing dot').toBeGreaterThan(
+      dot,
+    );
+  });
+});
+
+describe.each([
+  { label: 'co-op', category: 'coop' as const, map: () => withCoop },
+  { label: 'deathmatch', category: 'deathmatch' as const, map: () => withDeathmatch },
+])('$label start marker visibility', ({ category, map }) => {
+  it('draws when things are shown and the category is on', async () => {
+    mapPrefs.showThings = true;
+    mapPrefs.showCategories[category] = true;
+
+    payload = BASE;
+    const without = await snapshot();
+    payload = map();
+    const withIt = await snapshot();
+    expect(withIt, 'a start in the payload must change what is drawn').not.toBe(without);
+  });
+
+  it('stays hidden when the category is off', async () => {
+    mapPrefs.showThings = true;
+    mapPrefs.showCategories[category] = false;
+
+    payload = BASE;
+    const without = await snapshot();
+    payload = map();
+    const withIt = await snapshot();
+    expect(withIt, 'the chip must hide the marker completely').toBe(without);
+  });
+
+  it('does not follow the player 1 Start override', async () => {
+    // The override is documented as player-1 only. Were these markers wired to
+    // `showPlayerStart` instead of `showThings`, this is the case that catches
+    // it — and nothing else would.
+    mapPrefs.showThings = false;
+    mapPrefs.alwaysShowPlayerStart = true;
+    mapPrefs.showCategories[category] = true;
+
+    payload = BASE;
+    const without = await snapshot();
+    payload = map();
+    const withIt = await snapshot();
+    expect(withIt, 'the Start override governs player 1 alone').toBe(without);
   });
 });

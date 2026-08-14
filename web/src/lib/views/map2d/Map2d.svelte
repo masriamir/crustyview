@@ -14,6 +14,7 @@
     type Transform,
   } from './transform';
   import {
+    ARROW_CATEGORIES,
     CATEGORIES,
     CLASSIC_THING_COLORS,
     categoryOf,
@@ -79,6 +80,10 @@
   /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
   const THING_PX = 3;
   const PLAYER_ARROW_PX = 10;
+  /** Start markers below player 1, so the flagship arrow stays dominant where
+   *  a level clusters all four starts in one room (#72). */
+  const COOP_ARROW_PX = 7;
+  const DEATHMATCH_ARROW_PX = 7;
   const PLAYER_THING_TYPE = 1;
   /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
   const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
@@ -421,6 +426,7 @@
     const half = THING_PX / 2;
     for (const thing of map.things) {
       const category = categoryOf(thing.type_id, game);
+      if (ARROW_CATEGORIES.has(category)) continue;
       if (!mapPrefs.isCategoryShown(category)) continue;
       let path = paths.get(category);
       if (path === undefined) {
@@ -436,6 +442,29 @@
       if (path === undefined) continue;
       ctx.fillStyle = colors.things[CATEGORIES[i].id];
       ctx.fill(path);
+    }
+  }
+
+  /** Co-op and deathmatch starts, as arrows sized below the player-1 marker. */
+  function drawStartMarkers(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    colors: Palette,
+    game: string | null,
+  ): void {
+    // Deathmatch first so co-op paints above it where a level puts both in one
+    // room; `drawPlayerStart` then paints above both.
+    for (const [category, size] of [
+      ['deathmatch', DEATHMATCH_ARROW_PX],
+      ['coop', COOP_ARROW_PX],
+    ] as const) {
+      if (!mapPrefs.isCategoryShown(category)) continue;
+      const color = colors.things[category];
+      for (const thing of map.things) {
+        if (categoryOf(thing.type_id, game) !== category) continue;
+        drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
+      }
     }
   }
 
@@ -589,7 +618,11 @@
       });
       drawTeleportLinks(ctx, map, t, colors.lineTeleport);
     }
-    if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
+    const game = wad.summary?.game ?? null;
+    if (mapPrefs.showThings) {
+      drawThings(ctx, map, t, colors, game);
+      drawStartMarkers(ctx, map, t, colors, game);
+    }
     if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }
 
