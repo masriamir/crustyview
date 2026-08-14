@@ -35,6 +35,8 @@
   --map2d-line-sector-secret: #b02890;
   --map2d-line-sector-damage: #567d00;
   --map2d-thing-monsters: #b3264a;
+  --map2d-thing-coop: #3f9c6b;
+  --map2d-thing-deathmatch: #d1477f;
   --map2d-thing-weapons: #b56a00;
   --map2d-thing-ammo: #8a7440;
   --map2d-thing-health: #177a5b;
@@ -73,6 +75,8 @@
   --map2d-line-sector-secret: #ff6ee0;
   --map2d-line-sector-damage: #a8d820;
   --map2d-thing-monsters: #ff5c7a;
+  --map2d-thing-coop: #35a06a;
+  --map2d-thing-deathmatch: #ff7ad4;
   --map2d-thing-weapons: #ffa938;
   --map2d-thing-ammo: #cfb46e;
   --map2d-thing-health: #57d9c2;

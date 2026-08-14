@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CATEGORIES, categoryOf, countByCategory } from './things';
+import { ARROW_CATEGORIES, CATEGORIES, CLASSIC_THING_COLORS, categoryOf, countByCategory } from './things';
 
 describe('categoryOf', () => {
   it('classifies representative vanilla doomednums', () => {
@@ -24,17 +24,27 @@ describe('categoryOf', () => {
     expect(categoryOf(49, null)).toBe('decorations'); // hanging victim
   });
 
-  it('maps starts and unknowns to other', () => {
-    for (const id of [1, 2, 3, 4, 11]) expect(categoryOf(id, null)).toBe('other');
+  it('maps unknowns and the player 1 start to other', () => {
+    expect(categoryOf(1, null)).toBe('other');
+    // Type 87 is the boss-brain spawn spot: a monster-spawn target, not a
+    // player start, so it stays unclassified.
+    expect(categoryOf(87, null)).toBe('other');
     expect(categoryOf(0, null)).toBe('other');
     expect(categoryOf(9999, null)).toBe('other');
     expect(categoryOf(-1, null)).toBe('other');
+  });
+
+  it('classifies co-op and deathmatch starts', () => {
+    for (const id of [2, 3, 4]) expect(categoryOf(id, null)).toBe('coop');
+    expect(categoryOf(11, null)).toBe('deathmatch');
   });
 
   it('skips the Doom table entirely for Strife WADs', () => {
     expect(categoryOf(3001, 'Strife')).toBe('other');
     expect(categoryOf(2001, 'Strife')).toBe('other');
     expect(categoryOf(14, 'Strife')).toBe('other');
+    expect(categoryOf(2, 'Strife')).toBe('other');
+    expect(categoryOf(11, 'Strife')).toBe('other');
   });
 });
 
@@ -60,5 +70,27 @@ describe('countByCategory', () => {
     const counts = countByCategory([{ type_id: 3001 }, { type_id: 2001 }], 'Strife');
     expect(counts.other).toBe(2);
     expect(counts.monsters).toBe(0);
+  });
+});
+
+describe('the category model holds together', () => {
+  it('gives every category a classic color', () => {
+    for (const c of CATEGORIES) {
+      expect(CLASSIC_THING_COLORS[c.id], `${c.id} needs a classic color`).toMatch(
+        /^#[0-9a-f]{6}$/,
+      );
+    }
+  });
+
+  it('names only real categories in ARROW_CATEGORIES', () => {
+    // A typo here would produce a category the rect batch skips and the arrow
+    // pass never draws: markers gone, with no type error and nothing else
+    // failing.
+    const ids = CATEGORIES.map((c) => c.id);
+    for (const id of ARROW_CATEGORIES) expect(ids).toContain(id);
+  });
+
+  it('draws exactly the two start categories as arrows', () => {
+    expect([...ARROW_CATEGORIES].sort()).toEqual(['coop', 'deathmatch']);
   });
 });
