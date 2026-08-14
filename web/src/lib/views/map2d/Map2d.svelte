@@ -14,6 +14,8 @@
     type Transform,
   } from './transform';
   import {
+    ARROW_CATEGORIES,
+    ARROW_CATEGORY_ORDER,
     CATEGORIES,
     CLASSIC_THING_COLORS,
     categoryOf,
@@ -79,6 +81,18 @@
   /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
   const THING_PX = 3;
   const PLAYER_ARROW_PX = 10;
+  /** Start markers below player 1, so the flagship arrow stays dominant where
+   *  a level clusters all four starts in one room (#72). Sized independently —
+   *  they were tuned separately and may diverge — and both landed on 7. */
+  const COOP_ARROW_PX = 7;
+  const DEATHMATCH_ARROW_PX = 7;
+  /** Arrow size per `ARROW_CATEGORY_ORDER` member. Keyed off that array's
+   *  element type, so adding a category there fails to compile here until it
+   *  is given a size (things.ts). */
+  const ARROW_SIZES: Record<(typeof ARROW_CATEGORY_ORDER)[number], number> = {
+    deathmatch: DEATHMATCH_ARROW_PX,
+    coop: COOP_ARROW_PX,
+  };
   const PLAYER_THING_TYPE = 1;
   /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
   const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
@@ -415,12 +429,15 @@
     colors: Palette,
     game: string | null,
   ): void {
-    // One path per visible category, mirroring drawLines' per-kind batching;
-    // hidden categories are skipped before any path work.
+    // One path per visible rect category, mirroring drawLines' per-kind
+    // batching; arrow categories skip this batch entirely (they need
+    // per-marker rotation) and hidden categories are skipped before any path
+    // work.
     const paths = new Map<ThingCategory, Path2D>();
     const half = THING_PX / 2;
     for (const thing of map.things) {
       const category = categoryOf(thing.type_id, game);
+      if (ARROW_CATEGORIES.has(category)) continue;
       if (!mapPrefs.isCategoryShown(category)) continue;
       let path = paths.get(category);
       if (path === undefined) {
@@ -439,22 +456,46 @@
     }
   }
 
-  /** The player-1 start, as an arrow pointing the way the player faces. */
-  function drawPlayerStart(
+  /** Co-op and deathmatch starts, as arrows sized below the player-1 marker. */
+  function drawMultiplayerStarts(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
     t: Transform,
+    colors: Palette,
+    game: string | null,
+  ): void {
+    // `ARROW_CATEGORY_ORDER` carries the back-to-front paint order: deathmatch
+    // first so co-op paints above it where a level puts both in one room;
+    // `drawPlayerStart` then paints above both.
+    for (const category of ARROW_CATEGORY_ORDER) {
+      if (!mapPrefs.isCategoryShown(category)) continue;
+      const color = colors.things[category];
+      const size = ARROW_SIZES[category];
+      for (const thing of map.things) {
+        if (categoryOf(thing.type_id, game) !== category) continue;
+        drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
+      }
+    }
+  }
+
+  /**
+   * A start marker: a filled arrow at screen position `at`, turned to face the
+   * thing's angle.
+   *
+   * Thing angles are degrees counter-clockwise from east in map space; screen Y
+   * points the other way, so the same turn is a negative canvas rotation.
+   */
+  function drawStartArrow(
+    ctx: CanvasRenderingContext2D,
+    at: { x: number; y: number },
+    angle: number,
+    size: number,
     color: string,
   ): void {
-    const start = map.things.find((thing) => thing.type_id === PLAYER_THING_TYPE);
-    if (!start) return;
-    const at = mapToScreen(t, start.x, start.y);
-    const half = PLAYER_ARROW_PX / 2;
+    const half = size / 2;
     ctx.save();
     ctx.translate(at.x, at.y);
-    // Thing angles are degrees counter-clockwise from east in map space; screen Y
-    // points the other way, so the same turn is a negative canvas rotation.
-    ctx.rotate((-start.angle * Math.PI) / 180);
+    ctx.rotate((-angle * Math.PI) / 180);
     ctx.beginPath();
     ctx.moveTo(half, 0);
     ctx.lineTo(-half, -half * 0.8);
@@ -464,6 +505,18 @@
     ctx.fillStyle = color;
     ctx.fill();
     ctx.restore();
+  }
+
+  /** The player-1 start, as an arrow pointing the way the player faces. */
+  function drawPlayerStart(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    color: string,
+  ): void {
+    const start = map.things.find((thing) => thing.type_id === PLAYER_THING_TYPE);
+    if (!start) return;
+    drawStartArrow(ctx, mapToScreen(t, start.x, start.y), start.angle, PLAYER_ARROW_PX, color);
   }
 
   function draw(): void {
@@ -575,7 +628,11 @@
       });
       drawTeleportLinks(ctx, map, t, colors.lineTeleport);
     }
-    if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
+    const game = wad.summary?.game ?? null;
+    if (mapPrefs.showThings) {
+      drawThings(ctx, map, t, colors, game);
+      drawMultiplayerStarts(ctx, map, t, colors, game);
+    }
     if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }
 
