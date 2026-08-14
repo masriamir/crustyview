@@ -28,6 +28,7 @@
     CLASSIC_LINE_TELEPORT,
   } from './lines';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
+  import { pointVisible, segmentVisible, viewportRect } from './cull';
 
   interface Props {
     name: string;
@@ -105,6 +106,21 @@
   const SECTOR_DASH = [4, 4];
   const OVERLAY_WIDTH = 2;
   const DAMAGE_DASH_OFFSET = 4;
+  /** Cull padding in screen px. Each pad is derived from the constant(s) that
+   *  size the ink it covers — the whole stroke width or glyph size, not a
+   *  hand-computed half-extent — so a pad can never fall out of sync with the
+   *  size it is meant to cover the way a hand-computed literal can. */
+  const LINE_CULL_PAD_PX = Math.max(...Object.values(KIND_WIDTH), OVERLAY_WIDTH);
+  /** `THING_PX` is drawn centered, so a marker's own reach is half of it;
+   *  padding by the whole size is trivially conservative. */
+  const THING_CULL_PAD_PX = THING_PX;
+  /** A start arrow's farthest point is a barb vertex, at radius `half * 1.28`
+   *  from the arrow's coordinate (barbs sit at `(-half, ±half*0.8)`; the glyph
+   *  rotates arbitrarily). Padding by the full `size` clears this radius: size 7
+   *  yields 4.482, size 10 (`PLAYER_ARROW_PX`) yields 6.403, both covered by
+   *  this pad. `PLAYER_ARROW_PX` belongs to `drawPlayerStart`, deliberately
+   *  never culled. */
+  const ARROW_CULL_PAD_PX = Math.max(...Object.values(ARROW_SIZES));
 
   /** Teleport link treatment (#66). Links are an *annotation about* the map
    *  rather than part of it, so they are drawn subordinate to the source lines
@@ -130,6 +146,15 @@
   const LINK_ARROW_SIZE = 7;
   /** Half-angle of the arrowhead's barbs, in radians. */
   const LINK_ARROW_SPREAD = 0.42;
+  /** A link is drawn as an arc bowed up to `LINK_BOW_MAX` perpendicular to its
+   *  chord IN SCREEN SPACE, with a ring at the source and an arrowhead at the
+   *  destination — so a chord just off screen can still put ink inside the
+   *  viewport, and padding by the chord alone clips arcs along every edge.
+   *  Summing all three is deliberately conservative: the bow displaces the
+   *  arc's middle while the ring and arrowhead sit at opposite endpoints, so
+   *  they never all extend the same way. An over-inclusive rect costs a few
+   *  extra draws; an under-inclusive one deletes visible geometry. */
+  const LINK_CULL_PAD_PX = LINK_BOW_MAX + LINK_ARROW_SIZE + LINK_RING_RADIUS;
 
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
@@ -257,21 +282,17 @@
     // Precondition: `step` cleared `MIN_GRID_PX` at this scale — the sole caller
     // resolves it through `effectiveGridSize`, which owns the density rule (#76).
     // Invert the viewport corners: only the visible map rect needs grid lines.
-    const corners = [screenToMap(t, 0, 0), screenToMap(t, width, height)];
-    const minX = Math.min(corners[0].x, corners[1].x);
-    const maxX = Math.max(corners[0].x, corners[1].x);
-    const minY = Math.min(corners[0].y, corners[1].y);
-    const maxY = Math.max(corners[0].y, corners[1].y);
+    const view = viewportRect(t, width, height, 0);
     const path = new Path2D();
-    for (let x = Math.ceil(minX / step) * step; x <= maxX; x += step) {
-      const from = mapToScreen(t, x, minY);
-      const to = mapToScreen(t, x, maxY);
+    for (let x = Math.ceil(view.minX / step) * step; x <= view.maxX; x += step) {
+      const from = mapToScreen(t, x, view.minY);
+      const to = mapToScreen(t, x, view.maxY);
       path.moveTo(from.x, from.y);
       path.lineTo(to.x, to.y);
     }
-    for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) {
-      const from = mapToScreen(t, minX, y);
-      const to = mapToScreen(t, maxX, y);
+    for (let y = Math.ceil(view.minY / step) * step; y <= view.maxY; y += step) {
+      const from = mapToScreen(t, view.minX, y);
+      const to = mapToScreen(t, view.maxX, y);
       path.moveTo(from.x, from.y);
       path.lineTo(to.x, to.y);
     }
@@ -293,9 +314,11 @@
       one_sided: new Path2D(),
       secret: new Path2D(),
     };
+    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
     for (const line of map.lines) {
       const path = paths[line.kind];
       if (!path) continue; // defensive: an unknown kind must not break the draw
+      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
       const from = mapToScreen(t, line.x1, line.y1);
       const to = mapToScreen(t, line.x2, line.y2);
       path.moveTo(from.x, from.y);
@@ -328,9 +351,11 @@
     overlay: OverlayStroke,
   ): void {
     const path = new Path2D();
+    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
     let any = false;
     for (const line of map.lines) {
       if (!overlay.marked(line)) continue;
+      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
       any = true;
       const from = mapToScreen(t, line.x1, line.y1);
       const to = mapToScreen(t, line.x2, line.y2);
@@ -394,9 +419,11 @@
     color: string,
   ): void {
     if (!map.links?.length) return;
+    const view = viewportRect(t, width, height, LINK_CULL_PAD_PX);
     ctx.save();
     ctx.strokeStyle = color;
     for (const link of map.links) {
+      if (!segmentVisible(view, link.from[0], link.from[1], link.to[0], link.to[1])) continue;
       const from = mapToScreen(t, link.from[0], link.from[1]);
       const to = mapToScreen(t, link.to[0], link.to[1]);
       const control = linkControlPoint(from, to);
@@ -435,10 +462,12 @@
     // work.
     const paths = new Map<ThingCategory, Path2D>();
     const half = THING_PX / 2;
+    const view = viewportRect(t, width, height, THING_CULL_PAD_PX);
     for (const thing of map.things) {
       const category = categoryOf(thing.type_id, game);
       if (ARROW_CATEGORIES.has(category)) continue;
       if (!mapPrefs.isCategoryShown(category)) continue;
+      if (!pointVisible(view, thing.x, thing.y)) continue;
       let path = paths.get(category);
       if (path === undefined) {
         path = new Path2D();
@@ -467,12 +496,14 @@
     // `ARROW_CATEGORY_ORDER` carries the back-to-front paint order: deathmatch
     // first so co-op paints above it where a level puts both in one room;
     // `drawPlayerStart` then paints above both.
+    const view = viewportRect(t, width, height, ARROW_CULL_PAD_PX);
     for (const category of ARROW_CATEGORY_ORDER) {
       if (!mapPrefs.isCategoryShown(category)) continue;
       const color = colors.things[category];
       const size = ARROW_SIZES[category];
       for (const thing of map.things) {
         if (categoryOf(thing.type_id, game) !== category) continue;
+        if (!pointVisible(view, thing.x, thing.y)) continue;
         drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
       }
     }
