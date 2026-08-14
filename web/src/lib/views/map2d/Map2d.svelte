@@ -106,16 +106,23 @@
   const SECTOR_DASH = [4, 4];
   const OVERLAY_WIDTH = 2;
   const DAMAGE_DASH_OFFSET = 4;
-  /** Cull padding in screen px, sized to the widest stroke drawn from line
-   *  geometry (`KIND_WIDTH.one_sided` and `OVERLAY_WIDTH`, both 2) so a line
-   *  just off screen whose stroke would still land inside is not dropped. */
-  const LINE_CULL_PAD_PX = 2;
-  /** `THING_PX` is 3 and drawn centered, so a marker reaches 1.5 px past its
-   *  coordinate; 2 rounds that up. */
-  const THING_CULL_PAD_PX = 2;
-  /** The largest start arrow is `PLAYER_ARROW_PX` (10), drawn centered, so it
-   *  reaches 5 px past its coordinate; 6 rounds that up. */
-  const ARROW_CULL_PAD_PX = 6;
+  /** Cull padding in screen px. Each pad is derived from the constant(s) that
+   *  size the ink it covers — the whole stroke width or glyph size, not a
+   *  hand-computed half-extent — so a pad can never fall out of sync with the
+   *  size it is meant to cover the way a hand-computed literal can. */
+  const LINE_CULL_PAD_PX = Math.max(...Object.values(KIND_WIDTH), OVERLAY_WIDTH);
+  /** `THING_PX` is drawn centered, so a marker's own reach is half of it;
+   *  padding by the whole size is trivially conservative. */
+  const THING_CULL_PAD_PX = THING_PX;
+  /** A start arrow's farthest point is a barb vertex, at radius `size * 1.28`
+   *  from its coordinate (`drawStartArrow`'s barbs sit at `(-half, ±half*0.8)`,
+   *  and the glyph rotates arbitrarily, so the reach is that vertex's radius
+   *  in every direction). Padding by the full `size` — not half of it — clears
+   *  that radius with room to spare: at the largest arrow this pass ever
+   *  draws, `ARROW_SIZES` tops out at 7, whose vertex radius is 4.482; `10`
+   *  (`PLAYER_ARROW_PX`) belongs to `drawPlayerStart`, deliberately never
+   *  culled, and would need a bigger pad than this one if it ever were. */
+  const ARROW_CULL_PAD_PX = Math.max(...Object.values(ARROW_SIZES));
 
   /** Teleport link treatment (#66). Links are an *annotation about* the map
    *  rather than part of it, so they are drawn subordinate to the source lines
