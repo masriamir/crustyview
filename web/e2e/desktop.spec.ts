@@ -442,8 +442,9 @@ test.describe('desktop shell smoke', () => {
     await expectMapCanvasPainted(page);
 
     // Measured, not assumed: on freedoom1 E1M1, `teleports` is the only zero-count
-    // category (monsters 53, weapons 10, ammo 44, health 67, powerups 1, keys 1,
-    // teleports 0, decorations 104, other 12). E1M2 has none, so this pins E1M1.
+    // category (monsters 53, coop 3, deathmatch 8, weapons 10, ammo 44, health 67,
+    // powerups 1, keys 1, teleports 0, decorations 104, other 1). E1M2 has none,
+    // so this pins E1M1.
     const chip = page
       .getByRole('group', { name: 'Thing category filters' })
       .getByRole('button', { name: /^Teleports/ });

@@ -56,15 +56,28 @@ export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
 /**
  * Categories drawn as rotated arrows instead of the shared 3 px rect batch,
  * because each marker needs its own rotation and so cannot join a `Path2D`.
+ * Order is back-to-front for the arrow pass: `deathmatch` paints first, so
+ * `coop` paints above it where a level puts both starts in one room.
  *
- * `drawThings` skips this set and the arrow pass draws exactly it. One
- * constant read by both is what stops a category being skipped by the batch
- * and forgotten by the pass, which would erase the markers silently.
+ * `Map2d.svelte` iterates this array — not a hand-written literal — for both
+ * the arrow pass and the `Record` that sizes each arrow, and that `Record`'s
+ * key type is derived from this array too, so adding a category here fails
+ * the build until `Map2d.svelte` gives it a size. `ARROW_CATEGORIES` below is
+ * a `Set` built from this same array, and `drawThings` reads that `Set` to
+ * skip the rect batch. One array behind both is what stops a category being
+ * skipped by the batch and forgotten by the arrow pass, which would erase the
+ * markers silently.
  */
-export const ARROW_CATEGORIES: ReadonlySet<ThingCategory> = new Set<ThingCategory>([
-  'coop',
+export const ARROW_CATEGORY_ORDER = [
   'deathmatch',
-]);
+  'coop',
+] as const satisfies readonly ThingCategory[];
+
+/** The set form of `ARROW_CATEGORY_ORDER`, for the O(1) membership check
+ *  `drawThings` needs to skip these categories in the rect batch. */
+export const ARROW_CATEGORIES: ReadonlySet<ThingCategory> = new Set<ThingCategory>(
+  ARROW_CATEGORY_ORDER,
+);
 
 /**
  * Hover/description text for categories whose membership is not obvious from the
@@ -75,8 +88,9 @@ export const ARROW_CATEGORIES: ReadonlySet<ThingCategory> = new Set<ThingCategor
  * screen: that `health` also holds armor; that `powerups` includes the computer
  * map and light-amp visor; which end of a teleport `teleports` refers to; that
  * `decorations` contains the exploding barrel; which players `co-op` covers and
- * which it does not; and that `other` is now only the player 1 start, along
- * with everything in a Strife WAD.
+ * which it does not; and that `other` is now, on a vanilla map, little more
+ * than the player 1 start — it also catches the boss-brain spawn spot, any
+ * unrecognized or modded doomednum, and everything in a Strife WAD.
  */
 export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
   coop: 'Spawn points for players 2 to 4 — the player 1 start has its own Start button',
@@ -93,9 +107,9 @@ export const CATEGORY_DESCRIPTIONS: Partial<Record<ThingCategory, string>> = {
 type TableCategory = Exclude<ThingCategory, 'other'>;
 
 /**
- * Vanilla Doom/Doom2 doomednums (the two share one numbering space). Absent
- * ids — the player 1 start, the boss-brain spawn spot, and anything from
- * another game — fall through to `other`.
+ * Vanilla Doom/Doom2 doomednums (the two share one numbering space). Any id
+ * absent from this table — e.g. the player 1 start, the boss-brain spawn
+ * spot, or an unrecognized/modded doomednum — falls through to `other`.
  */
 const TABLE: Record<TableCategory, number[]> = {
   monsters: [

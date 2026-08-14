@@ -15,6 +15,7 @@
   } from './transform';
   import {
     ARROW_CATEGORIES,
+    ARROW_CATEGORY_ORDER,
     CATEGORIES,
     CLASSIC_THING_COLORS,
     categoryOf,
@@ -81,9 +82,17 @@
   const THING_PX = 3;
   const PLAYER_ARROW_PX = 10;
   /** Start markers below player 1, so the flagship arrow stays dominant where
-   *  a level clusters all four starts in one room (#72). */
+   *  a level clusters all four starts in one room (#72). Sized independently —
+   *  they were tuned separately and may diverge — and both landed on 7. */
   const COOP_ARROW_PX = 7;
   const DEATHMATCH_ARROW_PX = 7;
+  /** Arrow size per `ARROW_CATEGORY_ORDER` member. Keyed off that array's
+   *  element type, so adding a category there fails to compile here until it
+   *  is given a size (things.ts). */
+  const ARROW_SIZES: Record<(typeof ARROW_CATEGORY_ORDER)[number], number> = {
+    deathmatch: DEATHMATCH_ARROW_PX,
+    coop: COOP_ARROW_PX,
+  };
   const PLAYER_THING_TYPE = 1;
   /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
   const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
@@ -420,8 +429,10 @@
     colors: Palette,
     game: string | null,
   ): void {
-    // One path per visible category, mirroring drawLines' per-kind batching;
-    // hidden categories are skipped before any path work.
+    // One path per visible rect category, mirroring drawLines' per-kind
+    // batching; arrow categories skip this batch entirely (they need
+    // per-marker rotation) and hidden categories are skipped before any path
+    // work.
     const paths = new Map<ThingCategory, Path2D>();
     const half = THING_PX / 2;
     for (const thing of map.things) {
@@ -446,21 +457,20 @@
   }
 
   /** Co-op and deathmatch starts, as arrows sized below the player-1 marker. */
-  function drawStartMarkers(
+  function drawMultiplayerStarts(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
     t: Transform,
     colors: Palette,
     game: string | null,
   ): void {
-    // Deathmatch first so co-op paints above it where a level puts both in one
-    // room; `drawPlayerStart` then paints above both.
-    for (const [category, size] of [
-      ['deathmatch', DEATHMATCH_ARROW_PX],
-      ['coop', COOP_ARROW_PX],
-    ] as const) {
+    // `ARROW_CATEGORY_ORDER` carries the back-to-front paint order: deathmatch
+    // first so co-op paints above it where a level puts both in one room;
+    // `drawPlayerStart` then paints above both.
+    for (const category of ARROW_CATEGORY_ORDER) {
       if (!mapPrefs.isCategoryShown(category)) continue;
       const color = colors.things[category];
+      const size = ARROW_SIZES[category];
       for (const thing of map.things) {
         if (categoryOf(thing.type_id, game) !== category) continue;
         drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
@@ -621,7 +631,7 @@
     const game = wad.summary?.game ?? null;
     if (mapPrefs.showThings) {
       drawThings(ctx, map, t, colors, game);
-      drawStartMarkers(ctx, map, t, colors, game);
+      drawMultiplayerStarts(ctx, map, t, colors, game);
     }
     if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }

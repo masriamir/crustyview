@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ARROW_CATEGORIES, CATEGORIES, CLASSIC_THING_COLORS, categoryOf, countByCategory } from './things';
+import {
+  ARROW_CATEGORIES,
+  CATEGORIES,
+  CLASSIC_THING_COLORS,
+  categoryOf,
+  countByCategory,
+} from './things';
 
 describe('categoryOf', () => {
   it('classifies representative vanilla doomednums', () => {

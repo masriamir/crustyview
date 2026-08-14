@@ -138,6 +138,10 @@ describe.each([
   it('paint an arrow, not the 3 px dot every other category gets', async () => {
     mapPrefs.showThings = true;
     mapPrefs.showCategories[category] = true;
+    // showThings alone already implies showPlayerStart (mapPrefs.svelte.ts), so
+    // the player 1 arrow below draws too, but set it explicitly so this stays
+    // true regardless of that implication.
+    mapPrefs.alwaysShowPlayerStart = true;
 
     const arrow = await markerArea(map());
     const dot = await markerArea(withWeapon);
@@ -146,6 +150,44 @@ describe.each([
     expect(arrow, 'a start marker should be larger than an ordinary thing dot').toBeGreaterThan(
       dot,
     );
+
+    // The entire rationale for COOP_ARROW_PX/DEATHMATCH_ARROW_PX (Map2d.svelte)
+    // being smaller than PLAYER_ARROW_PX is that the flagship arrow stays
+    // dominant (#72) — nothing above asserts that. Verified to fail when
+    // COOP_ARROW_PX is raised to 20 (restored to 7 afterward).
+    const player = await markerArea(withPlayer1);
+    expect(
+      arrow,
+      'a co-op/deathmatch marker should stay smaller than the player 1 arrow',
+    ).toBeLessThan(player);
+  });
+});
+
+describe.each([
+  { label: 'co-op', category: 'coop' as const, map: () => withCoop },
+  { label: 'deathmatch', category: 'deathmatch' as const, map: () => withDeathmatch },
+])('$label rect-batch skip', ({ category, map }) => {
+  it('never lets an arrow category into the drawThings rect batch', async () => {
+    mapPrefs.showThings = true;
+    mapPrefs.showCategories[category] = true;
+
+    // `Path2D.prototype.rect` is the one call site drawThings uses to add a
+    // thing to the shared rect batch (Map2d.svelte). This payload's only thing
+    // is the arrow-category start itself, so if `ARROW_CATEGORIES` (things.ts)
+    // stopped gating that loop, this is the call that would appear. Pixel
+    // diffing can't see this: the 3 px rect is the same color as the arrow and
+    // sits almost entirely under it, so it only grows a `toBeGreaterThan`
+    // measurement by a sub-pixel sliver. Verified to fail when the `if
+    // (ARROW_CATEGORIES.has(category)) continue;` skip is deleted from
+    // drawThings (restored afterward).
+    const rectSpy = vi.spyOn(Path2D.prototype, 'rect');
+    payload = map();
+    await snapshot();
+    // Assert before restoring: `mockRestore` also clears the recorded calls
+    // (it includes a `mockReset`), so checking after it would always see zero
+    // regardless of what actually happened.
+    expect(rectSpy).not.toHaveBeenCalled();
+    rectSpy.mockRestore();
   });
 });
 
