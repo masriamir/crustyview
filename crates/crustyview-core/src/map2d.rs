@@ -238,19 +238,25 @@ fn sector_points(inp: &LinkInputs, idx: usize) -> Vec<(f64, f64)> {
 /// sector a landing can sit inside the box but outside the floor, and the
 /// candidate chosen that way may still be the wrong one.
 fn sector_bbox(inp: &LinkInputs, idx: usize) -> Option<(f64, f64, f64, f64)> {
-    let points = sector_points(inp, idx);
-    if points.is_empty() {
-        return None;
+    // Folded in one pass rather than through `sector_points`: this runs once per
+    // candidate when several sectors share a tag, and the vertices are only ever
+    // reduced to four numbers, so materializing them would allocate for nothing.
+    let mut bbox: Option<(f64, f64, f64, f64)> = None;
+    for l in inp
+        .lines
+        .iter()
+        .filter(|l| l.sectors.0 == Some(idx) || l.sectors.1 == Some(idx))
+    {
+        for (x, y) in [l.start, l.end] {
+            bbox = Some(match bbox {
+                None => (x, y, x, y),
+                Some((min_x, min_y, max_x, max_y)) => {
+                    (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+                }
+            });
+        }
     }
-    let (mut min_x, mut min_y) = (f64::INFINITY, f64::INFINITY);
-    let (mut max_x, mut max_y) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
-    for &(x, y) in &points {
-        min_x = min_x.min(x);
-        min_y = min_y.min(y);
-        max_x = max_x.max(x);
-        max_y = max_y.max(y);
-    }
-    Some((min_x, min_y, max_x, max_y))
+    bbox
 }
 
 /// Resolve a target to a point, given every source line in its cluster —
