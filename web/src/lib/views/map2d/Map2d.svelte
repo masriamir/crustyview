@@ -141,6 +141,15 @@
   const LINK_ARROW_SIZE = 7;
   /** Half-angle of the arrowhead's barbs, in radians. */
   const LINK_ARROW_SPREAD = 0.42;
+  /** A link is drawn as an arc bowed up to `LINK_BOW_MAX` perpendicular to its
+   *  chord IN SCREEN SPACE, with a ring at the source and an arrowhead at the
+   *  destination — so a chord just off screen can still put ink inside the
+   *  viewport, and padding by the chord alone clips arcs along every edge.
+   *  Summing all three is deliberately conservative: the bow displaces the
+   *  arc's middle while the ring and arrowhead sit at opposite endpoints, so
+   *  they never all extend the same way. An over-inclusive rect costs a few
+   *  extra draws; an under-inclusive one deletes visible geometry. */
+  const LINK_CULL_PAD_PX = LINK_BOW_MAX + LINK_ARROW_SIZE + LINK_RING_RADIUS;
 
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
@@ -405,9 +414,11 @@
     color: string,
   ): void {
     if (!map.links?.length) return;
+    const view = viewportRect(t, width, height, LINK_CULL_PAD_PX);
     ctx.save();
     ctx.strokeStyle = color;
     for (const link of map.links) {
+      if (!segmentVisible(view, link.from[0], link.from[1], link.to[0], link.to[1])) continue;
       const from = mapToScreen(t, link.from[0], link.from[1]);
       const to = mapToScreen(t, link.to[0], link.to[1]);
       const control = linkControlPoint(from, to);
