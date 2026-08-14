@@ -439,22 +439,24 @@
     }
   }
 
-  /** The player-1 start, as an arrow pointing the way the player faces. */
-  function drawPlayerStart(
+  /**
+   * A start marker: a filled arrow at screen position `at`, turned to face the
+   * thing's angle.
+   *
+   * Thing angles are degrees counter-clockwise from east in map space; screen Y
+   * points the other way, so the same turn is a negative canvas rotation.
+   */
+  function drawStartArrow(
     ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
+    at: { x: number; y: number },
+    angle: number,
+    size: number,
     color: string,
   ): void {
-    const start = map.things.find((thing) => thing.type_id === PLAYER_THING_TYPE);
-    if (!start) return;
-    const at = mapToScreen(t, start.x, start.y);
-    const half = PLAYER_ARROW_PX / 2;
+    const half = size / 2;
     ctx.save();
     ctx.translate(at.x, at.y);
-    // Thing angles are degrees counter-clockwise from east in map space; screen Y
-    // points the other way, so the same turn is a negative canvas rotation.
-    ctx.rotate((-start.angle * Math.PI) / 180);
+    ctx.rotate((-angle * Math.PI) / 180);
     ctx.beginPath();
     ctx.moveTo(half, 0);
     ctx.lineTo(-half, -half * 0.8);
@@ -464,6 +466,18 @@
     ctx.fillStyle = color;
     ctx.fill();
     ctx.restore();
+  }
+
+  /** The player-1 start, as an arrow pointing the way the player faces. */
+  function drawPlayerStart(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    color: string,
+  ): void {
+    const start = map.things.find((thing) => thing.type_id === PLAYER_THING_TYPE);
+    if (!start) return;
+    drawStartArrow(ctx, mapToScreen(t, start.x, start.y), start.angle, PLAYER_ARROW_PX, color);
   }
 
   function draw(): void {
