@@ -317,15 +317,32 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     **cannot approve**, and there is no second human. Any value above 0 would make merging
     impossible. Unresolved threads are what actually block, via
     `required_review_thread_resolution`.
-- Copilot renders **differently on every surface** — mixing them up breaks scripts:
+- Copilot renders **differently on every surface** — mixing them up breaks scripts. Every row below
+  was measured against PR #147 on 2026-08-14 (`.user.id` is `175728472` throughout, so these are
+  one identity wearing five names, not five accounts):
 
   | Surface | Rendering |
   |---|---|
-  | REST reviewer-request slug (the POST) | `copilot-pull-request-reviewer[bot]` — the `[bot]` suffix is required *only* here |
-  | GraphQL `reviewRequests` | `copilot-pull-request-reviewer`, as a **`Bot`** node |
+  | REST reviewer-request slug (the POST) | `copilot-pull-request-reviewer[bot]` |
+  | REST review **author** (`pulls/N/reviews` → `.user.login`) | `copilot-pull-request-reviewer[bot]` |
+  | REST review-**comment** author (`pulls/N/comments` → `.user.login`) | **`Copilot`** — *not* the same string as the row above |
   | Timeline `review_requested` event | `Copilot` |
-  | REST review **author** (`reviews`) | `copilot-pull-request-reviewer` — match this when polling |
+  | GraphQL — `reviewRequests`, review author, thread-comment author | `copilot-pull-request-reviewer`, always a **`Bot`** node |
   | REST `requested_reviewers` | **never appears at all** — the field lists Users only |
+
+  Two traps live in that table:
+  - **REST is not internally consistent.** `pulls/N/reviews` and `pulls/N/comments` are the same
+    bot on adjacent endpoints and disagree on its login. A filter written against one silently
+    matches nothing on the other.
+  - **A login mismatch is silent and fails toward "nothing is there."** `--jq
+    'select(.user.login=="…")'` yields an empty list rather than an error, so a review-poll reads
+    an already-submitted review as *not yet submitted* and waits out its stall timeout. That is
+    exactly what happened on #147 (#149): five reviews existed and the poll reported none.
+
+  **So: match on GraphQL, which uses one login everywhere, or on `.user.id`/`.user.type == "Bot"`,
+  which no surface varies.** If you must match a REST login, use
+  `startswith("copilot-pull-request-reviewer")` and know it does not cover the `Copilot` spelling
+  on review comments.
 
 - **Never confirm a request from `requested_reviewers` or from the POST's response.** That field
   cannot hold a bot, and the POST answers 200 with an empty `requested_reviewers` array whether
