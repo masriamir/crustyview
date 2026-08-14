@@ -28,6 +28,7 @@
     CLASSIC_LINE_TELEPORT,
   } from './lines';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
+  import { segmentVisible, viewportRect } from './cull';
 
   interface Props {
     name: string;
@@ -105,6 +106,10 @@
   const SECTOR_DASH = [4, 4];
   const OVERLAY_WIDTH = 2;
   const DAMAGE_DASH_OFFSET = 4;
+  /** Cull padding in screen px, sized to the widest stroke drawn from line
+   *  geometry (`KIND_WIDTH.one_sided` and `OVERLAY_WIDTH`, both 2) so a line
+   *  just off screen whose stroke would still land inside is not dropped. */
+  const LINE_CULL_PAD_PX = 2;
 
   /** Teleport link treatment (#66). Links are an *annotation about* the map
    *  rather than part of it, so they are drawn subordinate to the source lines
@@ -257,21 +262,17 @@
     // Precondition: `step` cleared `MIN_GRID_PX` at this scale — the sole caller
     // resolves it through `effectiveGridSize`, which owns the density rule (#76).
     // Invert the viewport corners: only the visible map rect needs grid lines.
-    const corners = [screenToMap(t, 0, 0), screenToMap(t, width, height)];
-    const minX = Math.min(corners[0].x, corners[1].x);
-    const maxX = Math.max(corners[0].x, corners[1].x);
-    const minY = Math.min(corners[0].y, corners[1].y);
-    const maxY = Math.max(corners[0].y, corners[1].y);
+    const view = viewportRect(t, width, height, 0);
     const path = new Path2D();
-    for (let x = Math.ceil(minX / step) * step; x <= maxX; x += step) {
-      const from = mapToScreen(t, x, minY);
-      const to = mapToScreen(t, x, maxY);
+    for (let x = Math.ceil(view.minX / step) * step; x <= view.maxX; x += step) {
+      const from = mapToScreen(t, x, view.minY);
+      const to = mapToScreen(t, x, view.maxY);
       path.moveTo(from.x, from.y);
       path.lineTo(to.x, to.y);
     }
-    for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) {
-      const from = mapToScreen(t, minX, y);
-      const to = mapToScreen(t, maxX, y);
+    for (let y = Math.ceil(view.minY / step) * step; y <= view.maxY; y += step) {
+      const from = mapToScreen(t, view.minX, y);
+      const to = mapToScreen(t, view.maxX, y);
       path.moveTo(from.x, from.y);
       path.lineTo(to.x, to.y);
     }
@@ -293,9 +294,11 @@
       one_sided: new Path2D(),
       secret: new Path2D(),
     };
+    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
     for (const line of map.lines) {
       const path = paths[line.kind];
       if (!path) continue; // defensive: an unknown kind must not break the draw
+      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
       const from = mapToScreen(t, line.x1, line.y1);
       const to = mapToScreen(t, line.x2, line.y2);
       path.moveTo(from.x, from.y);
@@ -328,9 +331,11 @@
     overlay: OverlayStroke,
   ): void {
     const path = new Path2D();
+    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
     let any = false;
     for (const line of map.lines) {
       if (!overlay.marked(line)) continue;
+      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
       any = true;
       const from = mapToScreen(t, line.x1, line.y1);
       const to = mapToScreen(t, line.x2, line.y2);
