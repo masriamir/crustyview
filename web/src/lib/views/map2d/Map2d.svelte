@@ -92,6 +92,31 @@
   const OVERLAY_WIDTH = 2;
   const DAMAGE_DASH_OFFSET = 4;
 
+  /** Teleport link treatment (#66). Links are an *annotation about* the map
+   *  rather than part of it, so they are drawn subordinate to the source lines
+   *  they accompany: thinner, softer, finely dotted. Drawn straight and at
+   *  overlay weight they were indistinguishable from walls — the problem was
+   *  never how many there are (DOOM and DOOM2 top out at 17-18 per map), it
+   *  was that nothing separated annotation from geometry. */
+  const LINK_DASH = [2, 3];
+  const LINK_WIDTH = 1;
+  const LINK_ALPHA = 0.6;
+  /** Endpoint marks are opaque enough to read against the dotted stroke. */
+  const LINK_MARK_ALPHA = 0.9;
+  /** Perpendicular bow at the midpoint, as a fraction of the chord and capped
+   *  in screen pixels. Nothing in a Doom map is curved, so an arc can never be
+   *  mistaken for a wall — and where several links share a destination (E3M5
+   *  runs 17 into 4 landings) arcs fan apart instead of stacking. */
+  const LINK_BOW_RATIO = 0.18;
+  const LINK_BOW_MAX = 42;
+  /** A ring anchors the source end, which otherwise starts inside the pad's
+   *  own lines; the arrowhead anchors the destination, which otherwise ends on
+   *  bare floor. Both ends looked like mistakes without them. */
+  const LINK_RING_RADIUS = 3;
+  const LINK_ARROW_SIZE = 7;
+  /** Half-angle of the arrowhead's barbs, in radians. */
+  const LINK_ARROW_SPREAD = 0.42;
+
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
   const MIN_ZOOM = 0.1;
@@ -308,6 +333,81 @@
     ctx.lineDashOffset = 0;
   }
 
+  /** Teleport source-to-destination links (#66). Same token as the source
+   *  lines: they read as one overlay, toggled by one chip. */
+  /** The quadratic control point that bows a link perpendicular to its chord. */
+  function linkControlPoint(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ): { x: number; y: number } {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    // A zero-length link (source and destination resolve to the same point) has
+    // no perpendicular; bow it by nothing rather than dividing by zero.
+    const len = Math.hypot(dx, dy) || 1;
+    const bow = Math.min(len * LINK_BOW_RATIO, LINK_BOW_MAX);
+    return {
+      x: (from.x + to.x) / 2 - (dy / len) * bow,
+      y: (from.y + to.y) / 2 + (dx / len) * bow,
+    };
+  }
+
+  /** A filled arrowhead at `tip`, pointing away from `tail`. */
+  function drawArrowHead(
+    ctx: CanvasRenderingContext2D,
+    tip: { x: number; y: number },
+    tail: { x: number; y: number },
+    color: string,
+  ): void {
+    const angle = Math.atan2(tip.y - tail.y, tip.x - tail.x);
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    for (const spread of [-LINK_ARROW_SPREAD, LINK_ARROW_SPREAD]) {
+      ctx.lineTo(
+        tip.x - LINK_ARROW_SIZE * Math.cos(angle + spread),
+        tip.y - LINK_ARROW_SIZE * Math.sin(angle + spread),
+      );
+    }
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function drawTeleportLinks(
+    ctx: CanvasRenderingContext2D,
+    map: Map2d,
+    t: Transform,
+    color: string,
+  ): void {
+    if (!map.links?.length) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    for (const link of map.links) {
+      const from = mapToScreen(t, link.from[0], link.from[1]);
+      const to = mapToScreen(t, link.to[0], link.to[1]);
+      const control = linkControlPoint(from, to);
+
+      const arc = new Path2D();
+      arc.moveTo(from.x, from.y);
+      arc.quadraticCurveTo(control.x, control.y, to.x, to.y);
+      ctx.setLineDash(LINK_DASH);
+      ctx.lineWidth = LINK_WIDTH;
+      ctx.globalAlpha = LINK_ALPHA;
+      ctx.stroke(arc);
+
+      // Endpoint marks: solid, so they read as anchors rather than more stroke.
+      ctx.setLineDash([]);
+      ctx.globalAlpha = LINK_MARK_ALPHA;
+      ctx.beginPath();
+      ctx.arc(from.x, from.y, LINK_RING_RADIUS, 0, Math.PI * 2);
+      ctx.stroke();
+      // Aimed along the curve's exit, not the chord, or the head sits skewed
+      // to the stroke it terminates.
+      drawArrowHead(ctx, to, control, color);
+    }
+    ctx.restore();
+  }
+
   function drawThings(
     ctx: CanvasRenderingContext2D,
     map: Map2d,
@@ -467,12 +567,14 @@
         dashOffset: DAMAGE_DASH_OFFSET,
         marked: (l) => l.damaging_sector === true,
       });
-    if (mapPrefs.showTeleportLines)
+    if (mapPrefs.showTeleportLines) {
       drawLineOverlay(ctx, map, t, {
         color: colors.lineTeleport,
         dash: TELEPORT_DASH,
         marked: (l) => l.teleport === true,
       });
+      drawTeleportLinks(ctx, map, t, colors.lineTeleport);
+    }
     if (mapPrefs.showThings) drawThings(ctx, map, t, colors, wad.summary?.game ?? null);
     if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
   }

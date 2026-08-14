@@ -6,7 +6,8 @@
 use crate::assemble::assemble_view;
 use crate::error::sanitize;
 use crustywad::Wad;
-use crustywad::map::{MapFormat, SidedefIdx};
+use crustywad::map::{Map, MapFormat, SidedefIdx};
+use std::collections::{HashMap, HashSet};
 
 /// The vanilla `ML_SECRET` linedef flag bit (same bit in Doom, Boom, and
 /// Hexen binary maps; crustywad normalizes UDMF's `secret` into it too).
@@ -16,17 +17,405 @@ const ML_SECRET: u32 = 0x0020;
 /// walk-over/monster teleports (39/97/125/126) plus Boom's switch (174/195),
 /// silent (207–210), line-to-line (243/244, 262–267), and silent monster-only
 /// (268/269) variants. Only meaningful in the Doom special number space;
-/// Hexen/UDMF spaces are #67.
+/// Hexen variants are in [`HEXEN_TELEPORT_SPECIALS`].
 const TELEPORT_SPECIALS: [i32; 20] = [
     39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267, 268,
     269,
 ];
 
+/// Hexen/ZDoom action specials that make a line a teleport *source*.
+/// `74` `Teleport_NewMap` and `75` `Teleport_EndGame` are deliberately absent —
+/// they exit the level rather than teleporting within it. `76` `TeleportOther`
+/// relocates a different actor, so it classifies but never yields a link.
+const HEXEN_TELEPORT_SPECIALS: [i32; 4] = [70, 71, 76, 215];
+
+/// Doom-space teleport specials whose `args[0]` names a destination **sector**.
+const DOOM_SECTOR_TELEPORTS: [i32; 12] = [39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 268, 269];
+/// Doom-space teleport specials whose `args[0]` names a destination **linedef**
+/// (Boom's line-to-line variants).
+const DOOM_LINE_TELEPORTS: [i32; 8] = [243, 244, 262, 263, 264, 265, 266, 267];
+
+/// UDMF namespaces that keep the Doom special number space. `zdoomtranslated`
+/// marks a map translated from Hexen-format to UDMF that kept Doom-style
+/// special numbering (as opposed to `zdoom`'s native Hexen-style numbering),
+/// so it belongs here, not in [`HEXEN_NAMESPACES`].
+const DOOM_NAMESPACES: [&str; 4] = ["doom", "heretic", "strife", "zdoomtranslated"];
+/// UDMF namespaces that use the Hexen special number space.
+const HEXEN_NAMESPACES: [&str; 2] = ["hexen", "zdoom"];
+
+/// Whether `ns` names one of `namespaces`, ignoring ASCII case. crustywad
+/// stores a UDMF `namespace` declaration verbatim, but `ZDoom` itself treats
+/// it case-insensitively — a map authored with `namespace = "ZDoom";` is
+/// common and must classify identically to `"zdoom"` (#66 review).
+fn namespace_matches(namespaces: &[&str], ns: &str) -> bool {
+    namespaces.iter().any(|n| n.eq_ignore_ascii_case(ns))
+}
+
 /// Whether `special` marks a teleport source in `format`'s special space.
 /// A dead teleporter (tag 0) still classifies — the special is what makes the
 /// line a source; whether it works in-game is not map2d's concern.
-fn is_teleport_special(special: i32, format: MapFormat) -> bool {
-    format == MapFormat::Doom && TELEPORT_SPECIALS.contains(&special)
+///
+/// `namespace` is the map's UDMF `namespace` declaration and is only consulted
+/// for [`MapFormat::Udmf`], whose special space depends on it. An unrecognized
+/// namespace classifies nothing rather than guessing at a numbering: a missing
+/// teleport mark is a gap, a wrong one is a lie.
+fn is_teleport_special(special: i32, format: MapFormat, namespace: Option<&str>) -> bool {
+    match format {
+        MapFormat::Doom => TELEPORT_SPECIALS.contains(&special),
+        MapFormat::Hexen => HEXEN_TELEPORT_SPECIALS.contains(&special),
+        MapFormat::Udmf => match namespace {
+            Some(ns) if namespace_matches(&DOOM_NAMESPACES, ns) => {
+                TELEPORT_SPECIALS.contains(&special)
+            }
+            Some(ns) if namespace_matches(&HEXEN_NAMESPACES, ns) => {
+                HEXEN_TELEPORT_SPECIALS.contains(&special)
+            }
+            _ => false,
+        },
+        // Covers two distinct cases, and `MapFormat` is `#[non_exhaustive]` so
+        // the wildcard is mandatory either way. Naming `Doom64` beside it reads
+        // as redundant and has already misled two reviewers, so the rationale
+        // lives here rather than in the pattern:
+        //
+        // 1. **Doom 64** has its own special space, and crustywad exposes only
+        //    the raw number with no semantics — classifying it would mean
+        //    asserting values no source in this repo can confirm (#146).
+        // 2. **Any future crustywad format** lands here *silently* — no E0004,
+        //    no lint, nothing to prompt a revisit. Unclassified is the right
+        //    default (a missing mark is a gap, a wrong one is a lie), but it is
+        //    invisible, so check this match by hand when the crustywad pin bumps.
+        _ => false,
+    }
+}
+
+/// A teleport source and its destination, in map units. Grouped: one link per
+/// connected cluster of source lines that share a destination — a pad's four
+/// lines touch at their corners and so form one cluster, while two disjoint
+/// pads that happen to share a destination tag share no vertices and stay
+/// two clusters, so they draw two links rather than collapsing into a single
+/// phantom link drawn from a point between them (#66 review).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct TeleportLink {
+    /// The source pad's center.
+    pub from: [f64; 2],
+    /// Where it lands.
+    pub to: [f64; 2],
+}
+
+/// The minimal view of a linedef that link building needs. A projection rather
+/// than crustywad's `MapLinedef` so the builder is a pure function over owned
+/// data — every case, including Hexen, is testable without WAD bytes.
+pub(crate) struct LinkLine {
+    pub start: (f64, f64),
+    pub end: (f64, f64),
+    pub special: i32,
+    pub args: [i32; 5],
+    pub id: i32,
+    /// Sector indices behind the right and left sidedefs.
+    pub sectors: (Option<usize>, Option<usize>),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct LinkSector {
+    pub tag: i32,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct LinkThing {
+    pub id: i32,
+    pub x: f64,
+    pub y: f64,
+    /// The thing's doomednum. Used to find a teleport landing (type `14`)
+    /// when several same-tag sectors are candidates for a `Sector` target.
+    pub type_id: u16,
+}
+
+/// The vanilla teleport-landing thing type (`Teleportman`, doomednum `14`).
+/// `EV_Teleport` searches a tagged sector's things for one of these; a
+/// sector without one is not where a working teleporter lands.
+const TELEPORT_LANDING_TYPE_ID: u16 = 14;
+
+pub(crate) struct LinkInputs<'a> {
+    pub lines: &'a [LinkLine],
+    pub sectors: &'a [LinkSector],
+    pub things: &'a [LinkThing],
+    pub format: MapFormat,
+    pub namespace: Option<&'a str>,
+}
+
+/// What a teleport source points at, before it is resolved to a point.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+enum LinkTarget {
+    /// A sector carrying this tag.
+    Sector(i32),
+    /// A linedef carrying this tag in `args[0]` (Boom line-to-line).
+    LineByTag(i32),
+    /// A linedef carrying this id (Hexen `215`).
+    LineById(i32),
+    /// A thing carrying this tid (Hexen `70`/`71`).
+    Thing(i32),
+}
+
+/// Where a teleport source points, or `None` when the special yields no link.
+/// Never reads beyond `args[1]`: the per-special sector-tag fallback arguments
+/// sit at a different index in each Hexen special, and a wrong index mislinks
+/// silently rather than failing.
+fn link_target(line: &LinkLine, format: MapFormat, namespace: Option<&str>) -> Option<LinkTarget> {
+    if !is_teleport_special(line.special, format, namespace) {
+        return None;
+    }
+    let doom_space = matches!(format, MapFormat::Doom)
+        || matches!(namespace, Some(ns) if namespace_matches(&DOOM_NAMESPACES, ns));
+    if doom_space {
+        if DOOM_SECTOR_TELEPORTS.contains(&line.special) {
+            return Some(LinkTarget::Sector(line.args[0]));
+        }
+        if DOOM_LINE_TELEPORTS.contains(&line.special) {
+            return Some(LinkTarget::LineByTag(line.args[0]));
+        }
+        return None;
+    }
+    match line.special {
+        70 | 71 => Some(LinkTarget::Thing(line.args[0])),
+        215 => Some(LinkTarget::LineById(line.args[1])),
+        // `76` TeleportOther relocates a different actor than the one crossing,
+        // so a source->destination link would misrepresent it.
+        _ => None,
+    }
+}
+
+/// The midpoint of a line.
+fn midpoint(l: &LinkLine) -> [f64; 2] {
+    [
+        f64::midpoint(l.start.0, l.end.0),
+        f64::midpoint(l.start.1, l.end.1),
+    ]
+}
+
+/// The mean of every point in `points`, or `None` when there are none. Used
+/// both for a source pad's centroid (a cluster's line endpoints) and, for a
+/// sector destination, as the mean of every boundary vertex — a
+/// vertex-multiplicity mean, not a true area centroid, so for a concave or
+/// donut-shaped sector the result can land outside the sector's floor. That
+/// is a known, accepted approximation (#49), not an oversight.
+fn centroid(points: &[(f64, f64)]) -> Option<[f64; 2]> {
+    if points.is_empty() {
+        return None;
+    }
+    // A map's point count is bounded by its lump sizes (at most tens of
+    // thousands of vertices), nowhere near f64's 52-bit mantissa.
+    #[allow(clippy::cast_precision_loss)]
+    let n = points.len() as f64;
+    let (sx, sy) = points
+        .iter()
+        .fold((0.0, 0.0), |(ax, ay), (x, y)| (ax + x, ay + y));
+    Some([sx / n, sy / n])
+}
+
+/// Every boundary vertex of sector `idx`: the endpoints of every line with a
+/// sidedef facing it, either side. No polygon, so the self-referencing-sector
+/// problem never arises (#49).
+fn sector_points(inp: &LinkInputs, idx: usize) -> Vec<(f64, f64)> {
+    inp.lines
+        .iter()
+        .filter(|l| l.sectors.0 == Some(idx) || l.sectors.1 == Some(idx))
+        .flat_map(|l| [l.start, l.end])
+        .collect()
+}
+
+/// The bounding box (`min_x, min_y, max_x, max_y`) of sector `idx`'s boundary
+/// vertices, or `None` when it has none. A cheap superset of "inside the
+/// sector" — not point-in-polygon containment, which this module
+/// deliberately never computes (#49) — used only to *choose among* several
+/// same-tag sector candidates in [`resolve`].
+///
+/// "Never worse" is meant specifically against the lowest-index fallback it
+/// replaces, and holds because the preference only diverges from that fallback
+/// when the lowest-index candidate's bbox contains *no* landing — and a sector
+/// with no landing anywhere in its bounding box certainly has none inside it,
+/// so it cannot be where the engine sends the player. It is **not** a
+/// guarantee of correctness: a bbox is a superset, so for a concave or holed
+/// sector a landing can sit inside the box but outside the floor, and the
+/// candidate chosen that way may still be the wrong one.
+fn sector_bbox(inp: &LinkInputs, idx: usize) -> Option<(f64, f64, f64, f64)> {
+    // Folded in one pass rather than through `sector_points`: this runs once per
+    // candidate when several sectors share a tag, and the vertices are only ever
+    // reduced to four numbers, so materializing them would allocate for nothing.
+    let mut bbox: Option<(f64, f64, f64, f64)> = None;
+    for l in inp
+        .lines
+        .iter()
+        .filter(|l| l.sectors.0 == Some(idx) || l.sectors.1 == Some(idx))
+    {
+        for (x, y) in [l.start, l.end] {
+            bbox = Some(match bbox {
+                None => (x, y, x, y),
+                Some((min_x, min_y, max_x, max_y)) => {
+                    (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+                }
+            });
+        }
+    }
+    bbox
+}
+
+/// Resolve a target to a point, given every source line in its cluster —
+/// all excluded from a linedef search so a teleporter can't resolve to
+/// itself or to a sibling line in its own pad. Boom's own `P_FindLine` does
+/// a lighter version of this (excluding just the searching line, by index)
+/// which matters for a bidirectional pair of line-to-line teleporters: both
+/// lines carry the *same* teleport special, so excluding "any other
+/// teleport-special line" (as an earlier version of this function did) would
+/// wrongly exclude the real target too.
+fn resolve(target: LinkTarget, component: &[usize], inp: &LinkInputs) -> Option<[f64; 2]> {
+    // Tag/tid `0` is Doom/Hexen's "no tag" sentinel. A UDMF line with no `id`
+    // assigned defaults to `-1` (crustywad's documented sentinel for
+    // `MapLinedef::id`), so `LineById` guards `<= 0` to catch both. Checked
+    // ahead of the match, rather than as a second `None`-returning arm in it,
+    // because `clippy::match_same_arms` (a hard error here, `-D warnings`)
+    // flags two arms with identical bodies — the same reason
+    // [`is_teleport_special`]'s `Doom64 | _` arm is merged.
+    let unset = match target {
+        LinkTarget::Sector(t) | LinkTarget::LineByTag(t) | LinkTarget::Thing(t) => t == 0,
+        LinkTarget::LineById(id) => id <= 0,
+    };
+    if unset {
+        return None;
+    }
+    match target {
+        LinkTarget::Sector(tag) => {
+            let candidates: Vec<usize> = inp
+                .sectors
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, s)| (s.tag == tag).then_some(idx))
+                .collect();
+            // Vanilla `EV_Teleport` iterates every sector carrying the tag
+            // and teleports to the first one that *contains* a teleport
+            // landing (thing type 14) — not simply the lowest-tagged index.
+            // Measured on Freedoom: 23 of 64 multi-candidate sources picked
+            // a landing-less sector while a later same-tag sector held the
+            // landing (#66 review). Falls back to the lowest index when no
+            // candidate's bounding box contains one, matching the old
+            // behavior exactly in that case.
+            let idx = candidates
+                .iter()
+                .copied()
+                .find(|&idx| {
+                    sector_bbox(inp, idx).is_some_and(|(min_x, min_y, max_x, max_y)| {
+                        inp.things.iter().any(|t| {
+                            t.type_id == TELEPORT_LANDING_TYPE_ID
+                                && (min_x..=max_x).contains(&t.x)
+                                && (min_y..=max_y).contains(&t.y)
+                        })
+                    })
+                })
+                .or_else(|| candidates.first().copied())?;
+            centroid(&sector_points(inp, idx))
+        }
+        LinkTarget::LineByTag(tag) => inp
+            .lines
+            .iter()
+            .enumerate()
+            .find(|(i, l)| !component.contains(i) && l.args[0] == tag)
+            .map(|(_, l)| midpoint(l)),
+        LinkTarget::LineById(id) => inp
+            .lines
+            .iter()
+            .enumerate()
+            .find(|(i, l)| !component.contains(i) && l.id == id)
+            .map(|(_, l)| midpoint(l)),
+        LinkTarget::Thing(tid) => inp.things.iter().find(|t| t.id == tid).map(|t| [t.x, t.y]),
+    }
+}
+
+/// A hashable key for an endpoint: the bit pattern of its two `f64`
+/// coordinates. Two lines share an endpoint only when they reference the
+/// exact same vertex, so bit-exact equality — not a tolerance — is the right
+/// notion of "shared" here; this key only exists to let that exact point
+/// live in a [`HashMap`].
+fn point_key(p: (f64, f64)) -> (u64, u64) {
+    (p.0.to_bits(), p.1.to_bits())
+}
+
+/// Partition `idxs` (all indices into `lines`, all sharing one [`LinkTarget`])
+/// into connected components: lines that share an endpoint, transitively. A
+/// teleporter pad is a closed loop, so its four lines share corners and land
+/// in one component; two disjoint pads that happen to share a destination
+/// tag share no vertices, so they land in two components rather than
+/// collapsing into one link drawn from a point between them (#66 review).
+fn connected_components(lines: &[LinkLine], idxs: &[usize]) -> Vec<Vec<usize>> {
+    let mut by_point: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
+    for &i in idxs {
+        let l = &lines[i];
+        by_point.entry(point_key(l.start)).or_default().push(i);
+        by_point.entry(point_key(l.end)).or_default().push(i);
+    }
+    // Scoped to this group, not to every linedef in the map: a map with many
+    // lines and few teleport sources would otherwise pay an O(linedefs)
+    // allocation per target group, which matters in wasm (#147 review).
+    let mut visited: HashSet<usize> = HashSet::with_capacity(idxs.len());
+    let mut components = Vec::new();
+    for &start in idxs {
+        if !visited.insert(start) {
+            continue;
+        }
+        let mut component = vec![start];
+        let mut stack = vec![start];
+        while let Some(i) = stack.pop() {
+            let l = &lines[i];
+            for point in [point_key(l.start), point_key(l.end)] {
+                for &j in by_point.get(&point).into_iter().flatten() {
+                    if visited.insert(j) {
+                        component.push(j);
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
+}
+
+/// Build one link per connected cluster of source lines that share a
+/// destination. The source point is the centroid of that cluster's line
+/// endpoints, so a four-line pad draws a single link from its middle rather
+/// than four overlapping ones — and two disjoint pads sharing a destination
+/// tag draw two links rather than one phantom link between them.
+pub(crate) fn build_teleport_links(inp: &LinkInputs) -> Vec<TeleportLink> {
+    // Every source line's index, grouped by what it targets.
+    let mut by_target: Vec<(LinkTarget, Vec<usize>)> = Vec::new();
+    for (i, l) in inp.lines.iter().enumerate() {
+        let Some(target) = link_target(l, inp.format, inp.namespace) else {
+            continue;
+        };
+        match by_target.iter_mut().find(|(t, _)| *t == target) {
+            Some((_, idxs)) => idxs.push(i),
+            None => by_target.push((target, vec![i])),
+        }
+    }
+    let mut links = Vec::new();
+    for (target, idxs) in by_target {
+        for component in connected_components(inp.lines, &idxs) {
+            // The whole cluster is excluded from the linedef search in
+            // `resolve`, not just one representative member — every line in
+            // it describes the same physical source pad, so none of them is
+            // a valid target for the others.
+            let Some(to) = resolve(target, &component, inp) else {
+                continue;
+            };
+            let points: Vec<(f64, f64)> = component
+                .iter()
+                .flat_map(|&i| [inp.lines[i].start, inp.lines[i].end])
+                .collect();
+            let Some(from) = centroid(&points) else {
+                continue;
+            };
+            links.push(TeleportLink { from, to });
+        }
+    }
+    links
 }
 
 /// Vanilla damaging-floor sector specials: 4/11/16 (−20%), 5 (−10%), 7 (−5%).
@@ -151,6 +540,10 @@ pub struct Map2d {
     pub secret_sectors: usize,
     /// Count of sectors classifying as damaging.
     pub damaging_sectors: usize,
+    /// Teleport source-to-destination links, one per teleporter. Omitted from
+    /// JSON when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<TeleportLink>,
 }
 
 /// Flatten the named map group for 2D drawing.
@@ -172,6 +565,8 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         .ok_or_else(|| sanitize(&format!("no map named {name}")))?;
     let map = assemble_view(wad, &group).map_err(|e| sanitize(&e.to_string()))?;
     let format = map.format();
+    // Only meaningful for UDMF; `None` for every binary format.
+    let namespace = map.namespace();
     // Classify every sector once; each line then looks up its two sides.
     let sector_marks: Vec<(bool, bool)> = map
         .sectors()
@@ -219,12 +614,13 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
                 x2: b.x,
                 y2: b.y,
                 kind,
-                teleport: is_teleport_special(l.special.special, format),
+                teleport: is_teleport_special(l.special.special, format, namespace),
                 secret_sector: right_secret || left_secret,
                 damaging_sector: right_damaging || left_damaging,
             })
         })
         .collect();
+    let teleport_links = teleport_links_for(&map, format, namespace);
     let things: Vec<Thing2d> = map
         .things()
         .iter()
@@ -243,6 +639,57 @@ pub fn map2d(wad: &Wad, name: &str) -> Result<Map2d, String> {
         things,
         secret_sectors,
         damaging_sectors,
+        links: teleport_links,
+    })
+}
+
+/// Project `map`'s linedefs, sectors, and things into the minimal shape
+/// [`build_teleport_links`] needs, then build the links. Split out of
+/// [`map2d`] to keep that function under clippy's line-count lint.
+fn teleport_links_for(map: &Map, format: MapFormat, namespace: Option<&str>) -> Vec<TeleportLink> {
+    let vertices = map.vertices();
+    let sidedefs = map.sidedefs();
+    let link_lines: Vec<LinkLine> = map
+        .linedefs()
+        .iter()
+        .filter_map(|l| {
+            let a = vertices.get(l.start.0)?;
+            let b = vertices.get(l.end.0)?;
+            let sector_of = |side: Option<SidedefIdx>| {
+                side.and_then(|idx| sidedefs.get(idx.0))
+                    .map(|sd| sd.sector.0)
+            };
+            Some(LinkLine {
+                start: (a.x, a.y),
+                end: (b.x, b.y),
+                special: l.special.special,
+                args: l.special.args,
+                id: l.id,
+                sectors: (sector_of(l.right), sector_of(l.left)),
+            })
+        })
+        .collect();
+    let link_sectors: Vec<LinkSector> = map
+        .sectors()
+        .iter()
+        .map(|s| LinkSector { tag: s.tag })
+        .collect();
+    let link_things: Vec<LinkThing> = map
+        .things()
+        .iter()
+        .map(|t| LinkThing {
+            id: t.id,
+            x: t.x,
+            y: t.y,
+            type_id: t.type_id,
+        })
+        .collect();
+    build_teleport_links(&LinkInputs {
+        lines: &link_lines,
+        sectors: &link_sectors,
+        things: &link_things,
+        format,
+        namespace,
     })
 }
 
@@ -282,9 +729,14 @@ fn bounds_of(lines: &[Line2d], things: &[Thing2d]) -> Bounds {
 }
 
 #[cfg(test)]
+// The link tests below assert exact `TeleportLink` coordinates computed from
+// centroids/midpoints of hand-picked, power-of-two-friendly inputs — the
+// arithmetic is exact in `f64`, so strict equality is the right check, not a
+// fragile one.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
-    use crate::fixtures::{broken_pwad, build_pwad, dangling_blockmap_pwad, tiny_pwad};
+    use crate::fixtures::{broken_pwad, build_pwad, dangling_blockmap_pwad, name8, tiny_pwad};
 
     #[test]
     fn flattens_lines_with_kinds_and_bounds() {
@@ -347,6 +799,87 @@ mod tests {
         ])
     }
 
+    /// A PWAD with a *working* teleporter: a four-line pad (special 97,
+    /// tag 1) facing a plain room (sector 0), linking to sector 1 (also
+    /// tag 1), which is its own boundary. The destination carries a type-14
+    /// teleport landing, so the bytes describe something that would actually
+    /// function in-game — and so the fixture also exercises `type_id` through
+    /// the projection, which the hand-built tests cannot. Every other link test hand-builds
+    /// `LinkLine`s directly, so this is the only thing that exercises
+    /// `teleport_links_for`'s wiring of `l.special.args`, `l.id`, and
+    /// `l.right`/`l.left` end to end through `map2d()` (#66 review) —
+    /// `tiny_pwad_teleports_have_no_destination` only proves the pipeline is
+    /// *reached*, not that it wires the right fields.
+    fn teleporter_pwad() -> Wad {
+        let vertexes: Vec<u8> = [
+            (0i16, 0i16),
+            (64, 0),
+            (64, 64),
+            (0, 64),
+            (200, 200),
+            (300, 200),
+            (300, 300),
+            (200, 300),
+        ]
+        .iter()
+        .flat_map(|(x, y)| [x.to_le_bytes(), y.to_le_bytes()].concat())
+        .collect();
+        // LINEDEFS: start, end, flags, special, tag, right sidedef, left sidedef (7 × u16)
+        let linedefs: Vec<u8> = [
+            [0u16, 1, 0, 97, 1, 0, 0xFFFF], // pad edge (teleport source)
+            [1u16, 2, 0, 97, 1, 0, 0xFFFF],
+            [2u16, 3, 0, 97, 1, 0, 0xFFFF],
+            [3u16, 0, 0, 97, 1, 0, 0xFFFF],
+            [4u16, 5, 0, 0, 0, 1, 0xFFFF], // destination sector's own boundary
+            [5u16, 6, 0, 0, 0, 1, 0xFFFF],
+            [6u16, 7, 0, 0, 0, 1, 0xFFFF],
+            [7u16, 4, 0, 0, 0, 1, 0xFFFF],
+        ]
+        .iter()
+        .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
+        .collect();
+        let sidedef = |sector: u16| {
+            let mut b = Vec::new();
+            b.extend_from_slice(&0i16.to_le_bytes());
+            b.extend_from_slice(&0i16.to_le_bytes());
+            b.extend_from_slice(&name8("-"));
+            b.extend_from_slice(&name8("-"));
+            b.extend_from_slice(&name8("STARTAN3"));
+            b.extend_from_slice(&sector.to_le_bytes());
+            b
+        };
+        let sidedefs: Vec<u8> = [sidedef(0), sidedef(1)].concat();
+        let sector = |tag: u16| {
+            let mut b = Vec::new();
+            b.extend_from_slice(&0i16.to_le_bytes());
+            b.extend_from_slice(&128i16.to_le_bytes());
+            b.extend_from_slice(&name8("FLOOR0_1"));
+            b.extend_from_slice(&name8("CEIL1_1"));
+            for v in [160u16, 0, tag] {
+                b.extend_from_slice(&v.to_le_bytes());
+            }
+            b
+        };
+        let sectors: Vec<u8> = [sector(0), sector(1)].concat();
+        // THINGS: x, y, angle, type, flags. On disk x/y are `i16`; these
+        // coordinates are positive, so the `u16` little-endian encoding below
+        // is byte-identical — a negative coordinate would need `i16` here.
+        // The type-14 teleport landing inside the destination sector is what
+        // makes this a teleporter rather than four lines pointing at floor.
+        let things: Vec<u8> = [[250u16, 250, 90, 14, 7]]
+            .iter()
+            .flat_map(|r| r.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>())
+            .collect();
+        build_pwad(&[
+            ("MAP01", &[]),
+            ("THINGS", &things),
+            ("LINEDEFS", &linedefs),
+            ("SIDEDEFS", &sidedefs),
+            ("VERTEXES", &vertexes),
+            ("SECTORS", &sectors),
+        ])
+    }
+
     #[test]
     fn assembly_failure_reports_the_real_error() {
         assert_eq!(
@@ -383,27 +916,144 @@ mod tests {
 
     #[test]
     fn teleport_specials_classify_by_format() {
-        let listed = [
-            39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 243, 244, 262, 263, 264, 265, 266, 267,
-            268, 269,
-        ];
-        for special in listed {
+        for special in TELEPORT_SPECIALS {
             assert!(
-                is_teleport_special(special, MapFormat::Doom),
-                "special {special} should classify on Doom-format maps"
+                is_teleport_special(special, MapFormat::Doom, None),
+                "special {special} is a Doom teleport"
             );
         }
-        for special in [0, 1, 40, 173, 196, 206, 211, 242, 245, 261, 270] {
+        for special in [0, 1, 38, 40, 96, 98, 270] {
             assert!(
-                !is_teleport_special(special, MapFormat::Doom),
+                !is_teleport_special(special, MapFormat::Doom, None),
                 "special {special} is not a teleport"
             );
         }
-        for format in [MapFormat::Hexen, MapFormat::Udmf, MapFormat::Doom64] {
+        // Doom numbers are meaningless in the Hexen space and vice versa.
+        assert!(!is_teleport_special(39, MapFormat::Hexen, None));
+        assert!(!is_teleport_special(70, MapFormat::Doom, None));
+        for special in HEXEN_TELEPORT_SPECIALS {
             assert!(
-                !is_teleport_special(39, format) && !is_teleport_special(97, format),
-                "{format:?} has a different special number space"
+                is_teleport_special(special, MapFormat::Hexen, None),
+                "special {special} is a Hexen teleport"
             );
+        }
+        // Level exits, not in-map teleports.
+        for special in [74, 75] {
+            assert!(
+                !is_teleport_special(special, MapFormat::Hexen, None),
+                "special {special} exits the level rather than teleporting within it"
+            );
+        }
+        // Doom64 has its own space, which crustywad exposes no semantics for.
+        assert!(!is_teleport_special(39, MapFormat::Doom64, None));
+        assert!(!is_teleport_special(70, MapFormat::Doom64, None));
+    }
+
+    #[test]
+    fn every_doom_teleport_special_names_a_destination_kind() {
+        // Nothing else catches a special added to `TELEPORT_SPECIALS` without
+        // a matching entry in `DOOM_SECTOR_TELEPORTS` or
+        // `DOOM_LINE_TELEPORTS`: `link_target` would silently return `None`
+        // for it — no compile error, no lint, no failing test until this one
+        // (#66 review).
+        for s in TELEPORT_SPECIALS {
+            assert!(
+                DOOM_SECTOR_TELEPORTS.contains(&s) || DOOM_LINE_TELEPORTS.contains(&s),
+                "special {s} is classified as a teleport but names no destination kind"
+            );
+        }
+    }
+
+    #[test]
+    fn each_teleport_special_maps_to_its_expected_link_target() {
+        // `every_doom_teleport_special_names_a_destination_kind` only checks
+        // membership in *some* destination-kind list — it cannot catch a
+        // special moved to the *wrong* list, or `71` silently dropped from
+        // the `70 | 71` Hexen arm, both of which would leave every existing
+        // check green (#66 review: only 97/243/70/76/215 of the 20 Doom
+        // specials + 3 Hexen ones were ever exercised through
+        // `link_target`). This pins the exact `LinkTarget` — variant and
+        // which `args` index it reads — for every one, using hardcoded
+        // tables rather than the module's own constants, so a constant
+        // change can't make the test agree with itself.
+        let doom_sector_teleports = [39, 97, 125, 126, 174, 195, 207, 208, 209, 210, 268, 269];
+        for special in doom_sector_teleports {
+            let l = line((0.0, 0.0), (1.0, 0.0), special, [7, 0, 0, 0, 0], None);
+            assert_eq!(
+                link_target(&l, MapFormat::Doom, None),
+                Some(LinkTarget::Sector(7)),
+                "special {special} should target a sector by args[0]"
+            );
+        }
+        let doom_line_teleports = [243, 244, 262, 263, 264, 265, 266, 267];
+        for special in doom_line_teleports {
+            let l = line((0.0, 0.0), (1.0, 0.0), special, [7, 0, 0, 0, 0], None);
+            assert_eq!(
+                link_target(&l, MapFormat::Doom, None),
+                Some(LinkTarget::LineByTag(7)),
+                "special {special} should target a linedef by args[0]"
+            );
+        }
+        // The two tables above must cover exactly `TELEPORT_SPECIALS` — no
+        // more, no less — or a special was added to one without a case here.
+        let mut covered: Vec<i32> = doom_sector_teleports
+            .into_iter()
+            .chain(doom_line_teleports)
+            .collect();
+        covered.sort_unstable();
+        let mut expected = TELEPORT_SPECIALS;
+        expected.sort_unstable();
+        assert_eq!(covered, expected.to_vec());
+
+        for special in [70, 71] {
+            let l = line((0.0, 0.0), (1.0, 0.0), special, [7, 0, 0, 0, 0], None);
+            assert_eq!(
+                link_target(&l, MapFormat::Hexen, None),
+                Some(LinkTarget::Thing(7)),
+                "special {special} should target a thing by args[0]"
+            );
+        }
+        let teleport_other = line((0.0, 0.0), (1.0, 0.0), 76, [7, 0, 0, 0, 0], None);
+        assert_eq!(
+            link_target(&teleport_other, MapFormat::Hexen, None),
+            None,
+            "76 TeleportOther classifies but never yields a link target"
+        );
+        let by_id = line((0.0, 0.0), (1.0, 0.0), 215, [3, 7, 0, 0, 0], None);
+        assert_eq!(
+            link_target(&by_id, MapFormat::Hexen, None),
+            Some(LinkTarget::LineById(7)),
+            "215 should target a linedef by args[1], not args[0]"
+        );
+    }
+
+    #[test]
+    fn udmf_classifies_by_namespace() {
+        // The base namespaces keep their binary format's special space —
+        // matched case-insensitively (crustywad stores the UDMF `namespace`
+        // declaration verbatim, but ZDoom itself does not care about its
+        // case), and `zdoomtranslated` keeps Doom-style numbering too (#66
+        // review).
+        for ns in [
+            "doom",
+            "heretic",
+            "strife",
+            "zdoomtranslated",
+            "DOOM",
+            "ZDoomTranslated",
+        ] {
+            assert!(is_teleport_special(39, MapFormat::Udmf, Some(ns)), "{ns}");
+            assert!(!is_teleport_special(70, MapFormat::Udmf, Some(ns)), "{ns}");
+        }
+        for ns in ["hexen", "zdoom", "HEXEN", "ZDoom"] {
+            assert!(is_teleport_special(70, MapFormat::Udmf, Some(ns)), "{ns}");
+            assert!(!is_teleport_special(39, MapFormat::Udmf, Some(ns)), "{ns}");
+        }
+        // An unrecognized or absent namespace classifies nothing rather than
+        // guessing: a missing mark is a gap, a wrong one is a lie.
+        for ns in [Some("eternity"), Some("vavoom"), Some(""), None] {
+            assert!(!is_teleport_special(39, MapFormat::Udmf, ns));
+            assert!(!is_teleport_special(70, MapFormat::Udmf, ns));
         }
     }
 
@@ -522,5 +1172,509 @@ mod tests {
         assert!(!json.contains("\"damaging_sector\":false"));
         assert!(json.contains("\"secret_sectors\":2"));
         assert!(json.contains("\"damaging_sectors\":2"));
+    }
+
+    fn line(
+        start: (f64, f64),
+        end: (f64, f64),
+        special: i32,
+        args: [i32; 5],
+        sector: Option<usize>,
+    ) -> LinkLine {
+        LinkLine {
+            start,
+            end,
+            special,
+            args,
+            id: 0,
+            sectors: (sector, None),
+        }
+    }
+
+    /// A classic pad: four lines around a square, all the same special and tag,
+    /// all facing sector 1. The destination is sector 2, tagged 1.
+    fn pad_inputs() -> (Vec<LinkLine>, Vec<LinkSector>, Vec<LinkThing>) {
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((64.0, 0.0), (64.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((64.0, 64.0), (0.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((0.0, 64.0), (0.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            // The destination sector's own boundary — not a teleport source.
+            line((200.0, 200.0), (300.0, 200.0), 0, [0; 5], Some(2)),
+            line((300.0, 200.0), (300.0, 300.0), 0, [0; 5], Some(2)),
+            line((300.0, 300.0), (200.0, 300.0), 0, [0; 5], Some(2)),
+            line((200.0, 300.0), (200.0, 200.0), 0, [0; 5], Some(2)),
+        ];
+        let sectors = vec![
+            LinkSector { tag: 0 },
+            LinkSector { tag: 0 },
+            LinkSector { tag: 1 },
+        ];
+        (lines, sectors, Vec::new())
+    }
+
+    #[test]
+    fn a_four_line_pad_yields_one_link_from_its_center() {
+        let (lines, sectors, things) = pad_inputs();
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            1,
+            "four lines of one pad collapse to one link"
+        );
+        assert_eq!(result[0].from, [32.0, 32.0], "the pad's center");
+        assert_eq!(result[0].to, [250.0, 250.0], "the tagged sector's center");
+    }
+
+    #[test]
+    fn a_pad_whose_lines_face_outward_still_yields_one_link() {
+        // Same pad, but every line's facing sidedef is on the other side. The
+        // grouping must not depend on which way the pad's lines face.
+        let (mut lines, sectors, things) = pad_inputs();
+        for l in lines.iter_mut().take(4) {
+            l.sectors = (None, Some(1));
+        }
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from, [32.0, 32.0]);
+    }
+
+    #[test]
+    fn two_disjoint_pads_sharing_a_sector_and_destination_yield_two_links() {
+        // Two physically separate pads, same special/tag, both facing the
+        // same source sector, both aimed at the same destination. Grouping
+        // by (destination, source sector) alone would merge them into one
+        // link from the midpoint between the two pads, where no teleporter
+        // exists (#66 review) — grouping must instead cluster by shared
+        // geometry, so this must yield two links, not one phantom one.
+        let (mut lines, sectors, things) = pad_inputs();
+        lines.extend([
+            line((1000.0, 0.0), (1064.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1064.0, 0.0), (1064.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1064.0, 64.0), (1000.0, 64.0), 97, [1, 0, 0, 0, 0], Some(1)),
+            line((1000.0, 64.0), (1000.0, 0.0), 97, [1, 0, 0, 0, 0], Some(1)),
+        ]);
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            2,
+            "two disjoint pads must not collapse into one link"
+        );
+        let froms: Vec<[f64; 2]> = result.iter().map(|l| l.from).collect();
+        assert!(froms.contains(&[32.0, 32.0]), "the first pad's own center");
+        assert!(
+            froms.contains(&[1032.0, 32.0]),
+            "the second pad's own center, not a point between the two pads"
+        );
+        assert!(
+            result.iter().all(|l| l.to == [250.0, 250.0]),
+            "both pads share the same destination"
+        );
+    }
+
+    #[test]
+    fn an_unmatched_or_zero_tag_yields_no_link() {
+        let (mut lines, sectors, things) = pad_inputs();
+        for l in lines.iter_mut().take(4) {
+            l.args = [99, 0, 0, 0, 0]; // no sector carries tag 99
+        }
+        let unmatched = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(unmatched.is_empty(), "an unmatched tag draws nothing");
+
+        for l in lines.iter_mut().take(4) {
+            l.args = [0; 5]; // tag 0 is the binary "no tag" value
+        }
+        let zero = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(zero.is_empty(), "tag 0 never matches");
+    }
+
+    #[test]
+    fn a_tagged_sector_with_no_boundary_lines_yields_no_link() {
+        // A sector can carry a teleport's tag while no linedef faces it — a
+        // malformed or orphaned tag. There is then no geometry to aim at, so
+        // both `sector_bbox` (the landing preference) and `centroid` (the
+        // fallback) find no points and the source draws nothing rather than
+        // guessing at a position.
+        let (mut lines, mut sectors, things) = pad_inputs();
+        lines.truncate(4); // drop the destination sector's boundary lines
+        sectors.truncate(3); // sector 2 keeps tag 1, but nothing faces it now
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert!(
+            result.is_empty(),
+            "a tag matching a sector with no geometry draws nothing"
+        );
+    }
+
+    #[test]
+    fn several_sectors_sharing_a_tag_resolve_to_the_lowest_index() {
+        // No candidate sector's bounding box contains a teleport landing
+        // (thing 14), so this exercises the fallback path — lowest index
+        // wins, exactly as it always did before the landing-aware tie-break
+        // in `same_tag_sectors_prefer_the_one_containing_a_teleport_landing`.
+        let (mut lines, mut sectors, things) = pad_inputs();
+        sectors.push(LinkSector { tag: 1 }); // a second sector (index 3) tagged 1
+        // Give the decoy sector real boundary geometry, far from sector 2's,
+        // so a wrong ("highest index wins") implementation would resolve to
+        // a visibly different point rather than merely fail to find one —
+        // an empty decoy sector would make this test pass by producing no
+        // link at all instead of discriminating on position.
+        lines.extend([
+            line((1000.0, 1000.0), (1100.0, 1000.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1000.0), (1100.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1100.0), (1000.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1000.0, 1100.0), (1000.0, 1000.0), 0, [0; 5], Some(3)),
+        ]);
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].to, [250.0, 250.0], "sector 2 wins over sector 3");
+    }
+
+    #[test]
+    fn same_tag_sectors_prefer_the_one_containing_a_teleport_landing() {
+        // Sectors 2 and 3 share tag 1; only sector 3 contains a thing 14
+        // (a teleport landing). Vanilla `EV_Teleport` searches tagged
+        // sectors for the first one *containing* a landing, not simply the
+        // lowest-tagged index — measured on Freedoom: 23 of 64
+        // multi-candidate sources picked a landing-less sector while a
+        // later same-tag sector held the landing (#66 review).
+        let (mut lines, mut sectors, _) = pad_inputs();
+        sectors.push(LinkSector { tag: 1 }); // sector 3, also tagged 1
+        lines.extend([
+            line((1000.0, 1000.0), (1100.0, 1000.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1000.0), (1100.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1100.0, 1100.0), (1000.0, 1100.0), 0, [0; 5], Some(3)),
+            line((1000.0, 1100.0), (1000.0, 1000.0), 0, [0; 5], Some(3)),
+        ]);
+        let things = vec![LinkThing {
+            id: 1,
+            x: 1050.0,
+            y: 1050.0,
+            type_id: 14,
+        }];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &sectors,
+            things: &things,
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].to,
+            [1050.0, 1050.0],
+            "sector 3 contains the landing; sector 2 does not, despite the lower index"
+        );
+    }
+
+    #[test]
+    fn boom_line_to_line_targets_a_line_by_tag() {
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 243, [7, 0, 0, 0, 0], Some(1)),
+            line((100.0, 0.0), (100.0, 100.0), 0, [7, 0, 0, 0, 0], Some(2)),
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].from, [32.0, 0.0], "the source line's midpoint");
+        assert_eq!(result[0].to, [100.0, 50.0], "the target line's midpoint");
+    }
+
+    #[test]
+    fn a_bidirectional_boom_line_pair_yields_two_links() {
+        // The idiomatic two-way Boom line teleporter: both lines carry the
+        // *same* teleport special and the same tag, each naming the other as
+        // its destination. Excluding "any other teleport-special line" from
+        // candidacy (as an earlier version of `resolve` did) would exclude
+        // the real target too, since it is itself a 243 line.
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 243, [7, 0, 0, 0, 0], Some(1)),
+            line((100.0, 0.0), (100.0, 100.0), 243, [7, 0, 0, 0, 0], Some(2)),
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(
+            result.len(),
+            2,
+            "each line is its own source, targeting the other"
+        );
+        assert!(
+            result
+                .iter()
+                .any(|l| l.from == [32.0, 0.0] && l.to == [100.0, 50.0]),
+            "line 1 points at line 2's midpoint"
+        );
+        assert!(
+            result
+                .iter()
+                .any(|l| l.from == [100.0, 50.0] && l.to == [32.0, 0.0]),
+            "line 2 points at line 1's midpoint"
+        );
+    }
+
+    #[test]
+    fn a_connected_multi_line_source_never_resolves_to_its_own_sibling() {
+        // Two lines that share an endpoint — one connected source cluster —
+        // both carrying tag 7, plus a separate real target line elsewhere
+        // also tagged 7. Excluding only one representative line (as an
+        // earlier version of `resolve` did, via `component.first()`) leaves
+        // every *other* member of the same cluster as a valid candidate, so
+        // the first line could resolve to its own sibling — a link from the
+        // pad to itself (#66 review).
+        let lines = vec![
+            line((0.0, 0.0), (64.0, 0.0), 243, [7, 0, 0, 0, 0], Some(1)), // idx 0
+            line((64.0, 0.0), (64.0, 64.0), 243, [7, 0, 0, 0, 0], Some(1)), // idx 1, shares (64,0) with idx 0
+            line((500.0, 0.0), (500.0, 100.0), 0, [7, 0, 0, 0, 0], Some(2)), // idx 2, the real target
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Doom,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1, "one cluster, one link");
+        assert_eq!(
+            result[0].to,
+            [500.0, 50.0],
+            "must resolve to the real target line, not a sibling in its own cluster"
+        );
+    }
+
+    #[test]
+    fn hexen_teleport_targets_a_thing_by_tid_exactly() {
+        let lines = vec![line((0.0, 0.0), (64.0, 0.0), 70, [5, 0, 0, 0, 0], Some(1))];
+        let things = vec![
+            LinkThing {
+                id: 4,
+                x: 10.0,
+                y: 10.0,
+                type_id: 0,
+            },
+            LinkThing {
+                id: 5,
+                x: 300.0,
+                y: 400.0,
+                type_id: 0,
+            },
+        ];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 2],
+            things: &things,
+            format: MapFormat::Hexen,
+            namespace: None,
+        });
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].to,
+            [300.0, 400.0],
+            "Hexen names its destination thing, so the link is exact"
+        );
+    }
+
+    #[test]
+    fn hexen_teleport_other_classifies_but_never_links() {
+        let lines = vec![line((0.0, 0.0), (64.0, 0.0), 76, [5, 0, 0, 0, 0], Some(1))];
+        let things = vec![LinkThing {
+            id: 5,
+            x: 300.0,
+            y: 400.0,
+            type_id: 0,
+        }];
+        let result = build_teleport_links(&LinkInputs {
+            lines: &lines,
+            sectors: &[LinkSector { tag: 0 }; 2],
+            things: &things,
+            format: MapFormat::Hexen,
+            namespace: None,
+        });
+        assert!(
+            is_teleport_special(76, MapFormat::Hexen, None),
+            "TeleportOther is still a teleport source"
+        );
+        assert!(
+            result.is_empty(),
+            "but it relocates another actor, so a source->destination link would misrepresent it"
+        );
+    }
+
+    #[test]
+    fn teleport_line_matches_the_line_id_not_the_tag() {
+        // The decoy carries tag 9 in args[0]; the real target carries id 9.
+        // An implementation reading the wrong field picks the decoy.
+        //
+        // Format is UDMF/zdoom, not binary Hexen: crustywad assembles every
+        // binary Hexen/Doom linedef with `id = 0` (there is no on-disk line
+        // id field to read), so special 215 can never functionally match on
+        // a real *binary* Hexen map — only on UDMF's `hexen`/`zdoom`
+        // namespaces, where `id` is an actual per-line UDMF field. Testing
+        // this under `MapFormat::Hexen` with hand-set ids exercised a
+        // configuration the real assembly pipeline cannot produce (#66
+        // review).
+        // `args[0]` is deliberately a *live* id (7) rather than 0, and a decoy
+        // line carries that id. An earlier version left it 0, so a mutant
+        // reading `args[0]` hit the "unset" guard and produced no link at all —
+        // the test still failed, but on emptiness rather than on following the
+        // wrong field. With a live decoy it fails on a wrong *coordinate*,
+        // which is what the name claims.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [7, 9, 0, 0, 0], Some(1));
+        source.id = 1;
+        let mut decoy = line((500.0, 500.0), (600.0, 500.0), 0, [0; 5], Some(2));
+        decoy.id = 7;
+        let mut target = line((100.0, 0.0), (100.0, 100.0), 0, [0; 5], Some(2));
+        target.id = 9;
+        let links = build_teleport_links(&LinkInputs {
+            lines: &[source, decoy, target],
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
+        });
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].to, [100.0, 50.0], "matched on id, not on args[0]");
+    }
+
+    #[test]
+    fn a_line_id_target_never_resolves_to_the_source_line_itself() {
+        // A malformed UDMF/zdoom map where a teleport line's own id happens
+        // to equal the id it targets. The source-index exclusion (not a
+        // special-based one — see `resolve`'s doc comment) must stop it
+        // linking to itself; the only candidate line here IS the source.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, 5, 0, 0, 0], Some(1));
+        source.id = 5;
+        let result = build_teleport_links(&LinkInputs {
+            lines: &[source],
+            sectors: &[LinkSector { tag: 0 }],
+            things: &[],
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
+        });
+        assert!(
+            result.is_empty(),
+            "the only line carrying id 5 is the source itself"
+        );
+    }
+
+    #[test]
+    fn udmf_no_id_sentinel_never_matches_via_line_id() {
+        // crustywad documents UDMF's "no id" sentinel as -1 (Doom/Hexen's is
+        // 0), and every UDMF line that omits `id` gets that same -1 — so two
+        // id-less lines must never link to each other via special 215.
+        let mut source = line((0.0, 0.0), (64.0, 0.0), 215, [0, -1, 0, 0, 0], Some(1));
+        source.id = -1;
+        let mut other = line((100.0, 0.0), (100.0, 100.0), 0, [0; 5], Some(2));
+        other.id = -1;
+        let result = build_teleport_links(&LinkInputs {
+            lines: &[source, other],
+            sectors: &[LinkSector { tag: 0 }; 3],
+            things: &[],
+            format: MapFormat::Udmf,
+            namespace: Some("zdoom"),
+        });
+        assert!(
+            result.is_empty(),
+            "-1 is UDMF's unset sentinel, not a real shared id"
+        );
+    }
+
+    #[test]
+    fn tiny_pwad_teleports_have_no_destination() {
+        let m = map2d(&tiny_pwad(), "MAP01").expect("assembles");
+        assert_eq!(m.lines.iter().filter(|l| l.teleport).count(), 2);
+        assert!(
+            m.links.is_empty(),
+            "its teleport lines are tagged 1 but nothing carries that tag"
+        );
+    }
+
+    #[test]
+    fn a_real_teleporter_produces_one_link_through_the_full_pipeline() {
+        let m = map2d(&teleporter_pwad(), "MAP01").expect("assembles");
+        assert_eq!(m.links.len(), 1);
+        assert_eq!(m.links[0].from, [32.0, 32.0], "the pad's own center");
+        assert_eq!(
+            m.links[0].to,
+            [250.0, 250.0],
+            "the tagged destination sector's center"
+        );
+    }
+
+    #[test]
+    fn links_field_skips_empty_and_appears_when_populated() {
+        // `sector_fields_skip_false_in_json` is the precedent: nothing else
+        // pins the serialized shape of `links`, so renaming the field or
+        // dropping its `#[serde(skip_serializing_if)]` would keep every
+        // other check green while silently breaking `format.ts` (#66
+        // review).
+        let empty = map2d(&tiny_pwad(), "MAP01").unwrap();
+        let empty_json = serde_json::to_string(&empty).unwrap();
+        assert!(
+            !empty_json.contains("\"links\""),
+            "an empty links vec is omitted from the payload"
+        );
+
+        let populated = map2d(&teleporter_pwad(), "MAP01").unwrap();
+        let populated_json = serde_json::to_string(&populated).unwrap();
+        assert!(
+            populated_json.contains("\"links\":["),
+            "a populated links vec is serialized under the `links` key"
+        );
+        assert!(
+            populated_json.contains("\"from\":[32.0,32.0]")
+                && populated_json.contains("\"to\":[250.0,250.0]"),
+            "each link keeps its `from`/`to` shape: {populated_json}"
+        );
     }
 }
