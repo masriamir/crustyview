@@ -28,7 +28,7 @@
     CLASSIC_LINE_TELEPORT,
   } from './lines';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
-  import { segmentVisible, viewportRect } from './cull';
+  import { pointVisible, segmentVisible, viewportRect } from './cull';
 
   interface Props {
     name: string;
@@ -110,6 +110,12 @@
    *  geometry (`KIND_WIDTH.one_sided` and `OVERLAY_WIDTH`, both 2) so a line
    *  just off screen whose stroke would still land inside is not dropped. */
   const LINE_CULL_PAD_PX = 2;
+  /** `THING_PX` is 3 and drawn centered, so a marker reaches 1.5 px past its
+   *  coordinate; 2 rounds that up. */
+  const THING_CULL_PAD_PX = 2;
+  /** The largest start arrow is `PLAYER_ARROW_PX` (10), drawn centered, so it
+   *  reaches 5 px past its coordinate; 6 rounds that up. */
+  const ARROW_CULL_PAD_PX = 6;
 
   /** Teleport link treatment (#66). Links are an *annotation about* the map
    *  rather than part of it, so they are drawn subordinate to the source lines
@@ -440,10 +446,12 @@
     // work.
     const paths = new Map<ThingCategory, Path2D>();
     const half = THING_PX / 2;
+    const view = viewportRect(t, width, height, THING_CULL_PAD_PX);
     for (const thing of map.things) {
       const category = categoryOf(thing.type_id, game);
       if (ARROW_CATEGORIES.has(category)) continue;
       if (!mapPrefs.isCategoryShown(category)) continue;
+      if (!pointVisible(view, thing.x, thing.y)) continue;
       let path = paths.get(category);
       if (path === undefined) {
         path = new Path2D();
@@ -472,12 +480,14 @@
     // `ARROW_CATEGORY_ORDER` carries the back-to-front paint order: deathmatch
     // first so co-op paints above it where a level puts both in one room;
     // `drawPlayerStart` then paints above both.
+    const view = viewportRect(t, width, height, ARROW_CULL_PAD_PX);
     for (const category of ARROW_CATEGORY_ORDER) {
       if (!mapPrefs.isCategoryShown(category)) continue;
       const color = colors.things[category];
       const size = ARROW_SIZES[category];
       for (const thing of map.things) {
         if (categoryOf(thing.type_id, game) !== category) continue;
+        if (!pointVisible(view, thing.x, thing.y)) continue;
         drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
       }
     }
