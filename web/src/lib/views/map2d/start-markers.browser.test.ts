@@ -186,8 +186,11 @@ describe.each([
     // Assert before restoring: `mockRestore` also clears the recorded calls
     // (it includes a `mockReset`), so checking after it would always see zero
     // regardless of what actually happened.
-    expect(rectSpy).not.toHaveBeenCalled();
-    rectSpy.mockRestore();
+    try {
+      expect(rectSpy).not.toHaveBeenCalled();
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 });
 

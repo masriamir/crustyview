@@ -42,7 +42,7 @@ export const CATEGORIES: readonly { id: ThingCategory; label: string }[] = [
 export const CLASSIC_THING_COLORS: Record<ThingCategory, string> = {
   monsters: '#ff375f',
   coop: '#2f9e50',
-  deathmatch: '#ff5edb',
+  deathmatch: '#ff8fa3',
   weapons: '#ff9f0a',
   ammo: '#c8a765',
   health: '#63e6be',
