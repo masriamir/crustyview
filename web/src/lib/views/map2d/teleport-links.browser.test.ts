@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Map2d as Map2dPayload } from '../../format';
 import { installMapSizing, painted } from './browser-test-helpers';
 
@@ -51,6 +51,14 @@ async function snapshot(): Promise<string> {
   expect(await painted(canvas as HTMLCanvasElement)).toBe(true);
   return (canvas as HTMLCanvasElement).toDataURL();
 }
+
+// `mapPrefs` is a module singleton, so a test that flips a preference and walks
+// away leaves it flipped for whatever runs next in this file. Restore rather
+// than reset-to-default: the point is to leave no trace, not to assert one.
+const showTeleportLinesDefault = mapPrefs.showTeleportLines;
+afterEach(() => {
+  mapPrefs.showTeleportLines = showTeleportLinesDefault;
+});
 
 describe('teleport links', () => {
   it('draw only when the payload carries them and the overlay is on', async () => {
