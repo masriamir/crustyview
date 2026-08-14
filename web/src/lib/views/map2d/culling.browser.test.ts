@@ -101,6 +101,12 @@ const showThingsDefault = mapPrefs.showThings;
 const showTeleportLinesDefault = mapPrefs.showTeleportLines;
 const coopShownDefault = mapPrefs.showCategories.coop;
 afterEach(() => {
+  // `payload` is module-level and every test currently assigns it before
+  // rendering, so nothing reads a stale one today. Reset it anyway, as
+  // `start-markers.browser.test.ts` does: a test added later that forgets to
+  // assign would otherwise inherit whichever fixture happened to run before
+  // it, and pass or fail for a reason that has nothing to do with itself.
+  payload = CROSSING;
   mapPrefs.showThings = showThingsDefault;
   mapPrefs.showTeleportLines = showTeleportLinesDefault;
   mapPrefs.showCategories.coop = coopShownDefault;
@@ -126,9 +132,17 @@ describe('viewport culling', () => {
    * suite.
    *
    * Each fixture avoids `pointVisible`/`segmentVisible`'s inclusive boundary
-   * on purpose (per its own comment below), and each was verified, by hand,
-   * to go red when its pad is *reduced* (not negated) — see
-   * task-4-report.md for the exact reduction and observed failure per test.
+   * on purpose (per its own comment below), and each was verified by hand to
+   * go red when its pad is *reduced* — not merely negated, which any of them
+   * would survive. The reductions used: `LINE_CULL_PAD_PX` 2 to 0.3,
+   * `THING_CULL_PAD_PX` 3 to 0.7, `ARROW_CULL_PAD_PX` 7 to 2 and
+   * `LINK_CULL_PAD_PX` 52 to 15.
+   *
+   * Each test can only discriminate down to its element's true ink reach,
+   * which is roughly half of each pad — the pads are deliberately
+   * conservative, so no drawn pixel reaches the rest of the budget and
+   * nothing can distinguish, say, a 52 from a 40. That ceiling is geometry,
+   * not a gap in the tests.
    */
   it('keeps a line whose coordinate sits just outside the raw viewport, within LINE_CULL_PAD_PX', async () => {
     payload = PAD_BASE;
