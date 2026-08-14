@@ -114,14 +114,12 @@
   /** `THING_PX` is drawn centered, so a marker's own reach is half of it;
    *  padding by the whole size is trivially conservative. */
   const THING_CULL_PAD_PX = THING_PX;
-  /** A start arrow's farthest point is a barb vertex, at radius `size * 1.28`
-   *  from its coordinate (`drawStartArrow`'s barbs sit at `(-half, ±half*0.8)`,
-   *  and the glyph rotates arbitrarily, so the reach is that vertex's radius
-   *  in every direction). Padding by the full `size` — not half of it — clears
-   *  that radius with room to spare: at the largest arrow this pass ever
-   *  draws, `ARROW_SIZES` tops out at 7, whose vertex radius is 4.482; `10`
-   *  (`PLAYER_ARROW_PX`) belongs to `drawPlayerStart`, deliberately never
-   *  culled, and would need a bigger pad than this one if it ever were. */
+  /** A start arrow's farthest point is a barb vertex, at radius `half * 1.28`
+   *  from the arrow's coordinate (barbs sit at `(-half, ±half*0.8)`; the glyph
+   *  rotates arbitrarily). Padding by the full `size` clears this radius: size 7
+   *  yields 4.482, size 10 (`PLAYER_ARROW_PX`) yields 6.403, both covered by
+   *  this pad. `PLAYER_ARROW_PX` belongs to `drawPlayerStart`, deliberately
+   *  never culled. */
   const ARROW_CULL_PAD_PX = Math.max(...Object.values(ARROW_SIZES));
 
   /** Teleport link treatment (#66). Links are an *annotation about* the map
