@@ -118,6 +118,26 @@ describe('MapPrefsStore', () => {
     expect(p.showTeleportLines).toBe(true);
   });
 
+  it('storage predating the arc/line split inherits the old flag for the arcs', () => {
+    // #154 split one preference into two. Before it, `showTeleportLines: false`
+    // meant "no source lines AND no arcs", so restoring the new key from its
+    // default would hand a returning user arcs they had switched off.
+    localStorage.setItem(KEY, JSON.stringify({ showTeleportLines: false }));
+    const p = new MapPrefsStore();
+    expect(p.showTeleportLines).toBe(false);
+    expect(p.showTeleportArcs).toBe(false);
+  });
+
+  it('a stored showTeleportArcs wins over the pre-split flag', () => {
+    // The inheritance only fills a gap. Once the new key exists it is an
+    // explicit choice, and the old flag must not override it in either
+    // direction.
+    localStorage.setItem(KEY, JSON.stringify({ showTeleportLines: false, showTeleportArcs: true }));
+    expect(new MapPrefsStore().showTeleportArcs).toBe(true);
+    localStorage.setItem(KEY, JSON.stringify({ showTeleportLines: true, showTeleportArcs: false }));
+    expect(new MapPrefsStore().showTeleportArcs).toBe(false);
+  });
+
   it('sector overlays default off; toggles flip, persist, and restore', () => {
     const p = new MapPrefsStore();
     expect(p.showSecretSectors).toBe(false);

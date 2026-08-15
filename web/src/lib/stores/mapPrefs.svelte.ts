@@ -94,7 +94,12 @@ export class MapPrefsStore {
     if (typeof v.alwaysShowPlayerStart === 'boolean')
       this.alwaysShowPlayerStart = v.alwaysShowPlayerStart;
     if (isGridSize(v.gridSize)) this.gridSize = v.gridSize;
+    // Stored preferences predating the arc/line split carry one flag that meant
+    // BOTH. Inherit it when the new key is absent, so a user who had teleports
+    // off does not have the arcs reappear on upgrade. A present `false` still
+    // wins — this only fills a gap, it never overrides an explicit choice.
     if (typeof v.showTeleportArcs === 'boolean') this.showTeleportArcs = v.showTeleportArcs;
+    else if (typeof v.showTeleportLines === 'boolean') this.showTeleportArcs = v.showTeleportLines;
     if (isTeleportArcCap(v.teleportArcCap)) this.teleportArcCap = v.teleportArcCap;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {

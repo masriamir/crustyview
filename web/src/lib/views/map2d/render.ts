@@ -309,7 +309,7 @@ function drawTeleportLinks(
 ): void {
   if (!map.links?.length) return;
   const view = viewportRect(t, width, height, LINK_CULL_PAD_PX);
-  // Cull FIRST, then cap what survived — never the other way round. Capping
+  // Cull FIRST, then cap what survived — never the other way around. Capping
   // globally would pick the longest links in the whole map, nearly all of which
   // are off screen at high zoom, so zooming in would reveal nothing. This order
   // gives progressive disclosure instead: the longest arteries at fit, then

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Map2d as Map2dPayload } from '../../format';
 import { installMapSizing, painted } from './browser-test-helpers';
+import type { TeleportArcCap } from './teleportArcs';
 
 /**
  * #66: the links are drawn inside the same overlay as the teleport source
@@ -184,10 +185,15 @@ describe('teleport links', () => {
     return found;
   }
 
-  async function paintWithCap(cap: number | 'all'): Promise<number> {
+  async function paintWithCap(cap: TeleportArcCap): Promise<number> {
     mapPrefs.style = 'classic';
     mapPrefs.showTeleportArcs = true;
-    mapPrefs.teleportArcCap = cap as typeof mapPrefs.teleportArcCap;
+    // Pinned, not left to its default: `linkPixels` counts every pixel of the
+    // teleport color and the source-line overlay strokes in that same color, so
+    // the isolation must be stated rather than resting on `MANY_LINKS`'s walls
+    // happening to carry no `teleport` flag.
+    mapPrefs.showTeleportLines = false;
+    mapPrefs.teleportArcCap = cap;
     payload = MANY_LINKS;
     const screen = await render(Map2d, { name: 'MAP01' });
     const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
@@ -209,6 +215,7 @@ describe('teleport links', () => {
     // than leave a stale bitmap. Panning first guarantees a tile is in use.
     mapPrefs.style = 'classic';
     mapPrefs.showTeleportArcs = true;
+    mapPrefs.showTeleportLines = false;
     mapPrefs.teleportArcCap = 'all';
     payload = MANY_LINKS;
     const screen = await render(Map2d, { name: 'MAP01' });
