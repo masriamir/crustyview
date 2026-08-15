@@ -195,6 +195,48 @@ describe('blitRects', () => {
     expect(r.sy).toBe(Math.round((300 + 0.4) * 2));
   });
 
+  /**
+   * A fractional device pixel ratio with an odd viewport, so `width * dpr` and
+   * `height * dpr` are both non-integers: 961 * 1.25 = 1201.25 and
+   * 601 * 1.25 = 751.25. This is Windows display scaling and browser zoom on
+   * any platform — headless Chromium runs at dpr 1, so no browser-tier test
+   * can reach it.
+   */
+  const FRACTIONAL_DPR = 1.25;
+  const ODD_WIDTH = 961;
+  const ODD_HEIGHT = 601;
+
+  it('keeps the source and destination device extents equal at a fractional dpr', () => {
+    // The invariant, stated as the thing that actually matters: the destination
+    // is CSS px into a context scaled by `dpr`, so its device extent is
+    // `dw * dpr` unrounded. Round the source to a different number and
+    // `drawImage` gets a scale factor a hair off 1, filters the whole image,
+    // and the map is permanently soft on every pan.
+    const r = blitRects(TILE, IDENTITY, ODD_WIDTH, ODD_HEIGHT, FRACTIONAL_DPR);
+    expect(r.sw).toBe(r.dw * FRACTIONAL_DPR);
+    expect(r.sh).toBe(r.dh * FRACTIONAL_DPR);
+    // And the extents really are fractional here, so the case cannot pass by
+    // the rounding being a no-op the way it is at dpr 1 and 2.
+    expect(Number.isInteger(r.sw)).toBe(false);
+    expect(Number.isInteger(r.sh)).toBe(false);
+  });
+
+  it('still rounds the source offset at a fractional dpr', () => {
+    // The offset rounding is not collateral damage of the fix above: it is what
+    // puts the blit on the device pixel grid, and it stays.
+    const r = blitRects(
+      TILE,
+      { scale: 1, tx: 0.3, ty: -0.4 },
+      ODD_WIDTH,
+      ODD_HEIGHT,
+      FRACTIONAL_DPR,
+    );
+    expect(Number.isInteger(r.sx)).toBe(true);
+    expect(Number.isInteger(r.sy)).toBe(true);
+    expect(r.sw).toBe(r.dw * FRACTIONAL_DPR);
+    expect(r.sh).toBe(r.dh * FRACTIONAL_DPR);
+  });
+
   it('maps the whole tile onto a scaled destination when the scale differs', () => {
     // A map point must land where the CURRENT transform puts it, so the
     // destination is derived from both transforms rather than from the

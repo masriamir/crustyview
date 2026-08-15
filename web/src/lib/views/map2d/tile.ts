@@ -85,6 +85,13 @@ function specAt(
  * most expensive. As zoom climbs the whole-map tile outgrows the budget, but by
  * then viewport culling (#153) has already made redraws cheap, so the two
  * techniques hand off to each other.
+ *
+ * "The whole map" is whatever `bounds` the caller passes, and the component
+ * passes more than `map.bounds`: it supplies `bounds ∪ viewportRect`, so a view
+ * panned outside the map still gets a tile covering what is on screen. It also
+ * clears the returned `wholeMap` itself when `map.bounds` is degenerate, since
+ * a zero-area bounds cannot promise to contain the geometry
+ * (`Map2d.svelte`, `renderTile`).
  */
 export function planTile(
   t: Transform,
@@ -177,12 +184,24 @@ export function tileCovers(spec: TileSpec, t: Transform, width: number, height: 
  * The `drawImage` arguments that put the tile's content where `t` says it
  * belongs.
  *
- * Two branches. At equal scale the source offset is **rounded to whole device
- * pixels**: an unrounded offset makes `drawImage` resample on every pan, which
- * would leave the map permanently soft instead of pixel-exact. At unequal scale
- * the whole tile is mapped onto a scaled destination, so geometry still lands
- * in the right place at the right size and only stroke weights and
- * antialiasing go stale.
+ * Two branches. At equal scale the source **offset** is rounded to whole device
+ * pixels while the source **extent** is not, and both halves of that are
+ * load-bearing. Rounding the offset is what makes the blit land on a device
+ * pixel grid; leaving the extent unrounded is what keeps it 1:1. The
+ * destination is given in CSS px into a context already scaled by `dpr`, so its
+ * device extent is `width * dpr` exactly — rounding the source to match a
+ * *different* number would ask `drawImage` for a scale factor a hair off 1 and
+ * resample the whole image. At dpr 1 or 2 the rounding is invisible because
+ * `width * dpr` is already an integer; at 1.25, 1.5 or 1.75 — Windows display
+ * scaling, and browser zoom on any platform — an odd `clientWidth` makes it
+ * 1201 device px onto a 1201.25 px destination, and the map goes permanently
+ * soft on every pan. So the invariant to hold is `sw === dw * dpr` and
+ * `sh === dh * dpr`, exactly, with `sx`/`sy` still integers.
+ *
+ * At unequal scale the whole tile is mapped onto a scaled destination, so
+ * geometry still lands in the right place at the right size and only stroke
+ * weights and antialiasing go stale. Resampling is the point there, so that
+ * branch reads the whole backing store and rounds to it.
  *
  * A source rect reaching past the tile is fine and expected for a whole-map
  * tile panned toward its edge: the canvas specification clips source and
@@ -200,8 +219,8 @@ export function blitRects(
     return {
       sx: Math.round((spec.transform.tx - t.tx) * dpr),
       sy: Math.round((spec.transform.ty - t.ty) * dpr),
-      sw: Math.round(width * dpr),
-      sh: Math.round(height * dpr),
+      sw: width * dpr,
+      sh: height * dpr,
       dx: 0,
       dy: 0,
       dw: width,
