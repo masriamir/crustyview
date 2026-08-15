@@ -1,6 +1,6 @@
 # ADR-0005: Cache the 2D map in a scale-keyed bitmap and blit it, rather than drawing less or moving to a GPU
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-14
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** [#152](https://github.com/masriamir/crustyview/issues/152)
@@ -73,10 +73,13 @@ amends or reaffirms ADR-0002.
 - Good, because every continuous gesture — pan, pinch, wheel, resize drag — becomes a `drawImage` of
   roughly 1 ms, independent of line count.
 - Good, because it forces a simplification the component already needed. `draw()` runs outside the
-  redraw `$effect`'s tracking context, so that effect names fifteen dependencies by hand; the cache's
-  invalidation key replaces that list. A preference missing from the key then fails to invalidate the
-  cache *and* fails to schedule a redraw, so the symptom is a picture that does not change at all
-  rather than one that changes everywhere except the cached layer — loud instead of silent.
+  redraw `$effect`'s tracking context, so that effect has to name every dependency by hand — fifteen
+  of them before this change. The cache's invalidation key collapses ten of those (the preference,
+  style and theme dependencies) into one derived value, leaving six: the canvas, the map data, the
+  transform, the width, the height and the key. It also covers `game`, which the hand-written list
+  never tracked at all. A preference missing from the key then fails to invalidate the cache *and*
+  fails to schedule a redraw, so the symptom is a picture that does not change at all rather than one
+  that changes everywhere except the cached layer — loud instead of silent.
 - Bad, because first paint of a map and every preference toggle still cost one full ~95 ms blocking
   render. They invalidate the key by definition. Accepted because both are one-off moments where a
   pause reads as loading, and because #156 is additive on top of the same cache rather than a rewrite

@@ -255,8 +255,9 @@ function drawLineOverlay(
   ctx.lineDashOffset = 0;
 }
 
-/** Teleport source-to-destination links (#66). Same token as the source
- *  lines: they read as one overlay, toggled by one chip. */
+// Teleport source-to-destination links (#66). Same token as the source lines:
+// they read as one overlay, toggled by one chip.
+
 /** The quadratic control point that bows a link perpendicular to its chord. */
 function linkControlPoint(
   from: { x: number; y: number },

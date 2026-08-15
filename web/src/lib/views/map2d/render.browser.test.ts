@@ -9,6 +9,11 @@ import type { Transform } from './transform';
  * surface with its own dimensions, so those are parameters now — and a pass
  * that missed the change would still look right in the app while quietly
  * culling against the wrong rect on the tile (#152).
+ *
+ * The fixture below is one wall line and nothing else — no things, no links, no
+ * marked sectors — so what this file actually exercises is the surface size
+ * reaching `drawLines`' cull rect. The other passes take the same parameters by
+ * construction, but they are not covered here.
  */
 const PALETTE: Palette = {
   bg: '#000000',

@@ -707,11 +707,13 @@
 
   // Redraw on anything the picture depends on. `draw()` runs outside this
   // effect's tracking context, so its dependencies have to be named here — but
-  // every preference, the theme and the game now arrive through one derived
-  // key rather than fifteen hand-written lines. That is what stops the cache's
-  // invalidation drifting from the redraw trigger: a field missing from the key
-  // fails to do both, so the symptom is a picture that never changes rather
-  // than one that changes everywhere except the cached layer (#152).
+  // every preference, the style and the theme now arrive through one derived
+  // key, so the ten lines that used to name them by hand are down to the six
+  // below. The key also covers `game`, which the old list never tracked at all.
+  // That is what stops the cache's invalidation drifting from the redraw
+  // trigger: a field missing from the key fails to do both, so the symptom is a
+  // picture that never changes rather than one that changes everywhere except
+  // the cached layer (#152).
   $effect(() => {
     void canvas;
     void data;

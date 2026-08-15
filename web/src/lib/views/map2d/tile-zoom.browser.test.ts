@@ -434,10 +434,11 @@ describe('zooming against the tile cache', () => {
     // And the settle really did undo it. A guard weakened into "blit scaled
     // forever" leaves `settled` at `during`, which is `ZOOM_RATIO` times too
     // much ink; a crisp re-render puts it back on the direct render's stroke
-    // weight. Measured on this fixture: `during / direct` is 6.54 against a
-    // 6.73 ideal (bilinear resampling loses a little at the line ends), and
-    // `settled / direct` is 1.000004. The band below is headroom for another
-    // machine's device pixel ratio, not the observed spread.
+    // weight. Measured on this fixture at dpr 1: `during / direct` is 6.38
+    // against a `ZOOM_RATIO` ideal of 6.73 (bilinear resampling loses a little
+    // at the line ends), and `settled / direct` is 1.000006. The band below is
+    // headroom for another machine's device pixel ratio, not the observed
+    // spread.
     expect(settled / direct, 'the settled picture must match a direct render').toBeGreaterThan(0.8);
     expect(settled / direct, 'the settled picture must match a direct render').toBeLessThan(1.25);
   });
