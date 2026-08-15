@@ -78,4 +78,56 @@ describe('teleport links', () => {
     const offWith = await snapshot();
     expect(offWith, 'with the overlay off, a link must change nothing').toBe(offWithout);
   });
+
+  /**
+   * #162. Links are culled on their ENDPOINTS, not on whether their chord
+   * crosses the view — a deliberate departure from #153's trivial-reject rule,
+   * which every other pass still uses.
+   *
+   * The rule differs because a link is an annotation about a pair of places
+   * rather than map geometry. Dropping a wall that crosses the view destroys
+   * structure; dropping a link whose two ends are both off screen removes an
+   * arc that says nothing about where it goes or where it came from. On
+   * Eviternity II MAP26 that distinction is 1,668 uncullable arcs against a
+   * handful, and it is why high zoom cost MORE than fit before this change.
+   *
+   * Both fixtures place endpoints outside the declared `bounds`, which
+   * `fitTransform` fits instead of the geometry — the standard trick here for
+   * putting things off screen without driving the zoom keys.
+   */
+  const CROSSING_LINK: Map2dPayload = {
+    ...BASE,
+    // Both ends far outside, on OPPOSITE edges, so the chord sweeps straight
+    // across the viewport. This is exactly the shape trivial reject keeps.
+    links: [{ from: [-50000, 256], to: [60000, 256] }],
+  };
+  const ANCHORED_LINK: Map2dPayload = {
+    ...BASE,
+    // One end inside the view, the other far outside: still readable, so it
+    // must survive.
+    links: [{ from: [256, 256], to: [60000, 256] }],
+  };
+
+  it('skip a link whose two endpoints are both off screen', async () => {
+    mapPrefs.showTeleportLines = true;
+    payload = BASE;
+    const without = await snapshot();
+    payload = CROSSING_LINK;
+    const withCrossing = await snapshot();
+    expect(
+      withCrossing,
+      'a link with both ends off screen carries no information and must not draw',
+    ).toBe(without);
+  });
+
+  it('still draw a link with one endpoint on screen', async () => {
+    // The other half of the rule, and the one that keeps it from being "drop
+    // every link that leaves the view": a visible terminus is readable.
+    mapPrefs.showTeleportLines = true;
+    payload = BASE;
+    const without = await snapshot();
+    payload = ANCHORED_LINK;
+    const withAnchored = await snapshot();
+    expect(withAnchored, 'a link anchored in view must still draw').not.toBe(without);
+  });
 });
