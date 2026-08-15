@@ -4,6 +4,7 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { gridDrawnSuffix, gridLabel, type GridSize } from './map2d/grid';
+  import { arcCapLabel, arcCapName } from './map2d/teleportArcs';
   import {
     CATEGORIES,
     CATEGORY_DESCRIPTIONS,
@@ -44,6 +45,7 @@
 
   const teleportLines = $derived(map2d?.teleportLineCount() ?? null);
   const sectorCounts = $derived(map2d?.sectorCounts() ?? null);
+  const linkTotal = $derived(map2d?.linkCount() ?? null);
 
   /** Swatch color per the active style, so the chips double as the legend. */
   function swatchColor(id: ThingCategory): string {
@@ -121,6 +123,19 @@
           onclick={() => mapPrefs.toggleGrid()}
         >
           Grid · {gridLabelText}
+        </button>
+        <button
+          type="button"
+          class="tool"
+          title="Show teleport links — the arcs pairing each teleporter with its destination; , and . change how many draw. The Teleport lines chip marks the sources separately."
+          aria-pressed={mapPrefs.showTeleportArcs}
+          aria-disabled={linkTotal === 0}
+          aria-label={arcCapName(mapPrefs.teleportArcCap, linkTotal ?? 0)}
+          onclick={() => {
+            if (linkTotal !== 0) mapPrefs.toggleTeleportArcs();
+          }}
+        >
+          Links · {arcCapLabel(mapPrefs.teleportArcCap, linkTotal ?? 0)}
         </button>
         <button
           type="button"

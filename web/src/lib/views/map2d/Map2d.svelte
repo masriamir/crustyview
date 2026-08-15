@@ -8,6 +8,7 @@
   import { fitTransform, panBy, screenToMap, zoomAt, type Transform } from './transform';
   import { countByCategory, type ThingCategory } from './things';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
+  import { arcCapName, stepArcCap } from './teleportArcs';
   import { viewportRect } from './cull';
   import { renderKey, tileKey, type TileKeyInput } from './renderKey';
   import {
@@ -56,6 +57,11 @@
   let dragging = $state(false);
   /** Polite live-region text for grid size changes ("Grid 64"). */
   let gridAnnouncement = $state('');
+  /** Polite live-region text for arc-cap changes. Separate from the grid's
+   *  region deliberately: that one carries a debounce and three defect fixes
+   *  (#127/#128/#131), and this announcement is immediate — a keypress, not a
+   *  gesture — so it has nothing to share with it. */
+  let arcCapAnnouncement = $state('');
   /** Debounce for the drawable-state announcement; 0 when none is pending. */
   let gridAnnounceTimer = 0;
   /**
@@ -471,6 +477,13 @@
     return count;
   }
 
+  /** Teleport link count for the arc button's label; null until the map is available. */
+  export function linkCount(): number | null {
+    const map = data;
+    if (!map) return null;
+    return map.links?.length ?? 0;
+  }
+
   /** Classified-sector counts for the overlay chips; null until the map is available. */
   export function sectorCounts(): { secrets: number; damage: number } | null {
     const map = data;
@@ -604,6 +617,21 @@
     gridAnnouncement = `Grid ${next}${limit}${shown}`;
   }
 
+  /** Step the arc cap, turning the overlay on if hidden — adjusting is
+   *  immediate feedback, exactly as it is for the grid. */
+  function adjustArcCap(direction: -1 | 1): void {
+    if (!mapPrefs.showTeleportArcs) mapPrefs.toggleTeleportArcs();
+    const next = stepArcCap(mapPrefs.teleportArcCap, direction);
+    const clamped = next === mapPrefs.teleportArcCap;
+    mapPrefs.setTeleportArcCap(next);
+    const total = data?.links?.length ?? 0;
+    // A clamped press still announces, with distinct wording: identical
+    // live-region text is skipped by both Svelte and screen readers.
+    arcCapAnnouncement = clamped
+      ? `${arcCapName(next, total)}, limit reached`
+      : arcCapName(next, total);
+  }
+
   function handleKeyDown(e: KeyboardEvent): void {
     // Brackets first: many layouts type them with AltGr (reported as ctrl+alt)
     // or Option, which the blanket modifier guard below would swallow. Only
@@ -611,6 +639,14 @@
     if ((e.key === '[' || e.key === ']') && !e.metaKey) {
       e.preventDefault();
       adjustGridSize(e.key === ']' ? 1 : -1);
+      return;
+    }
+    // `,` and `.` are the unshifted `<` and `>`, so they read as less/more, and
+    // unlike `[` / `]` they are not typed via AltGr or Option on common
+    // layouts — which is why that branch above needs its own modifier handling.
+    if ((e.key === ',' || e.key === '.') && !e.metaKey) {
+      e.preventDefault();
+      adjustArcCap(e.key === '.' ? 1 : -1);
       return;
     }
     // Leave modified keys to the browser and the OS.
@@ -784,9 +820,10 @@
     <p id={instructionsId} class="visually-hidden">
       Drag or use the arrow keys to pan. Zoom with the scroll wheel, a pinch, or the plus
       and minus keys. Press 0 or double-click to fit the whole map. Press [ or ] to shrink
-      or grow the grid.
+      or grow the grid, or , and . to change how many teleport links draw.
     </p>
     <p class="visually-hidden" role="status">{gridAnnouncement}</p>
+    <p class="visually-hidden" role="status">{arcCapAnnouncement}</p>
     {#if isEmpty}<p class="empty" role="status">Empty map.</p>{/if}
   </div>
 {/if}
