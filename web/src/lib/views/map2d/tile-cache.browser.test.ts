@@ -266,14 +266,18 @@ beforeEach(() => {
   payloads = { MAP01: MAP };
   // `mapPrefs` is a module singleton shared by every case in this file, and
   // `localStorage` can carry state in from another file, so pin the starting
-  // point rather than trusting the defaults.
-  if (!mapPrefs.showThings) mapPrefs.toggleThings();
-  if (!mapPrefs.showTeleportLines) mapPrefs.toggleTeleportLines();
-  if (mapPrefs.showSecretSectors) mapPrefs.toggleSecretSectors();
-  if (mapPrefs.showDamagingSectors) mapPrefs.toggleDamagingSectors();
-  if (!mapPrefs.alwaysShowPlayerStart) mapPrefs.toggleAlwaysShowPlayerStart();
-  if (!mapPrefs.isCategoryShown('monsters')) mapPrefs.toggleCategory('monsters');
-  if (mapPrefs.style !== 'classic') mapPrefs.toggleStyle();
+  // point rather than trusting the defaults. Assigned directly rather than
+  // through the `toggle*` methods because those call `#persist()`: a bare
+  // assignment is still reactive but writes nothing to `localStorage`, so this
+  // file leaves no preferences behind for whatever spec runs next in the same
+  // browser context.
+  mapPrefs.showThings = true;
+  mapPrefs.showTeleportLines = true;
+  mapPrefs.showSecretSectors = false;
+  mapPrefs.showDamagingSectors = false;
+  mapPrefs.alwaysShowPlayerStart = true;
+  mapPrefs.showCategories.monsters = true;
+  mapPrefs.style = 'classic';
 });
 
 describe('a preference change reaches the cached bitmap', () => {
