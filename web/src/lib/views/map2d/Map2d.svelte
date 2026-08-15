@@ -387,14 +387,26 @@
     const scaleMoved = t.scale !== lastDrawnScale;
     lastDrawnScale = t.scale;
     let usable: TileState | null;
-    if (live !== null && live.spec.transform.scale !== t.scale) {
-      // Scale changed mid-gesture: blit what we have, scaled. Geometry still
-      // lands in the right place at the right size; only stroke weights and
-      // antialiasing are stale until the gesture settles.
+    // Coverage is asked FIRST, at either scale. A scaled blit maps the whole
+    // tile onto a scaled destination, so a zoom-out shrinks it: past the tile's
+    // margin the destination is smaller than the canvas and the edges show bare
+    // background. Blank is worse than soft, so an escaped tile re-renders.
+    if (live !== null && tileCovers(live.spec, t, width, height)) {
       usable = live;
-      if (scaleMoved) scheduleTileSettle();
-    } else if (live !== null && tileCovers(live.spec, t, width, height)) {
-      usable = live;
+      if (live.spec.transform.scale !== t.scale) {
+        // Scale changed mid-gesture: blit what we have, scaled. Geometry still
+        // lands in the right place at the right size; only stroke weights and
+        // antialiasing are stale until the gesture settles.
+        if (scaleMoved) scheduleTileSettle();
+      } else {
+        // An exact-scale hit is already crisp, so a settle armed by an earlier
+        // zoom has nothing left to fix — letting it fire would null a good tile
+        // and pay a full re-render for nothing. Reachable whenever a gesture
+        // lands back on the tile's own scale, which the MIN_ZOOM / MAX_ZOOM
+        // clamps make easy: every notch past the stop resolves to the same
+        // scale.
+        cancelTileSettle();
+      }
     } else {
       cancelTileSettle();
       usable = renderTile(map, t, colors, game, dpr, key);

@@ -1,4 +1,5 @@
 import type { Map2d } from '../../format';
+import { viewportRect } from './cull';
 import { mapToScreen, type Transform } from './transform';
 
 /**
@@ -130,19 +131,46 @@ export function planTile(
 }
 
 /**
- * Whether `spec` can serve the current view.
+ * Whether `spec` holds everything the view will show — at any scale.
  *
- * **Precondition: the scales already match.** Distinguishing "wrong scale" from
- * "panned out of range" is the caller's job, because the two have different
- * answers — a scale change blits the tile scaled, a pan out of range
- * re-renders.
+ * Three paths, and the first two are kept apart deliberately.
+ *
+ * A **whole-map** tile short-circuits: there is nothing outside it to be
+ * missing, and it is often smaller than the viewport, which a containment test
+ * would reject.
+ *
+ * At **equal scale** the question is answered in screen pixels against the
+ * tile's own offset. That formulation is kept exactly as written rather than
+ * rerouted through the map-space arithmetic below, because its four edge cases
+ * sit precisely on the margin boundary and would be exposed to floating-point
+ * drift by the extra divisions.
+ *
+ * At **unequal scale** the same question is answered in map space: everything
+ * the viewport shows under `t` must lie inside the map rect the tile actually
+ * holds. This path is not a nicety — `blitRects` maps the *whole* tile onto a
+ * destination scaled by `t.scale / spec.transform.scale`, so a zoom-out shrinks
+ * that destination, and once the zoom passes the tile's margin the destination
+ * is narrower than the canvas and leaves unpainted bands at the edges (#152).
  */
 export function tileCovers(spec: TileSpec, t: Transform, width: number, height: number): boolean {
   if (spec.wholeMap) return true;
-  // Screen coordinates are tile coordinates plus this offset.
-  const dx = t.tx - spec.transform.tx;
-  const dy = t.ty - spec.transform.ty;
-  return -dx >= 0 && -dy >= 0 && width - dx <= spec.width && height - dy <= spec.height;
+  if (t.scale === spec.transform.scale) {
+    // Screen coordinates are tile coordinates plus this offset.
+    const dx = t.tx - spec.transform.tx;
+    const dy = t.ty - spec.transform.ty;
+    return -dx >= 0 && -dy >= 0 && width - dx <= spec.width && height - dy <= spec.height;
+  }
+  // The tile is its own viewport under its own transform, so one function
+  // describes both rects — including the corner normalization screen-down /
+  // map-north makes necessary.
+  const view = viewportRect(t, width, height, 0);
+  const held = viewportRect(spec.transform, spec.width, spec.height, 0);
+  return (
+    view.minX >= held.minX &&
+    view.maxX <= held.maxX &&
+    view.minY >= held.minY &&
+    view.maxY <= held.maxY
+  );
 }
 
 /**

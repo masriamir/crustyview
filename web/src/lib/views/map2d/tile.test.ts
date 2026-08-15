@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { blitRects, planTile, tileCovers, type TileBudget, type TileSpec } from './tile';
-import type { Transform } from './transform';
+import { zoomAt, type Transform } from './transform';
 
 /** Identity scale with no offset: screen (x, y) is map (x, -y). */
 const IDENTITY: Transform = { scale: 1, tx: 0, ty: 0 };
@@ -129,6 +129,44 @@ describe('tileCovers', () => {
       wholeMap: true,
     };
     expect(tileCovers(wholeMap, { scale: 1, tx: 9999, ty: -9999 }, 800, 600)).toBe(true);
+  });
+
+  /**
+   * Zoom about the viewport center, exactly as the component's keyboard and
+   * wheel handlers do. Derived through `zoomAt` rather than hand-written, so
+   * these cases cannot disagree with the transform the app would actually
+   * produce.
+   */
+  const zoomedView = (factor: number): Transform =>
+    zoomAt(IDENTITY, 400, 300, factor, 0, Number.POSITIVE_INFINITY);
+
+  it('still covers a zoom-in, which shrinks the view inside the tile', () => {
+    expect(tileCovers(VIEWPORT_TILE, zoomedView(2), 800, 600)).toBe(true);
+  });
+
+  it('covers a zoom-out exactly to the margin', () => {
+    // `blitRects` maps the whole tile onto a destination scaled by the zoom
+    // factor, so a tile spanning `1 + 2 * margin` viewports still fills the
+    // canvas down to `1 / (1 + 2 * margin)` — 0.5 at the 0.5 margin above.
+    expect(tileCovers(VIEWPORT_TILE, zoomedView(0.5), 800, 600)).toBe(true);
+  });
+
+  it('stops covering a zoom-out past the margin', () => {
+    // One notch further and the scaled destination is narrower than the canvas,
+    // which used to blit anyway and leave bare background at the edges (#152).
+    expect(tileCovers(VIEWPORT_TILE, zoomedView(0.49), 800, 600)).toBe(false);
+  });
+
+  it('covers any scale when the tile holds the whole map', () => {
+    // The `wholeMap` short-circuit runs ahead of both range tests, so a
+    // whole-map tile is never rejected for a scale change either.
+    const wholeMap: TileSpec = {
+      transform: { scale: 1, tx: 0, ty: 100 },
+      width: 100,
+      height: 100,
+      wholeMap: true,
+    };
+    expect(tileCovers(wholeMap, zoomedView(0.01), 800, 600)).toBe(true);
   });
 });
 

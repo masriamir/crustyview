@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
 import type { Map2d as Map2dPayload } from '../../format';
 import { installMapSizing, painted } from './browser-test-helpers';
+import {
+  planTile,
+  MAX_TILE_AREA_PX,
+  MAX_TILE_SIDE_PX,
+  TILE_MARGIN_FRACTION,
+  type TileBudget,
+} from './tile';
+import { TILE_PAD_PX } from './render';
+import { fitTransform } from './transform';
 
 /**
  * State 4 of the cache (#152): a zoom blits the existing tile scaled and
@@ -62,7 +71,7 @@ const SPAN = 4000;
  * A single cross through the center would leave one line of each orientation at
  * the deep end, and a fixture that only just has ink makes a weak measurement.
  */
-const LATTICE_PITCH = 250;
+const LATTICE_PITCH = 125;
 
 /**
  * Nothing but one-sided walls: they are the only red ink `wallInk` can see, and
@@ -140,6 +149,34 @@ const ZOOM_RATIO = ZOOM_STEP ** ZOOM_PRESSES;
  */
 const PAN_TICKS = 1;
 
+/**
+ * Zoom depth that forces a **viewport** tile: the whole map at this scale
+ * outgrows the tile budget, so `planTile` falls back to a margin-bounded tile —
+ * the only kind a zoom-out can escape. Asserted rather than assumed in the case
+ * that uses it, since a whole-map tile short-circuits `tileCovers` and would
+ * make that case silently vacuous.
+ */
+const ZOOM_IN_TO_VIEWPORT_TILE = 25;
+/**
+ * Zoom-out steps that escape it. A viewport tile spans `1 + 2m` viewports at
+ * its own scale and `blitRects` maps the whole of it onto a destination scaled
+ * by `k`, so the canvas stays covered only while `k >= 1 / (1 + 2m)`. At the
+ * nominal margin of 0.5 that is a 2x zoom-out, and `1.1 ** 8 = 2.14` clears it.
+ */
+const ZOOM_OUT_PAST_MARGIN = 8;
+
+/**
+ * The component's own tile budget, built from the same exported constants it
+ * builds its own from, so the precondition below cannot drift from what `Map2d`
+ * actually plans with.
+ */
+const BUDGET: TileBudget = {
+  maxSidePx: MAX_TILE_SIDE_PX,
+  maxAreaPx: MAX_TILE_AREA_PX,
+  marginFraction: TILE_MARGIN_FRACTION,
+  padPx: TILE_PAD_PX,
+};
+
 beforeEach(() => {
   control.disableCache = false;
   control.renders = 0;
@@ -194,11 +231,21 @@ async function frames(n = 3): Promise<void> {
  * theme store settles asynchronously, and a re-render landing after the sample
  * would be attributed to the gesture.
  */
-async function mountPainted(): Promise<{ el: HTMLCanvasElement; renders: number }> {
+interface Mounted {
+  el: HTMLCanvasElement;
+  /** The sized `.map2d` box, so a case can measure the fit it will get. */
+  box: HTMLElement;
+  renders: number;
+  unmount: () => Promise<void>;
+}
+
+async function mountPainted(): Promise<Mounted> {
   const screen = await render(Map2d, { name: 'MAP01' });
   const canvas = screen.container.querySelector('canvas');
   expect(canvas, 'Map2d should render a canvas').not.toBeNull();
   const el = canvas as HTMLCanvasElement;
+  const box = screen.container.querySelector('.map2d');
+  expect(box, 'Map2d should render its sized box').not.toBeNull();
   expect(await painted(el), 'the map must fit and paint before timers are faked').toBe(true);
   let previous = -1;
   for (let i = 0; i < 20 && control.renders !== previous; i++) {
@@ -206,7 +253,7 @@ async function mountPainted(): Promise<{ el: HTMLCanvasElement; renders: number 
     await frames(2);
   }
   expect(control.renders, 'the first paint must have drawn the map').toBeGreaterThan(0);
-  return { el, renders: control.renders };
+  return { el, box: box as HTMLElement, renders: control.renders, unmount: screen.unmount };
 }
 
 /** One zoom-in step. `=` is the keyboard zoom the component binds. */
@@ -222,6 +269,14 @@ function zoomBurst(el: HTMLCanvasElement): void {
   for (let i = 0; i < BURST_TICKS; i++) {
     zoomIn(el, PRESSES_PER_TICK);
     settleFrame();
+  }
+}
+
+/** One zoom-out step. */
+function zoomOut(el: HTMLCanvasElement, times = 1): void {
+  el.focus();
+  for (let i = 0; i < times; i++) {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: '-', bubbles: true, cancelable: true }));
   }
 }
 
@@ -275,14 +330,48 @@ function wallInk(el: HTMLCanvasElement): number {
   return mass / (255 - floor);
 }
 
+/**
+ * Canvas columns and rows carrying no wall ink at all.
+ *
+ * Every lattice line spans the whole map on one axis, so at any zoom that keeps
+ * the viewport inside the map, each horizontal line crosses every column and
+ * each vertical line crosses every row: a correct picture leaves both counts at
+ * zero. A blit whose destination is smaller than the canvas leaves bare
+ * background at the edges, which is exactly a band of empty columns and rows.
+ */
+function unpaintedBands(el: HTMLCanvasElement): { columns: number; rows: number } {
+  const { data, width, height } = pixels(el);
+  let floor = 255;
+  for (let p = 0; p < data.length; p += 4) if (data[p] < floor) floor = data[p];
+  // Well clear of the background and well below a wall stroke, so a partly
+  // covered edge pixel still counts as ink.
+  const inked = floor + 40;
+  const columnHasInk = new Array<boolean>(width).fill(false);
+  const rowHasInk = new Array<boolean>(height).fill(false);
+  for (let p = 0; p < data.length; p += 4) {
+    if (data[p] <= inked) continue;
+    const index = p / 4;
+    rowHasInk[Math.floor(index / width)] = true;
+    columnHasInk[index % width] = true;
+  }
+  return {
+    columns: columnHasInk.filter((has) => !has).length,
+    rows: rowHasInk.filter((has) => !has).length,
+  };
+}
+
 /** The picture the burst leaves behind, before and after the settle. */
-async function measureBurst(): Promise<{ during: number; settled: number }> {
-  const { el } = await mountPainted();
+async function measureBurst(): Promise<{
+  during: number;
+  settled: number;
+  unmount: () => Promise<void>;
+}> {
+  const { el, unmount } = await mountPainted();
   fakeTimers();
   zoomBurst(el);
   const during = wallInk(el);
   letItSettle();
-  return { during, settled: wallInk(el) };
+  return { during, settled: wallInk(el), unmount };
 }
 
 describe('zooming against the tile cache', () => {
@@ -325,8 +414,14 @@ describe('zooming against the tile cache', () => {
     // is a direct render at the scale it is drawn for. Run first, with its own
     // mount, so the comparison is against a picture the cache never touched.
     control.disableCache = true;
-    const direct = (await measureBurst()).settled;
+    const reference = await measureBurst();
+    const direct = reference.settled;
+    // Unmount before the second mount: two live instances would both keep
+    // drawing, and the next person to crib this file should not inherit that as
+    // a pattern. Real timers first, so the teardown is not waiting on a clock
+    // nothing advances.
     vi.useRealTimers();
+    await reference.unmount();
 
     control.disableCache = false;
     const { during, settled } = await measureBurst();
@@ -345,5 +440,39 @@ describe('zooming against the tile cache', () => {
     // machine's device pixel ratio, not the observed spread.
     expect(settled / direct, 'the settled picture must match a direct render').toBeGreaterThan(0.8);
     expect(settled / direct, 'the settled picture must match a direct render').toBeLessThan(1.25);
+  });
+
+  it('re-renders rather than blitting a tile the zoom-out has escaped', async () => {
+    const { el, box } = await mountPainted();
+    const fit = fitTransform(MAP.bounds, box.clientWidth, box.clientHeight);
+    expect(
+      planTile(
+        { ...fit, scale: fit.scale * ZOOM_STEP ** ZOOM_IN_TO_VIEWPORT_TILE },
+        box.clientWidth,
+        box.clientHeight,
+        window.devicePixelRatio || 1,
+        MAP.bounds,
+        BUDGET,
+      ).wholeMap,
+      'the setup must reach a viewport tile — a whole-map tile short-circuits tileCovers',
+    ).toBe(false);
+
+    fakeTimers();
+    zoomIn(el, ZOOM_IN_TO_VIEWPORT_TILE);
+    settleFrame();
+    letItSettle();
+    expect(unpaintedBands(el), 'the freshly rendered viewport tile must fill the canvas').toEqual({
+      columns: 0,
+      rows: 0,
+    });
+
+    // Out past the margin in one burst, and measured before the settle fires:
+    // this is the frame that used to blit a destination smaller than the canvas.
+    zoomOut(el, ZOOM_OUT_PAST_MARGIN);
+    settleFrame();
+    expect(
+      unpaintedBands(el),
+      'a zoom-out past the tile margin must re-render, not leave bare bands at the edges',
+    ).toEqual({ columns: 0, rows: 0 });
   });
 });
