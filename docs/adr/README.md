@@ -39,3 +39,5 @@ choices don't need an ADR.
   shell, state-driven navigation, tokened light/dark theming, mobile-capable
 - [ADR-0004](0004-versioning-and-release-policy.md) — Versioning and release
   policy: single workspace version, git-cliff over release-plz
+- [ADR-0005](0005-scale-keyed-render-cache-for-the-2d-map.md) — Cache the 2D map
+  in a scale-keyed bitmap and blit it, rather than drawing less or moving to a GPU

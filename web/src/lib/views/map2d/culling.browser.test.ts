@@ -46,6 +46,33 @@ const PAD_BASE: Map2dPayload = {
 
 let payload: Map2dPayload = CROSSING;
 
+/**
+ * Forces `draw()` down its direct fallback, exactly as
+ * `tile-cache.browser.test.ts` does: `planTile` returning a zero-sized tile is
+ * read by the component as "no cache".
+ *
+ * The pad fixtures below need it. The tile spans `bounds ∪ viewportRect`
+ * inflated by `TILE_PAD_PX` (52), so an element 0.5–3 px outside the viewport
+ * is deep inside the tile and draws no matter what the per-pass pads are —
+ * these four cases would pass at pad 0, which is the opposite of what they were
+ * written to prove. Rendering straight to the visible canvas puts the per-pass
+ * cull rects back in charge (#152).
+ */
+const control = vi.hoisted(() => ({ disableCache: false }));
+
+vi.mock('./tile', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./tile')>();
+  return {
+    ...mod,
+    planTile: (...args: Parameters<typeof mod.planTile>) => {
+      if (control.disableCache) {
+        return { transform: { ...args[0] }, width: 0, height: 0, wholeMap: false };
+      }
+      return mod.planTile(...args);
+    },
+  };
+});
+
 vi.mock('../../stores/wad.svelte', () => ({
   wad: {
     phase: 'loaded',
@@ -107,6 +134,7 @@ afterEach(() => {
   // assign would otherwise inherit whichever fixture happened to run before
   // it, and pass or fail for a reason that has nothing to do with itself.
   payload = CROSSING;
+  control.disableCache = false;
   mapPrefs.showThings = showThingsDefault;
   mapPrefs.showTeleportLines = showTeleportLinesDefault;
   mapPrefs.showCategories.coop = coopShownDefault;
@@ -138,6 +166,10 @@ describe('viewport culling', () => {
    * `THING_CULL_PAD_PX` 3 to 0.7, `ARROW_CULL_PAD_PX` 7 to 2 and
    * `LINK_CULL_PAD_PX` 52 to 15.
    *
+   * All four run with the tile cache disabled, which is what keeps that true:
+   * the tile is inflated by `TILE_PAD_PX` (52) and would swallow every offset
+   * used here. See `control` above.
+   *
    * Each test can only discriminate down to its element's true ink reach,
    * which is roughly half of each pad — the pads are deliberately
    * conservative, so no drawn pixel reaches the rest of the budget and
@@ -145,6 +177,7 @@ describe('viewport culling', () => {
    * not a gap in the tests.
    */
   it('keeps a line whose coordinate sits just outside the raw viewport, within LINE_CULL_PAD_PX', async () => {
+    control.disableCache = true;
     payload = PAD_BASE;
     const without = await snapshot(true);
     const t = fitTransform(BOUNDS, without.width, without.height);
@@ -167,6 +200,7 @@ describe('viewport culling', () => {
   });
 
   it('keeps a thing whose coordinate sits just outside the raw viewport, within THING_CULL_PAD_PX', async () => {
+    control.disableCache = true;
     mapPrefs.showThings = true;
     payload = PAD_BASE;
     const without = await snapshot(true);
@@ -187,6 +221,7 @@ describe('viewport culling', () => {
   });
 
   it('keeps a start marker whose coordinate sits just outside the raw viewport, within ARROW_CULL_PAD_PX', async () => {
+    control.disableCache = true;
     mapPrefs.showThings = true;
     mapPrefs.showCategories.coop = true;
     payload = PAD_BASE;
@@ -210,6 +245,7 @@ describe('viewport culling', () => {
   });
 
   it('keeps a teleport link whose chord sits just outside the raw viewport, its bow reaching onto the canvas', async () => {
+    control.disableCache = true;
     mapPrefs.showTeleportLines = true;
     payload = PAD_BASE;
     const without = await snapshot(true);

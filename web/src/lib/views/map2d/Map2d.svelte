@@ -5,30 +5,22 @@
   import { mapCursor } from '../../stores/mapCursor.svelte';
   import { mapPrefs } from '../../stores/mapPrefs.svelte';
   import { theme } from '../../stores/theme.svelte';
-  import {
-    fitTransform,
-    mapToScreen,
-    panBy,
-    screenToMap,
-    zoomAt,
-    type Transform,
-  } from './transform';
-  import {
-    ARROW_CATEGORIES,
-    ARROW_CATEGORY_ORDER,
-    CATEGORIES,
-    CLASSIC_THING_COLORS,
-    categoryOf,
-    countByCategory,
-    type ThingCategory,
-  } from './things';
-  import {
-    CLASSIC_LINE_SECTOR_DAMAGE,
-    CLASSIC_LINE_SECTOR_SECRET,
-    CLASSIC_LINE_TELEPORT,
-  } from './lines';
+  import { fitTransform, panBy, screenToMap, zoomAt, type Transform } from './transform';
+  import { countByCategory, type ThingCategory } from './things';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
-  import { pointVisible, segmentVisible, viewportRect } from './cull';
+  import { viewportRect } from './cull';
+  import { renderKey, tileKey, type TileKeyInput } from './renderKey';
+  import {
+    blitRects,
+    planTile,
+    tileCovers,
+    MAX_TILE_AREA_PX,
+    MAX_TILE_SIDE_PX,
+    TILE_MARGIN_FRACTION,
+    type TileBudget,
+    type TileSpec,
+  } from './tile';
+  import { drawGrid, drawMapLayers, resolvePalette, TILE_PAD_PX, type Palette } from './render';
 
   interface Props {
     name: string;
@@ -45,116 +37,6 @@
 
   /** aria-describedby target for the canvas operating instructions. */
   const instructionsId = $props.id();
-
-  type LineKind = Map2d['lines'][number]['kind'];
-
-  /** Every color one draw needs, resolved once per draw. */
-  interface Palette {
-    bg: string;
-    grid: string;
-    wall: string;
-    twoSided: string;
-    secret: string;
-    lineTeleport: string;
-    lineSectorSecret: string;
-    lineSectorDamage: string;
-    things: Record<ThingCategory, string>;
-    player: string;
-  }
-
-  /**
-   * Classic Doom automap colors. Deliberately a constant rather than tokens: the
-   * classic style is theme-independent — it looks the same in light and dark.
-   */
-  const CLASSIC: Palette = {
-    bg: '#0a0a0a',
-    grid: '#2c2c2e',
-    wall: '#ff3b30',
-    twoSided: '#8e8e93',
-    secret: '#ffd60a',
-    lineTeleport: CLASSIC_LINE_TELEPORT,
-    lineSectorSecret: CLASSIC_LINE_SECTOR_SECRET,
-    lineSectorDamage: CLASSIC_LINE_SECTOR_DAMAGE,
-    things: CLASSIC_THING_COLORS,
-    player: '#34c759',
-  };
-
-  /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
-  const THING_PX = 3;
-  const PLAYER_ARROW_PX = 10;
-  /** Start markers below player 1, so the flagship arrow stays dominant where
-   *  a level clusters all four starts in one room (#72). Sized independently —
-   *  they were tuned separately and may diverge — and both landed on 7. */
-  const COOP_ARROW_PX = 7;
-  const DEATHMATCH_ARROW_PX = 7;
-  /** Arrow size per `ARROW_CATEGORY_ORDER` member. Keyed off that array's
-   *  element type, so adding a category there fails to compile here until it
-   *  is given a size (things.ts). */
-  const ARROW_SIZES: Record<(typeof ARROW_CATEGORY_ORDER)[number], number> = {
-    deathmatch: DEATHMATCH_ARROW_PX,
-    coop: COOP_ARROW_PX,
-  };
-  const PLAYER_THING_TYPE = 1;
-  /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
-  const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
-  const KIND_WIDTH: Record<LineKind, number> = { two_sided: 1, one_sided: 2, secret: 1.5 };
-  /** Dashed overlay strokes above the base kind colors. Teleport keeps its
-   *  own rhythm; the two sector overlays share [4,4] with the damage pass
-   *  phase-shifted, so a line bordering both a secret and a damaging sector
-   *  interleaves the two colors instead of one hiding the other. */
-  const TELEPORT_DASH = [6, 4];
-  const SECTOR_DASH = [4, 4];
-  const OVERLAY_WIDTH = 2;
-  const DAMAGE_DASH_OFFSET = 4;
-  /** Cull padding in screen px. Each pad is derived from the constant(s) that
-   *  size the ink it covers — the whole stroke width or glyph size, not a
-   *  hand-computed half-extent — so a pad can never fall out of sync with the
-   *  size it is meant to cover the way a hand-computed literal can. */
-  const LINE_CULL_PAD_PX = Math.max(...Object.values(KIND_WIDTH), OVERLAY_WIDTH);
-  /** `THING_PX` is drawn centered, so a marker's own reach is half of it;
-   *  padding by the whole size is trivially conservative. */
-  const THING_CULL_PAD_PX = THING_PX;
-  /** A start arrow's farthest point is a barb vertex, at radius `half * 1.28`
-   *  from the arrow's coordinate (barbs sit at `(-half, ±half*0.8)`; the glyph
-   *  rotates arbitrarily). Padding by the full `size` clears this radius: size 7
-   *  yields 4.482, size 10 (`PLAYER_ARROW_PX`) yields 6.403, both covered by
-   *  this pad. `PLAYER_ARROW_PX` belongs to `drawPlayerStart`, deliberately
-   *  never culled. */
-  const ARROW_CULL_PAD_PX = Math.max(...Object.values(ARROW_SIZES));
-
-  /** Teleport link treatment (#66). Links are an *annotation about* the map
-   *  rather than part of it, so they are drawn subordinate to the source lines
-   *  they accompany: thinner, softer, finely dotted. Drawn straight and at
-   *  overlay weight they were indistinguishable from walls — the problem was
-   *  never how many there are (DOOM and DOOM2 top out at 17-18 per map), it
-   *  was that nothing separated annotation from geometry. */
-  const LINK_DASH = [2, 3];
-  const LINK_WIDTH = 1;
-  const LINK_ALPHA = 0.6;
-  /** Endpoint marks are opaque enough to read against the dotted stroke. */
-  const LINK_MARK_ALPHA = 0.9;
-  /** Perpendicular bow at the midpoint, as a fraction of the chord and capped
-   *  in screen pixels. Nothing in a Doom map is curved, so an arc can never be
-   *  mistaken for a wall — and where several links share a destination (E3M5
-   *  runs 17 into 4 landings) arcs fan apart instead of stacking. */
-  const LINK_BOW_RATIO = 0.18;
-  const LINK_BOW_MAX = 42;
-  /** A ring anchors the source end, which otherwise starts inside the pad's
-   *  own lines; the arrowhead anchors the destination, which otherwise ends on
-   *  bare floor. Both ends looked like mistakes without them. */
-  const LINK_RING_RADIUS = 3;
-  const LINK_ARROW_SIZE = 7;
-  /** Half-angle of the arrowhead's barbs, in radians. */
-  const LINK_ARROW_SPREAD = 0.42;
-  /** A link is drawn as an arc bowed up to `LINK_BOW_MAX` perpendicular to its
-   *  chord IN SCREEN SPACE, with a ring at the source and an arrowhead at the
-   *  destination — so a chord just off screen can still put ink inside the
-   *  viewport, and padding by the chord alone clips arcs along every edge.
-   *  Summing all three is deliberately conservative: the bow displaces the
-   *  arc's middle while the ring and arrowhead sit at opposite endpoints, so
-   *  they never all extend the same way. An over-inclusive rect costs a few
-   *  extra draws; an under-inclusive one deletes visible geometry. */
-  const LINK_CULL_PAD_PX = LINK_BOW_MAX + LINK_ARROW_SIZE + LINK_RING_RADIUS;
 
   /** One wheel notch / keypress zoom step, and the zoom range as multiples of the fit scale. */
   const ZOOM_STEP = 1.1;
@@ -219,11 +101,6 @@
   /** The map this instance has already fitted — plain bookkeeping, not reactive state. */
   let fittedFor: Map2d | null = null;
 
-  function token(style: CSSStyleDeclaration, property: string, fallback: string): string {
-    const value = style.getPropertyValue(property).trim();
-    return value === '' ? fallback : value;
-  }
-
   /** Last resolved palette, kept with the `style:theme` key it was resolved for. */
   let cached: { key: string; colors: Palette } | null = null;
 
@@ -237,28 +114,9 @@
   function palette(el: HTMLCanvasElement): Palette {
     const key = `${mapPrefs.style}:${theme.resolved}`;
     if (cached !== null && cached.key === key) return cached.colors;
-    const colors = resolvePalette(el);
+    const colors = resolvePalette(el, mapPrefs.style);
     cached = { key, colors };
     return colors;
-  }
-
-  function resolvePalette(el: HTMLCanvasElement): Palette {
-    if (mapPrefs.style === 'classic') return CLASSIC;
-    const style = getComputedStyle(el);
-    return {
-      bg: token(style, '--map2d-bg', CLASSIC.bg),
-      grid: token(style, '--map2d-grid', CLASSIC.grid),
-      wall: token(style, '--map2d-wall', CLASSIC.wall),
-      twoSided: token(style, '--map2d-two-sided', CLASSIC.twoSided),
-      secret: token(style, '--map2d-secret', CLASSIC.secret),
-      lineTeleport: token(style, '--map2d-line-teleport', CLASSIC.lineTeleport),
-      lineSectorSecret: token(style, '--map2d-line-sector-secret', CLASSIC.lineSectorSecret),
-      lineSectorDamage: token(style, '--map2d-line-sector-damage', CLASSIC.lineSectorDamage),
-      things: Object.fromEntries(
-        CATEGORIES.map((c) => [c.id, token(style, `--map2d-thing-${c.id}`, CLASSIC_THING_COLORS[c.id])]),
-      ) as Record<ThingCategory, string>,
-      player: token(style, '--map2d-player', CLASSIC.player),
-    };
   }
 
   /** Back the canvas with device pixels, then scale the context so drawing is in CSS px. */
@@ -273,281 +131,151 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawGrid(
-    ctx: CanvasRenderingContext2D,
-    t: Transform,
-    color: string,
-    step: number,
-  ): void {
-    // Precondition: `step` cleared `MIN_GRID_PX` at this scale — the sole caller
-    // resolves it through `effectiveGridSize`, which owns the density rule (#76).
-    // Invert the viewport corners: only the visible map rect needs grid lines.
-    const view = viewportRect(t, width, height, 0);
-    const path = new Path2D();
-    for (let x = Math.ceil(view.minX / step) * step; x <= view.maxX; x += step) {
-      const from = mapToScreen(t, x, view.minY);
-      const to = mapToScreen(t, x, view.maxY);
-      path.moveTo(from.x, from.y);
-      path.lineTo(to.x, to.y);
-    }
-    for (let y = Math.ceil(view.minY / step) * step; y <= view.maxY; y += step) {
-      const from = mapToScreen(t, view.minX, y);
-      const to = mapToScreen(t, view.maxX, y);
-      path.moveTo(from.x, from.y);
-      path.lineTo(to.x, to.y);
-    }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.stroke(path);
+  /** What a rendered tile carries besides its pixels. */
+  interface TileState {
+    spec: TileSpec;
+    key: string;
+    map: Map2d;
+    /** The ratio the tile was rendered at, compared per draw: `devicePixelRatio`
+     *  is not reactive, so it cannot live in the key (#152). */
+    dpr: number;
   }
 
-  function drawLines(
-    ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
-    colors: Palette,
-  ): void {
-    // One path per kind, filled in a single pass, so each kind strokes once
-    // regardless of how the WAD interleaves them.
-    const paths: Record<LineKind, Path2D> = {
-      two_sided: new Path2D(),
-      one_sided: new Path2D(),
-      secret: new Path2D(),
-    };
-    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
-    for (const line of map.lines) {
-      const path = paths[line.kind];
-      if (!path) continue; // defensive: an unknown kind must not break the draw
-      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
-      const from = mapToScreen(t, line.x1, line.y1);
-      const to = mapToScreen(t, line.x2, line.y2);
-      path.moveTo(from.x, from.y);
-      path.lineTo(to.x, to.y);
-    }
-    const kindColor: Record<LineKind, string> = {
-      two_sided: colors.twoSided,
-      one_sided: colors.wall,
-      secret: colors.secret,
-    };
-    for (const kind of KIND_ORDER) {
-      ctx.strokeStyle = kindColor[kind];
-      ctx.lineWidth = KIND_WIDTH[kind];
-      ctx.stroke(paths[kind]);
-    }
+  /** The offscreen surface. One per component, resized rather than recreated. */
+  let tileCanvas: HTMLCanvasElement | null = null;
+  let tileState: TileState | null = null;
+
+  const TILE_BUDGET = {
+    maxSidePx: MAX_TILE_SIDE_PX,
+    maxAreaPx: MAX_TILE_AREA_PX,
+    marginFraction: TILE_MARGIN_FRACTION,
+    padPx: TILE_PAD_PX,
+  } satisfies TileBudget;
+
+  /**
+   * How long after the last scale change the tile is re-rendered crisply. Long
+   * enough to span a wheel burst, short enough that the soft state reads as
+   * transient.
+   */
+  const TILE_SETTLE_MS = 120;
+  /** Pending crisp re-render; 0 when none is armed. */
+  let tileSettleTimer = 0;
+  /**
+   * The scale the previous draw ran at, so a draw can tell a zoom tick from a
+   * pan. `NaN` before the first draw, which compares unequal to everything and
+   * so reads as "moved" — harmless, since the first draw has no tile to keep.
+   */
+  let lastDrawnScale = Number.NaN;
+
+  /**
+   * Arm the crisp re-render, restarting the window on every scale change so a
+   * continuing gesture keeps blitting.
+   *
+   * Cleared in `onDestroy` and nowhere else in the reactive graph. NOT in the
+   * redraw `$effect`'s teardown: that effect tracks `transform`, so it re-runs
+   * on every wheel notch, pinch move and pan keypress, and Svelte runs a
+   * cleanup before each re-run — clearing there would cancel the settle during
+   * the exact gesture it exists to serve. That is #127's defect, in a new
+   * place, and `zoom, then drag` is where it lands: the drag re-runs the effect
+   * at an unchanged scale, so the cancel would never be undone and the map
+   * would stay soft until the user let go.
+   */
+  function scheduleTileSettle(): void {
+    if (tileSettleTimer !== 0) window.clearTimeout(tileSettleTimer);
+    tileSettleTimer = window.setTimeout(() => {
+      tileSettleTimer = 0;
+      // Drop the tile and redraw: `draw()` then renders a fresh one at the
+      // scale the gesture landed on.
+      tileState = null;
+      scheduleDraw();
+    }, TILE_SETTLE_MS);
   }
 
-  /** One dashed overlay pass above the base kind strokes. */
-  interface OverlayStroke {
-    color: string;
-    dash: number[];
-    dashOffset?: number;
-    marked: (line: Map2d['lines'][number]) => boolean;
-  }
-
-  function drawLineOverlay(
-    ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
-    overlay: OverlayStroke,
-  ): void {
-    const path = new Path2D();
-    const view = viewportRect(t, width, height, LINE_CULL_PAD_PX);
-    let any = false;
-    for (const line of map.lines) {
-      if (!overlay.marked(line)) continue;
-      if (!segmentVisible(view, line.x1, line.y1, line.x2, line.y2)) continue;
-      any = true;
-      const from = mapToScreen(t, line.x1, line.y1);
-      const to = mapToScreen(t, line.x2, line.y2);
-      path.moveTo(from.x, from.y);
-      path.lineTo(to.x, to.y);
-    }
-    if (!any) return;
-    ctx.strokeStyle = overlay.color;
-    ctx.lineWidth = OVERLAY_WIDTH;
-    ctx.setLineDash(overlay.dash);
-    ctx.lineDashOffset = overlay.dashOffset ?? 0;
-    ctx.stroke(path);
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
-  }
-
-  /** Teleport source-to-destination links (#66). Same token as the source
-   *  lines: they read as one overlay, toggled by one chip. */
-  /** The quadratic control point that bows a link perpendicular to its chord. */
-  function linkControlPoint(
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-  ): { x: number; y: number } {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    // A zero-length link (source and destination resolve to the same point) has
-    // no perpendicular; bow it by nothing rather than dividing by zero.
-    const len = Math.hypot(dx, dy) || 1;
-    const bow = Math.min(len * LINK_BOW_RATIO, LINK_BOW_MAX);
-    return {
-      x: (from.x + to.x) / 2 - (dy / len) * bow,
-      y: (from.y + to.y) / 2 + (dx / len) * bow,
-    };
-  }
-
-  /** A filled arrowhead at `tip`, pointing away from `tail`. */
-  function drawArrowHead(
-    ctx: CanvasRenderingContext2D,
-    tip: { x: number; y: number },
-    tail: { x: number; y: number },
-    color: string,
-  ): void {
-    const angle = Math.atan2(tip.y - tail.y, tip.x - tail.x);
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    for (const spread of [-LINK_ARROW_SPREAD, LINK_ARROW_SPREAD]) {
-      ctx.lineTo(
-        tip.x - LINK_ARROW_SIZE * Math.cos(angle + spread),
-        tip.y - LINK_ARROW_SIZE * Math.sin(angle + spread),
-      );
-    }
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
-
-  function drawTeleportLinks(
-    ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
-    color: string,
-  ): void {
-    if (!map.links?.length) return;
-    const view = viewportRect(t, width, height, LINK_CULL_PAD_PX);
-    ctx.save();
-    ctx.strokeStyle = color;
-    for (const link of map.links) {
-      if (!segmentVisible(view, link.from[0], link.from[1], link.to[0], link.to[1])) continue;
-      const from = mapToScreen(t, link.from[0], link.from[1]);
-      const to = mapToScreen(t, link.to[0], link.to[1]);
-      const control = linkControlPoint(from, to);
-
-      const arc = new Path2D();
-      arc.moveTo(from.x, from.y);
-      arc.quadraticCurveTo(control.x, control.y, to.x, to.y);
-      ctx.setLineDash(LINK_DASH);
-      ctx.lineWidth = LINK_WIDTH;
-      ctx.globalAlpha = LINK_ALPHA;
-      ctx.stroke(arc);
-
-      // Endpoint marks: solid, so they read as anchors rather than more stroke.
-      ctx.setLineDash([]);
-      ctx.globalAlpha = LINK_MARK_ALPHA;
-      ctx.beginPath();
-      ctx.arc(from.x, from.y, LINK_RING_RADIUS, 0, Math.PI * 2);
-      ctx.stroke();
-      // Aimed along the curve's exit, not the chord, or the head sits skewed
-      // to the stroke it terminates.
-      drawArrowHead(ctx, to, control, color);
-    }
-    ctx.restore();
-  }
-
-  function drawThings(
-    ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
-    colors: Palette,
-    game: string | null,
-  ): void {
-    // One path per visible rect category, mirroring drawLines' per-kind
-    // batching; arrow categories skip this batch entirely (they need
-    // per-marker rotation) and hidden categories are skipped before any path
-    // work.
-    const paths = new Map<ThingCategory, Path2D>();
-    const half = THING_PX / 2;
-    const view = viewportRect(t, width, height, THING_CULL_PAD_PX);
-    for (const thing of map.things) {
-      const category = categoryOf(thing.type_id, game);
-      if (ARROW_CATEGORIES.has(category)) continue;
-      if (!mapPrefs.isCategoryShown(category)) continue;
-      if (!pointVisible(view, thing.x, thing.y)) continue;
-      let path = paths.get(category);
-      if (path === undefined) {
-        path = new Path2D();
-        paths.set(category, path);
-      }
-      const at = mapToScreen(t, thing.x, thing.y);
-      path.rect(at.x - half, at.y - half, THING_PX, THING_PX);
-    }
-    // Reverse chip order: the list's top categories paint last, on top.
-    for (let i = CATEGORIES.length - 1; i >= 0; i--) {
-      const path = paths.get(CATEGORIES[i].id);
-      if (path === undefined) continue;
-      ctx.fillStyle = colors.things[CATEGORIES[i].id];
-      ctx.fill(path);
-    }
-  }
-
-  /** Co-op and deathmatch starts, as arrows sized below the player-1 marker. */
-  function drawMultiplayerStarts(
-    ctx: CanvasRenderingContext2D,
-    map: Map2d,
-    t: Transform,
-    colors: Palette,
-    game: string | null,
-  ): void {
-    // `ARROW_CATEGORY_ORDER` carries the back-to-front paint order: deathmatch
-    // first so co-op paints above it where a level puts both in one room;
-    // `drawPlayerStart` then paints above both.
-    const view = viewportRect(t, width, height, ARROW_CULL_PAD_PX);
-    for (const category of ARROW_CATEGORY_ORDER) {
-      if (!mapPrefs.isCategoryShown(category)) continue;
-      const color = colors.things[category];
-      const size = ARROW_SIZES[category];
-      for (const thing of map.things) {
-        if (categoryOf(thing.type_id, game) !== category) continue;
-        if (!pointVisible(view, thing.x, thing.y)) continue;
-        drawStartArrow(ctx, mapToScreen(t, thing.x, thing.y), thing.angle, size, color);
-      }
-    }
+  /** A tile re-render for any other reason supersedes a pending settle. */
+  function cancelTileSettle(): void {
+    if (tileSettleTimer === 0) return;
+    window.clearTimeout(tileSettleTimer);
+    tileSettleTimer = 0;
   }
 
   /**
-   * A start marker: a filled arrow at screen position `at`, turned to face the
-   * thing's angle.
-   *
-   * Thing angles are degrees counter-clockwise from east in map space; screen Y
-   * points the other way, so the same turn is a negative canvas rotation.
+   * Render every scale-dependent layer into the offscreen tile, replacing
+   * whatever was there. Returns `null` when no usable tile can be made, which
+   * the caller reads as "draw straight to the visible canvas" — the cache is an
+   * optimization and must never be the only path to a picture.
    */
-  function drawStartArrow(
-    ctx: CanvasRenderingContext2D,
-    at: { x: number; y: number },
-    angle: number,
-    size: number,
-    color: string,
-  ): void {
-    const half = size / 2;
-    ctx.save();
-    ctx.translate(at.x, at.y);
-    ctx.rotate((-angle * Math.PI) / 180);
-    ctx.beginPath();
-    ctx.moveTo(half, 0);
-    ctx.lineTo(-half, -half * 0.8);
-    ctx.lineTo(-half * 0.4, 0);
-    ctx.lineTo(-half, half * 0.8);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  /** The player-1 start, as an arrow pointing the way the player faces. */
-  function drawPlayerStart(
-    ctx: CanvasRenderingContext2D,
+  function renderTile(
     map: Map2d,
     t: Transform,
-    color: string,
+    colors: Palette,
+    game: string | null,
+    dpr: number,
+    key: string,
+  ): TileState | null {
+    // Plan against the union of the map's bounds and what the view can
+    // currently see, never the bounds alone. Every pass culls against the
+    // surface it is drawing onto, and the tile is that surface, so a tile
+    // clipped to the bounds silently deletes anything outside them — where a
+    // direct render draws it. crustywad derives `bounds` from the very lines
+    // and things being drawn, so this costs a slightly larger tile on a map
+    // smaller than the viewport and changes nothing on a megawad, which is
+    // where the cache earns its keep. `culling.browser.test.ts`'s pad fixtures
+    // are the case that proves it: they place geometry outside the bounds they
+    // declare, and go red against a bounds-clipped tile.
+    const view = viewportRect(t, width, height, 0);
+    const covered = {
+      min_x: Math.min(map.bounds.min_x, view.minX),
+      min_y: Math.min(map.bounds.min_y, view.minY),
+      max_x: Math.max(map.bounds.max_x, view.maxX),
+      max_y: Math.max(map.bounds.max_y, view.maxY),
+    };
+    const planned = planTile(t, width, height, dpr, covered, TILE_BUDGET);
+    // `wholeMap` promises validity at any translation, which rests entirely on
+    // `bounds` containing every line and thing. crustywad derives it that way —
+    // except that `bounds_of` collapses to a zero-area rect at the origin when
+    // any side is non-finite (a pathological UDMF coordinate), leaving the
+    // finite geometry where it is. Trusting the flag there blits a tile
+    // covering only the first viewport and silently drops whatever pans in,
+    // with no re-render to correct it. A zero-area bounds is precisely that
+    // signal, so fall back to the range-checked tile, which re-renders as soon
+    // as the viewport leaves it.
+    const boundsAreReal =
+      map.bounds.max_x > map.bounds.min_x && map.bounds.max_y > map.bounds.min_y;
+    const spec = boundsAreReal ? planned : { ...planned, wholeMap: false };
+    if (!(spec.width > 0) || !(spec.height > 0)) return null;
+    const el = tileCanvas ?? document.createElement('canvas');
+    // Before the surface is adopted or resized: a context failure must not
+    // leave a reallocated, unusable canvas behind.
+    const tileCtx = el.getContext('2d');
+    if (!tileCtx) return null;
+    tileCanvas = el;
+    const backingWidth = Math.max(1, Math.round(spec.width * dpr));
+    const backingHeight = Math.max(1, Math.round(spec.height * dpr));
+    // Same rule as `sizeCanvas`: assigning width/height clears the surface and
+    // resets context state, so only touch them on a real size change.
+    if (el.width !== backingWidth) el.width = backingWidth;
+    if (el.height !== backingHeight) el.height = backingHeight;
+    tileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Transparent, not filled: the visible canvas paints the background and the
+    // grid underneath, and the tile composites over them.
+    tileCtx.clearRect(0, 0, spec.width, spec.height);
+    drawMapLayers(tileCtx, map, spec.transform, spec.width, spec.height, colors, game);
+    return { spec, key, map, dpr };
+  }
+
+  /** Put the tile's content where `t` says it belongs. */
+  function blitTile(
+    ctx: CanvasRenderingContext2D,
+    state: TileState,
+    t: Transform,
+    dpr: number,
   ): void {
-    const start = map.things.find((thing) => thing.type_id === PLAYER_THING_TYPE);
-    if (!start) return;
-    drawStartArrow(ctx, mapToScreen(t, start.x, start.y), start.angle, PLAYER_ARROW_PX, color);
+    const el = tileCanvas;
+    if (!el) return;
+    const r = blitRects(state.spec, t, width, height, dpr);
+    // A zero-extent source throws IndexSizeError rather than drawing nothing.
+    if (r.sw <= 0 || r.sh <= 0) return;
+    ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh);
   }
 
   function draw(): void {
@@ -636,35 +364,62 @@
       }
       gridDrawable = null;
     }
-    if (mapPrefs.showGrid && gridStep !== null) drawGrid(ctx, t, colors.grid, gridStep);
-    drawLines(ctx, map, t, colors);
-    if (mapPrefs.showSecretSectors)
-      drawLineOverlay(ctx, map, t, {
-        color: colors.lineSectorSecret,
-        dash: SECTOR_DASH,
-        marked: (l) => l.secret_sector === true,
-      });
-    if (mapPrefs.showDamagingSectors)
-      drawLineOverlay(ctx, map, t, {
-        color: colors.lineSectorDamage,
-        dash: SECTOR_DASH,
-        dashOffset: DAMAGE_DASH_OFFSET,
-        marked: (l) => l.damaging_sector === true,
-      });
-    if (mapPrefs.showTeleportLines) {
-      drawLineOverlay(ctx, map, t, {
-        color: colors.lineTeleport,
-        dash: TELEPORT_DASH,
-        marked: (l) => l.teleport === true,
-      });
-      drawTeleportLinks(ctx, map, t, colors.lineTeleport);
-    }
+    if (mapPrefs.showGrid && gridStep !== null)
+      drawGrid(ctx, t, width, height, colors.grid, gridStep);
+
     const game = wad.summary?.game ?? null;
-    if (mapPrefs.showThings) {
-      drawThings(ctx, map, t, colors, game);
-      drawMultiplayerStarts(ctx, map, t, colors, game);
+    const dpr = window.devicePixelRatio || 1;
+    const key = tileKeyValue;
+    const live =
+      tileState !== null &&
+      tileState.key === key &&
+      tileState.map === map &&
+      tileState.dpr === dpr
+        ? tileState
+        : null;
+    // Whether the scale MOVED since the previous draw — not whether it differs
+    // from the tile's. A pan after a zoom still blits a stale-scale tile, but
+    // the gesture that produced it is over: re-arming on every stale-scale draw
+    // would hold the map soft for as long as the user kept dragging. It would
+    // also make the settle level-armed — re-armed by the next draw no matter
+    // what canceled it — which silently neutralizes the #127 rule the timer's
+    // cleanup follows, since the redraw `$effect` always schedules a draw.
+    const scaleMoved = t.scale !== lastDrawnScale;
+    lastDrawnScale = t.scale;
+    let usable: TileState | null;
+    // Coverage is asked FIRST, at either scale. A scaled blit maps the whole
+    // tile onto a scaled destination, so a zoom-out shrinks it: past the tile's
+    // margin the destination is smaller than the canvas and the edges show bare
+    // background. Blank is worse than soft, so an escaped tile re-renders.
+    if (live !== null && tileCovers(live.spec, t, width, height)) {
+      usable = live;
+      if (live.spec.transform.scale !== t.scale) {
+        // Scale changed mid-gesture: blit what we have, scaled. Geometry still
+        // lands in the right place at the right size; only stroke weights and
+        // antialiasing are stale until the gesture settles.
+        if (scaleMoved) scheduleTileSettle();
+      } else {
+        // An exact-scale hit is already crisp, so a settle armed by an earlier
+        // zoom has nothing left to fix — letting it fire would null a good tile
+        // and pay a full re-render for nothing. Reachable whenever a gesture
+        // lands back on the tile's own scale, which the MIN_ZOOM / MAX_ZOOM
+        // clamps make easy: every notch past the stop resolves to the same
+        // scale.
+        cancelTileSettle();
+      }
+    } else {
+      cancelTileSettle();
+      usable = renderTile(map, t, colors, game, dpr, key);
     }
-    if (mapPrefs.showPlayerStart) drawPlayerStart(ctx, map, t, colors.player);
+    if (usable) {
+      tileState = usable;
+      blitTile(ctx, usable, t, dpr);
+    } else {
+      // No usable tile — degenerate viewport, or no 2D context for the
+      // offscreen surface. Draw directly: slower, but never blank.
+      tileState = null;
+      drawMapLayers(ctx, map, t, width, height, colors, game);
+    }
   }
 
   // Track the container's content box — the canvas is styled to fill it exactly.
@@ -919,24 +674,50 @@
     });
   }
 
-  // Redraw on anything the picture depends on. Every dependency is listed here
-  // because `draw()` runs outside this effect's tracking context.
+  /**
+   * Everything baked into the tile, named exactly once.
+   *
+   * Both keys derive from this object rather than repeating the field list.
+   * Spelling it out twice would mean a new preference could reach one key and
+   * miss the other — reintroducing the very invalidation/redraw drift the key
+   * exists to prevent (#152), in the code meant to prevent it. `satisfies`
+   * rather than a type annotation so a missing or mistyped field fails here,
+   * at the declaration, instead of at a call site.
+   */
+  const bakedInput = $derived({
+    style: mapPrefs.style,
+    theme: theme.resolved,
+    game: wad.summary?.game ?? null,
+    showThings: mapPrefs.showThings,
+    alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
+    categories: mapPrefs.showCategories,
+    showTeleportLines: mapPrefs.showTeleportLines,
+    showSecretSectors: mapPrefs.showSecretSectors,
+    showDamagingSectors: mapPrefs.showDamagingSectors,
+  } satisfies TileKeyInput);
+  /** The tile's identity — everything baked into the bitmap. */
+  const tileKeyValue = $derived(tileKey(bakedInput));
+  /** The tile's identity plus the two layers drawn live. */
+  const renderKeyValue = $derived(
+    renderKey({ ...bakedInput, showGrid: mapPrefs.showGrid, gridSize: mapPrefs.gridSize }),
+  );
+
+  // Redraw on anything the picture depends on. `draw()` runs outside this
+  // effect's tracking context, so its dependencies have to be named here — but
+  // every preference, the style and the theme now arrive through one derived
+  // key, so the ten lines that used to name them by hand are down to the six
+  // below. The key also covers `game`, which the old list never tracked at all.
+  // That is what stops the cache's invalidation drifting from the redraw
+  // trigger: a field missing from the key fails to do both, so the symptom is a
+  // picture that never changes rather than one that changes everywhere except
+  // the cached layer (#152).
   $effect(() => {
     void canvas;
     void data;
     void transform;
     void width;
     void height;
-    void mapPrefs.showThings;
-    void mapPrefs.alwaysShowPlayerStart;
-    for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
-    void mapPrefs.showTeleportLines;
-    void mapPrefs.showSecretSectors;
-    void mapPrefs.showDamagingSectors;
-    void mapPrefs.showGrid;
-    void mapPrefs.gridSize;
-    void mapPrefs.style;
-    void theme.resolved;
+    void renderKeyValue;
     scheduleDraw();
     return () => {
       if (frame === 0) return;
@@ -948,12 +729,23 @@
   // Not the redraw effect's teardown: that effect tracks `transform` and so re-runs
   // on every wheel tick, pinch move, pan and zoom keypress, and Svelte runs an
   // effect's cleanup before each re-run. Canceling there killed the pending
-  // announcement mid-gesture — the exact case it exists to cover (#127).
+  // announcement mid-gesture — the exact case it exists to cover (#127). The
+  // tile settle below is armed by a scale change and so lives on exactly the
+  // same ticks: it is unmount-only for the same reason (#152).
   onDestroy(() => {
     if (gridAnnounceTimer !== 0) {
       window.clearTimeout(gridAnnounceTimer);
       gridAnnounceTimer = 0;
     }
+    cancelTileSettle();
+    // Sizing to zero releases the backing store immediately rather than
+    // waiting on the collector; the tile can be tens of megabytes.
+    if (tileCanvas) {
+      tileCanvas.width = 0;
+      tileCanvas.height = 0;
+      tileCanvas = null;
+    }
+    tileState = null;
   });
 </script>
 
