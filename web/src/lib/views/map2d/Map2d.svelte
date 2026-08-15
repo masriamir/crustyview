@@ -9,7 +9,7 @@
   import { countByCategory, type ThingCategory } from './things';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
   import { viewportRect } from './cull';
-  import { renderKey, tileKey } from './renderKey';
+  import { renderKey, tileKey, type TileKeyInput } from './renderKey';
   import {
     blitRects,
     planTile,
@@ -674,35 +674,32 @@
     });
   }
 
+  /**
+   * Everything baked into the tile, named exactly once.
+   *
+   * Both keys derive from this object rather than repeating the field list.
+   * Spelling it out twice would mean a new preference could reach one key and
+   * miss the other — reintroducing the very invalidation/redraw drift the key
+   * exists to prevent (#152), in the code meant to prevent it. `satisfies`
+   * rather than a type annotation so a missing or mistyped field fails here,
+   * at the declaration, instead of at a call site.
+   */
+  const bakedInput = $derived({
+    style: mapPrefs.style,
+    theme: theme.resolved,
+    game: wad.summary?.game ?? null,
+    showThings: mapPrefs.showThings,
+    alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
+    categories: mapPrefs.showCategories,
+    showTeleportLines: mapPrefs.showTeleportLines,
+    showSecretSectors: mapPrefs.showSecretSectors,
+    showDamagingSectors: mapPrefs.showDamagingSectors,
+  } satisfies TileKeyInput);
   /** The tile's identity — everything baked into the bitmap. */
-  const tileKeyValue = $derived(
-    tileKey({
-      style: mapPrefs.style,
-      theme: theme.resolved,
-      game: wad.summary?.game ?? null,
-      showThings: mapPrefs.showThings,
-      alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
-      categories: mapPrefs.showCategories,
-      showTeleportLines: mapPrefs.showTeleportLines,
-      showSecretSectors: mapPrefs.showSecretSectors,
-      showDamagingSectors: mapPrefs.showDamagingSectors,
-    }),
-  );
+  const tileKeyValue = $derived(tileKey(bakedInput));
   /** The tile's identity plus the two layers drawn live. */
   const renderKeyValue = $derived(
-    renderKey({
-      style: mapPrefs.style,
-      theme: theme.resolved,
-      game: wad.summary?.game ?? null,
-      showThings: mapPrefs.showThings,
-      alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
-      categories: mapPrefs.showCategories,
-      showTeleportLines: mapPrefs.showTeleportLines,
-      showSecretSectors: mapPrefs.showSecretSectors,
-      showDamagingSectors: mapPrefs.showDamagingSectors,
-      showGrid: mapPrefs.showGrid,
-      gridSize: mapPrefs.gridSize,
-    }),
+    renderKey({ ...bakedInput, showGrid: mapPrefs.showGrid, gridSize: mapPrefs.gridSize }),
   );
 
   // Redraw on anything the picture depends on. `draw()` runs outside this
