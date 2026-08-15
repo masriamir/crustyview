@@ -29,6 +29,8 @@ describe('MapPrefsStore', () => {
       showDamagingSectors: false,
       alwaysShowPlayerStart: true,
       gridSize: 32,
+      showTeleportArcs: true,
+      teleportArcCap: 100,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);

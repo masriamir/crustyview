@@ -692,6 +692,8 @@
     alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
     categories: mapPrefs.showCategories,
     showTeleportLines: mapPrefs.showTeleportLines,
+    showTeleportArcs: mapPrefs.showTeleportArcs,
+    teleportArcCap: mapPrefs.teleportArcCap,
     showSecretSectors: mapPrefs.showSecretSectors,
     showDamagingSectors: mapPrefs.showDamagingSectors,
   } satisfies TileKeyInput);
