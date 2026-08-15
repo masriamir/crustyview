@@ -130,12 +130,12 @@
           title="Show teleport links — the arcs pairing each teleporter with its destination; , and . change how many draw. The Teleport lines chip marks the sources separately."
           aria-pressed={mapPrefs.showTeleportArcs}
           aria-disabled={linkTotal === 0}
-          aria-label={arcCapName(mapPrefs.teleportArcCap, linkTotal ?? 0)}
+          aria-label={arcCapName(mapPrefs.teleportArcCap, linkTotal)}
           onclick={() => {
             if (linkTotal !== 0) mapPrefs.toggleTeleportArcs();
           }}
         >
-          Links · {arcCapLabel(mapPrefs.teleportArcCap, linkTotal ?? 0)}
+          Links · {arcCapLabel(mapPrefs.teleportArcCap, linkTotal)}
         </button>
         <button
           type="button"
@@ -291,6 +291,12 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accent-contrast);
+  }
+  /* Mirrors .chip[aria-disabled='true']: a zero-link map leaves the button
+     focusable (no `disabled` attribute — #74) but visibly inert. */
+  .tool[aria-disabled='true'] {
+    color: var(--text-muted);
+    cursor: not-allowed;
   }
   .zoom {
     /* Fixed width so the bar doesn't twitch as the digits change during a zoom. */

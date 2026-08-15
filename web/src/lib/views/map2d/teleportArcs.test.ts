@@ -120,6 +120,19 @@ describe('arcCapLabel', () => {
     expect(arcCapLabel(100, 0)).toBe('none');
     expect(arcCapLabel('all', 0)).toBe('none');
   });
+
+  it('shows the plain cap for `null`, never `none`', () => {
+    // `null` means "not known yet" (no map has resolved a link count: a fresh
+    // open, or a failed assembly) — it is NOT the same as `0`, which is the
+    // observed fact that a resolved map has no links. Collapsing the two with
+    // `?? 0` was #154's fix-round-1 defect: a failed map rendered `Links ·
+    // none`, actively claiming an absence nobody had established. `null`
+    // renders as if the cap were not biting, matching `undefined`'s treatment
+    // in `grid.ts` for the identical reason (#76) — do not "simplify" this
+    // back to `?? 0`.
+    expect(arcCapLabel(100, null)).toBe('100');
+    expect(arcCapLabel('all', null)).toBe('all');
+  });
 });
 
 describe('arcCapName', () => {
@@ -138,5 +151,14 @@ describe('arcCapName', () => {
     for (const total of [0, 40, 1668]) {
       expect(arcCapName(100, total).toLowerCase()).toContain('links');
     }
+  });
+
+  it('speaks the plain cap for `null`, and never claims a count', () => {
+    // Same distinction as `arcCapLabel`: `null` is "not known yet", not "zero
+    // observed". The accessible name must not claim the map has no links —
+    // that is a factual claim about a map we have not finished assembling.
+    expect(arcCapName(100, null)).toBe('Show teleport links, cap 100');
+    expect(arcCapName('all', null)).toBe('Show teleport links, all drawn');
+    expect(arcCapName(100, null)).not.toContain('none');
   });
 });

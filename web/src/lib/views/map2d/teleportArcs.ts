@@ -79,8 +79,20 @@ export function selectArcs(
  * survived culling at the current view. A view-dependent readout would change
  * while panning and would need to be threaded back from the component — which
  * is exactly the shape that produced #128's stale grid label.
+ *
+ * `total` is `number | null`, and `null` is NOT the same as `0` — `null` means
+ * "not known yet" (no map has resolved: a fresh open, or a failed assembly),
+ * while `0` is the observed fact that this map has no links. Collapsing the
+ * two with `?? 0` was #154's fix-round-1 defect: a failed map rendered `Links
+ * · none`, actively claiming an absence that was never established, mirroring
+ * exactly the `undefined` vs `null` distinction `grid.ts` already draws for
+ * the same reason (#76). `null` is handled first, and deliberately renders as
+ * if the cap were not biting — the honest state is "we don't know the total",
+ * not "the cap is satisfied", but the closest non-claiming rendering is the
+ * plain cap.
  */
-export function arcCapLabel(cap: TeleportArcCap, total: number): string {
+export function arcCapLabel(cap: TeleportArcCap, total: number | null): string {
+  if (total === null) return cap === 'all' ? 'all' : `${cap}`;
   if (total === 0) return 'none';
   if (cap === 'all') return 'all';
   return total > cap ? `${cap} of ${total.toLocaleString()}` : `${cap}`;
@@ -91,8 +103,13 @@ export function arcCapLabel(cap: TeleportArcCap, total: number): string {
  * label's `·` separator and thousands separator would otherwise be spoken as
  * punctuation, making the announcement worse than the label (CLAUDE.md, #74).
  * Contains the visible label "Links", as WCAG 2.5.3 requires.
+ *
+ * See `arcCapLabel` for why `null` total is handled before the zero check and
+ * must not claim a count.
  */
-export function arcCapName(cap: TeleportArcCap, total: number): string {
+export function arcCapName(cap: TeleportArcCap, total: number | null): string {
+  if (total === null)
+    return cap === 'all' ? 'Show teleport links, all drawn' : `Show teleport links, cap ${cap}`;
   if (total === 0) return 'Show teleport links, none on this map';
   if (cap === 'all') return 'Show teleport links, all drawn';
   return total > cap
