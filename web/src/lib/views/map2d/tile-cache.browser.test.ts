@@ -74,11 +74,78 @@ const MAP: Map2dPayload = {
   damaging_sectors: 0,
 };
 
+/**
+ * The zero-area bounds `bounds_of` produces when a single coordinate is
+ * non-finite, with the geometry still at real coordinates.
+ *
+ * `fitTransform` falls back to scale 1 centered on the origin for degenerate
+ * bounds, so map (0, 0) is the viewport center and screen x is map x plus half
+ * the canvas width: the near group straddles the center and the far group
+ * starts ~600 px right of it, off screen until panned to.
+ */
+const NEAR_HALF_SPAN = 150;
+const FAR_X = 600;
+const DEGENERATE: Map2dPayload = {
+  name: 'MAP01',
+  bounds: { min_x: 0, min_y: 0, max_x: 0, max_y: 0 },
+  lines: [
+    { x1: -NEAR_HALF_SPAN, y1: 0, x2: NEAR_HALF_SPAN, y2: 0, kind: 'one_sided' },
+    {
+      x1: FAR_X,
+      y1: -NEAR_HALF_SPAN,
+      x2: FAR_X,
+      y2: NEAR_HALF_SPAN,
+      kind: 'two_sided',
+      teleport: true,
+    },
+  ],
+  things: [],
+  secret_sectors: 0,
+  damaging_sectors: 0,
+};
+
+/**
+ * Two maps sharing one bounds. `fitTransform` is a pure function of bounds and
+ * viewport, so both fit at exactly the same scale — which is what makes map
+ * identity the only clause in `usable` that can notice the switch.
+ */
+const SWITCH_BOUNDS = { min_x: 0, min_y: 0, max_x: SPAN, max_y: SPAN };
+const SWITCH_BORDER = [
+  { x1: 0, y1: 0, x2: SPAN, y2: 0, kind: 'one_sided' as const },
+  { x1: SPAN, y1: 0, x2: SPAN, y2: SPAN, kind: 'one_sided' as const },
+  { x1: SPAN, y1: SPAN, x2: 0, y2: SPAN, kind: 'one_sided' as const },
+  { x1: 0, y1: SPAN, x2: 0, y2: 0, kind: 'one_sided' as const },
+];
+const PLAIN_MAP: Map2dPayload = {
+  name: 'MAP01',
+  bounds: SWITCH_BOUNDS,
+  lines: SWITCH_BORDER,
+  things: [],
+  secret_sectors: 0,
+  damaging_sectors: 0,
+};
+const MARKED_MAP: Map2dPayload = {
+  ...PLAIN_MAP,
+  name: 'MAP02',
+  lines: [
+    ...SWITCH_BORDER,
+    { x1: 1000, y1: 2000, x2: 3000, y2: 2000, kind: 'two_sided', secret_sector: true },
+  ],
+  secret_sectors: 1,
+};
+
+/**
+ * Which payload each map name serves, so a case can swap the fixture or serve
+ * two maps at once. Reset in `beforeEach`; a case that forgets to assign
+ * inherits the default rather than whatever ran before it.
+ */
+let payloads: Record<string, Map2dPayload> = { MAP01: MAP };
+
 vi.mock('../../stores/wad.svelte', () => ({
   wad: {
     phase: 'loaded',
     summary: { kind: 'PWAD', lump_count: 6, map_count: 1, game: null },
-    map2d: () => MAP,
+    map2d: (name: string) => payloads[name] ?? null,
     map2dError: () => null,
   },
 }));
@@ -166,25 +233,37 @@ async function frames(n = 3): Promise<void> {
   }
 }
 
-/** Mount, wait for the fit and first paint, then pan. */
-async function mountAndPan(): Promise<HTMLCanvasElement> {
-  const screen = await render(Map2d, { name: 'MAP01' });
+/** Mount and wait for the fit and first paint. */
+async function mount(name = 'MAP01') {
+  const screen = await render(Map2d, { name });
   const canvas = screen.container.querySelector('canvas');
   expect(canvas, 'Map2d should render a canvas').not.toBeNull();
   const el = canvas as HTMLCanvasElement;
-  expect(await painted(el), 'the map must fit and paint before panning').toBe(true);
-  for (let i = 0; i < PAN_PRESSES; i++) {
+  expect(await painted(el), 'the map must fit and paint').toBe(true);
+  return { screen, el };
+}
+
+/** Pan right by `presses` keypresses and let the resulting draw land. */
+async function panRight(el: HTMLCanvasElement, presses: number): Promise<void> {
+  for (let i = 0; i < presses; i++) {
     el.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
     );
   }
   await frames();
+}
+
+/** Mount, wait for the fit and first paint, then pan. */
+async function mountAndPan(): Promise<HTMLCanvasElement> {
+  const { el } = await mount();
+  await panRight(el, PAN_PRESSES);
   return el;
 }
 
 beforeEach(() => {
   control.disableCache = false;
   control.renders = 0;
+  payloads = { MAP01: MAP };
   // `mapPrefs` is a module singleton shared by every case in this file, and
   // `localStorage` can carry state in from another file, so pin the starting
   // point rather than trusting the defaults.
@@ -281,5 +360,44 @@ describe('the cache decides correctly when to rasterize', () => {
     const before = control.renders;
     mapPrefs.toggleSecretSectors();
     await expect.poll(() => control.renders).toBeGreaterThan(before);
+  });
+
+  it('keeps re-rendering when the bounds are degenerate', async () => {
+    // A zero-area bounds cannot contain the geometry, so `wholeMap` — which
+    // promises validity at any translation — must not be honored: the tile
+    // holds only the first viewport, and everything panned into view
+    // afterwards would be missing from it forever.
+    payloads = { MAP01: DEGENERATE };
+    const { el } = await mount();
+    expect(
+      countColor(el, CLASSIC_LINE_TELEPORT),
+      'the far group starts off screen',
+    ).toBe(0);
+    // Each press pans by a tenth of the viewport, so six clears the ~600 px
+    // the far group starts out beyond the right edge.
+    await panRight(el, 6);
+    expect(
+      countColor(el, CLASSIC_LINE_TELEPORT),
+      'geometry panned into view must be rasterized, not read from a tile that never held it',
+    ).toBeGreaterThan(0);
+  });
+
+  it('drops the tile when the map changes under an identical fit', async () => {
+    // The two maps share one bounds, so the fit — and therefore the scale
+    // clause in `usable` — is identical across the switch, and `MapView` keeps
+    // this component alive through it. Map identity is the only thing left
+    // that can tell the bitmap is the wrong map's.
+    payloads = { MAP01: PLAIN_MAP, MAP02: MARKED_MAP };
+    mapPrefs.toggleSecretSectors();
+    const { screen, el } = await mount('MAP01');
+    expect(countColor(el, CLASSIC_LINE_SECTOR_SECRET), 'MAP01 has no secret sector').toBe(0);
+
+    await screen.rerender({ name: 'MAP02' });
+    await frames();
+
+    expect(
+      countColor(el, CLASSIC_LINE_SECTOR_SECRET),
+      "the switch must repaint, not blit the previous map's tile",
+    ).toBeGreaterThan(0);
   });
 });

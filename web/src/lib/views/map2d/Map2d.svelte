@@ -17,6 +17,7 @@
     MAX_TILE_AREA_PX,
     MAX_TILE_SIDE_PX,
     TILE_MARGIN_FRACTION,
+    type TileBudget,
     type TileSpec,
   } from './tile';
   import { drawGrid, drawMapLayers, resolvePalette, TILE_PAD_PX, type Palette } from './render';
@@ -149,7 +150,7 @@
     maxAreaPx: MAX_TILE_AREA_PX,
     marginFraction: TILE_MARGIN_FRACTION,
     padPx: TILE_PAD_PX,
-  };
+  } satisfies TileBudget;
 
   /**
    * Render every scale-dependent layer into the offscreen tile, replacing
@@ -182,9 +183,25 @@
       max_x: Math.max(map.bounds.max_x, view.maxX),
       max_y: Math.max(map.bounds.max_y, view.maxY),
     };
-    const spec = planTile(t, width, height, dpr, covered, TILE_BUDGET);
+    const planned = planTile(t, width, height, dpr, covered, TILE_BUDGET);
+    // `wholeMap` promises validity at any translation, which rests entirely on
+    // `bounds` containing every line and thing. crustywad derives it that way —
+    // except that `bounds_of` collapses to a zero-area rect at the origin when
+    // any side is non-finite (a pathological UDMF coordinate), leaving the
+    // finite geometry where it is. Trusting the flag there blits a tile
+    // covering only the first viewport and silently drops whatever pans in,
+    // with no re-render to correct it. A zero-area bounds is precisely that
+    // signal, so fall back to the range-checked tile, which re-renders as soon
+    // as the viewport leaves it.
+    const boundsAreReal =
+      map.bounds.max_x > map.bounds.min_x && map.bounds.max_y > map.bounds.min_y;
+    const spec = boundsAreReal ? planned : { ...planned, wholeMap: false };
     if (!(spec.width > 0) || !(spec.height > 0)) return null;
     const el = tileCanvas ?? document.createElement('canvas');
+    // Before the surface is adopted or resized: a context failure must not
+    // leave a reallocated, unusable canvas behind.
+    const tileCtx = el.getContext('2d');
+    if (!tileCtx) return null;
     tileCanvas = el;
     const backingWidth = Math.max(1, Math.round(spec.width * dpr));
     const backingHeight = Math.max(1, Math.round(spec.height * dpr));
@@ -192,8 +209,6 @@
     // resets context state, so only touch them on a real size change.
     if (el.width !== backingWidth) el.width = backingWidth;
     if (el.height !== backingHeight) el.height = backingHeight;
-    const tileCtx = el.getContext('2d');
-    if (!tileCtx) return null;
     tileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Transparent, not filled: the visible canvas paints the background and the
     // grid underneath, and the tile composites over them.
