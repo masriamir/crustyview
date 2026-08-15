@@ -51,8 +51,17 @@ describe('tileKey', () => {
   it('does not change when a grid preference changes', () => {
     // The grid is drawn live on the visible canvas, never baked into the
     // tile, so a grid change must not throw the bitmap away.
-    expect(tileKey({ ...BASE, showGrid: true })).toBe(tileKey(BASE));
-    expect(tileKey({ ...BASE, gridSize: 128 })).toBe(tileKey(BASE));
+    //
+    // Bound to typed locals rather than written inline: `tileKey` takes the
+    // narrower `TileKeyInput`, and TypeScript's excess-property check applies
+    // to properties SPELLED OUT in a fresh object literal — so
+    // `tileKey({ ...BASE, showGrid: true })` is a compile error even though
+    // passing a `RenderKeyInput` variable is fine. `npm run check` catches
+    // this; `npm test` does not, because Vitest never type-checks.
+    const gridShown: RenderKeyInput = { ...BASE, showGrid: true };
+    const gridCoarser: RenderKeyInput = { ...BASE, gridSize: 128 };
+    expect(tileKey(gridShown)).toBe(tileKey(BASE));
+    expect(tileKey(gridCoarser)).toBe(tileKey(BASE));
   });
 });
 
