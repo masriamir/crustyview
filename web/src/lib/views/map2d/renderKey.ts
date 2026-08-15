@@ -58,8 +58,8 @@ export function tileKey(input: TileKeyInput): string {
 
 /**
  * Everything a draw depends on except the transform and the canvas size — the
- * single dependency the redraw `$effect` tracks in place of naming fifteen
- * fields by hand.
+ * single dependency the redraw `$effect` tracks in place of the fifteen
+ * hand-written `void` statements it used to name them with.
  *
  * This is the load-bearing property: a preference missing from `tileKey` is
  * also missing here, so it fails to invalidate the cache *and* fails to

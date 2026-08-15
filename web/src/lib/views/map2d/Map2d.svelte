@@ -6,9 +6,20 @@
   import { mapPrefs } from '../../stores/mapPrefs.svelte';
   import { theme } from '../../stores/theme.svelte';
   import { fitTransform, panBy, screenToMap, zoomAt, type Transform } from './transform';
-  import { CATEGORIES, countByCategory, type ThingCategory } from './things';
+  import { countByCategory, type ThingCategory } from './things';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
-  import { drawGrid, drawMapLayers, resolvePalette, type Palette } from './render';
+  import { viewportRect } from './cull';
+  import { renderKey, tileKey } from './renderKey';
+  import {
+    blitRects,
+    planTile,
+    tileCovers,
+    MAX_TILE_AREA_PX,
+    MAX_TILE_SIDE_PX,
+    TILE_MARGIN_FRACTION,
+    type TileSpec,
+  } from './tile';
+  import { drawGrid, drawMapLayers, resolvePalette, TILE_PAD_PX, type Palette } from './render';
 
   interface Props {
     name: string;
@@ -119,6 +130,93 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  /** What a rendered tile carries besides its pixels. */
+  interface TileState {
+    spec: TileSpec;
+    key: string;
+    map: Map2d;
+    /** The ratio the tile was rendered at, compared per draw: `devicePixelRatio`
+     *  is not reactive, so it cannot live in the key (#152). */
+    dpr: number;
+  }
+
+  /** The offscreen surface. One per component, resized rather than recreated. */
+  let tileCanvas: HTMLCanvasElement | null = null;
+  let tileState: TileState | null = null;
+
+  const TILE_BUDGET = {
+    maxSidePx: MAX_TILE_SIDE_PX,
+    maxAreaPx: MAX_TILE_AREA_PX,
+    marginFraction: TILE_MARGIN_FRACTION,
+    padPx: TILE_PAD_PX,
+  };
+
+  /**
+   * Render every scale-dependent layer into the offscreen tile, replacing
+   * whatever was there. Returns `null` when no usable tile can be made, which
+   * the caller reads as "draw straight to the visible canvas" — the cache is an
+   * optimization and must never be the only path to a picture.
+   */
+  function renderTile(
+    map: Map2d,
+    t: Transform,
+    colors: Palette,
+    game: string | null,
+    dpr: number,
+    key: string,
+  ): TileState | null {
+    // Plan against the union of the map's bounds and what the view can
+    // currently see, never the bounds alone. Every pass culls against the
+    // surface it is drawing onto, and the tile is that surface, so a tile
+    // clipped to the bounds silently deletes anything outside them — where a
+    // direct render draws it. crustywad derives `bounds` from the very lines
+    // and things being drawn, so this costs a slightly larger tile on a map
+    // smaller than the viewport and changes nothing on a megawad, which is
+    // where the cache earns its keep. `culling.browser.test.ts`'s pad fixtures
+    // are the case that proves it: they place geometry outside the bounds they
+    // declare, and go red against a bounds-clipped tile.
+    const view = viewportRect(t, width, height, 0);
+    const covered = {
+      min_x: Math.min(map.bounds.min_x, view.minX),
+      min_y: Math.min(map.bounds.min_y, view.minY),
+      max_x: Math.max(map.bounds.max_x, view.maxX),
+      max_y: Math.max(map.bounds.max_y, view.maxY),
+    };
+    const spec = planTile(t, width, height, dpr, covered, TILE_BUDGET);
+    if (!(spec.width > 0) || !(spec.height > 0)) return null;
+    const el = tileCanvas ?? document.createElement('canvas');
+    tileCanvas = el;
+    const backingWidth = Math.max(1, Math.round(spec.width * dpr));
+    const backingHeight = Math.max(1, Math.round(spec.height * dpr));
+    // Same rule as `sizeCanvas`: assigning width/height clears the surface and
+    // resets context state, so only touch them on a real size change.
+    if (el.width !== backingWidth) el.width = backingWidth;
+    if (el.height !== backingHeight) el.height = backingHeight;
+    const tileCtx = el.getContext('2d');
+    if (!tileCtx) return null;
+    tileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Transparent, not filled: the visible canvas paints the background and the
+    // grid underneath, and the tile composites over them.
+    tileCtx.clearRect(0, 0, spec.width, spec.height);
+    drawMapLayers(tileCtx, map, spec.transform, spec.width, spec.height, colors, game);
+    return { spec, key, map, dpr };
+  }
+
+  /** Put the tile's content where `t` says it belongs. */
+  function blitTile(
+    ctx: CanvasRenderingContext2D,
+    state: TileState,
+    t: Transform,
+    dpr: number,
+  ): void {
+    const el = tileCanvas;
+    if (!el) return;
+    const r = blitRects(state.spec, t, width, height, dpr);
+    // A zero-extent source throws IndexSizeError rather than drawing nothing.
+    if (r.sw <= 0 || r.sh <= 0) return;
+    ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh);
+  }
+
   function draw(): void {
     const el = canvas;
     if (!el) {
@@ -207,7 +305,28 @@
     }
     if (mapPrefs.showGrid && gridStep !== null)
       drawGrid(ctx, t, width, height, colors.grid, gridStep);
-    drawMapLayers(ctx, map, t, width, height, colors, wad.summary?.game ?? null);
+
+    const game = wad.summary?.game ?? null;
+    const dpr = window.devicePixelRatio || 1;
+    const key = tileKeyValue;
+    const usable =
+      tileState !== null &&
+      tileState.key === key &&
+      tileState.map === map &&
+      tileState.dpr === dpr &&
+      tileState.spec.transform.scale === t.scale &&
+      tileCovers(tileState.spec, t, width, height)
+        ? tileState
+        : renderTile(map, t, colors, game, dpr, key);
+    if (usable) {
+      tileState = usable;
+      blitTile(ctx, usable, t, dpr);
+    } else {
+      // No usable tile — degenerate viewport, or no 2D context for the
+      // offscreen surface. Draw directly: slower, but never blank.
+      tileState = null;
+      drawMapLayers(ctx, map, t, width, height, colors, game);
+    }
   }
 
   // Track the container's content box — the canvas is styled to fill it exactly.
@@ -462,24 +581,51 @@
     });
   }
 
-  // Redraw on anything the picture depends on. Every dependency is listed here
-  // because `draw()` runs outside this effect's tracking context.
+  /** The tile's identity — everything baked into the bitmap. */
+  const tileKeyValue = $derived(
+    tileKey({
+      style: mapPrefs.style,
+      theme: theme.resolved,
+      game: wad.summary?.game ?? null,
+      showThings: mapPrefs.showThings,
+      alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
+      categories: mapPrefs.showCategories,
+      showTeleportLines: mapPrefs.showTeleportLines,
+      showSecretSectors: mapPrefs.showSecretSectors,
+      showDamagingSectors: mapPrefs.showDamagingSectors,
+    }),
+  );
+  /** The tile's identity plus the two layers drawn live. */
+  const renderKeyValue = $derived(
+    renderKey({
+      style: mapPrefs.style,
+      theme: theme.resolved,
+      game: wad.summary?.game ?? null,
+      showThings: mapPrefs.showThings,
+      alwaysShowPlayerStart: mapPrefs.alwaysShowPlayerStart,
+      categories: mapPrefs.showCategories,
+      showTeleportLines: mapPrefs.showTeleportLines,
+      showSecretSectors: mapPrefs.showSecretSectors,
+      showDamagingSectors: mapPrefs.showDamagingSectors,
+      showGrid: mapPrefs.showGrid,
+      gridSize: mapPrefs.gridSize,
+    }),
+  );
+
+  // Redraw on anything the picture depends on. `draw()` runs outside this
+  // effect's tracking context, so its dependencies have to be named here — but
+  // every preference, the theme and the game now arrive through one derived
+  // key rather than fifteen hand-written lines. That is what stops the cache's
+  // invalidation drifting from the redraw trigger: a field missing from the key
+  // fails to do both, so the symptom is a picture that never changes rather
+  // than one that changes everywhere except the cached layer (#152).
   $effect(() => {
     void canvas;
     void data;
     void transform;
     void width;
     void height;
-    void mapPrefs.showThings;
-    void mapPrefs.alwaysShowPlayerStart;
-    for (const c of CATEGORIES) void mapPrefs.showCategories[c.id];
-    void mapPrefs.showTeleportLines;
-    void mapPrefs.showSecretSectors;
-    void mapPrefs.showDamagingSectors;
-    void mapPrefs.showGrid;
-    void mapPrefs.gridSize;
-    void mapPrefs.style;
-    void theme.resolved;
+    void renderKeyValue;
     scheduleDraw();
     return () => {
       if (frame === 0) return;
@@ -497,6 +643,14 @@
       window.clearTimeout(gridAnnounceTimer);
       gridAnnounceTimer = 0;
     }
+    // Sizing to zero releases the backing store immediately rather than
+    // waiting on the collector; the tile can be tens of megabytes.
+    if (tileCanvas) {
+      tileCanvas.width = 0;
+      tileCanvas.height = 0;
+      tileCanvas = null;
+    }
+    tileState = null;
   });
 </script>
 
