@@ -116,14 +116,15 @@ const LINK_RING_RADIUS = 3;
 const LINK_ARROW_SIZE = 7;
 /** Half-angle of the arrowhead's barbs, in radians. */
 const LINK_ARROW_SPREAD = 0.42;
-/** A link is drawn as an arc bowed up to `LINK_BOW_MAX` perpendicular to its
- *  chord IN SCREEN SPACE, with a ring at the source and an arrowhead at the
- *  destination — so a chord just off screen can still put ink inside the
- *  viewport, and padding by the chord alone clips arcs along every edge.
- *  Summing all three is deliberately conservative: the bow displaces the
- *  arc's middle while the ring and arrowhead sit at opposite endpoints, so
- *  they never all extend the same way. An over-inclusive rect costs a few
- *  extra draws; an under-inclusive one deletes visible geometry. */
+/** Pad for the link pass, which culls on ENDPOINTS rather than on the chord
+ *  (#162) — so this covers how far ink reaches from an endpoint that sits just
+ *  outside the view. The ring (`LINK_RING_RADIUS`) and the arrowhead
+ *  (`LINK_ARROW_SIZE`) are drawn AT the endpoints; `LINK_BOW_MAX` is added on
+ *  top even though the bow displaces the arc's MIDDLE rather than its ends,
+ *  because an arc leaving a just-off-screen endpoint curves back toward the
+ *  view before it exits. Summing all three is deliberately conservative: they
+ *  never all extend the same way. An over-inclusive rect costs a few extra
+ *  draws; an under-inclusive one deletes visible ink. */
 const LINK_CULL_PAD_PX = LINK_BOW_MAX + LINK_ARROW_SIZE + LINK_RING_RADIUS;
 
 function token(style: CSSStyleDeclaration, property: string, fallback: string): string {
@@ -309,7 +310,26 @@ function drawTeleportLinks(
   ctx.save();
   ctx.strokeStyle = color;
   for (const link of map.links) {
-    if (!segmentVisible(view, link.from[0], link.from[1], link.to[0], link.to[1])) continue;
+    // Culled on the ENDPOINTS, not on whether the chord crosses the view —
+    // deliberately unlike every other pass, which uses `segmentVisible`'s
+    // trivial reject (#153). A link's chord spans much of the map, so its ends
+    // sit outside on OPPOSITE edges, which is precisely the case trivial reject
+    // is built to keep; under that rule links are effectively uncullable and
+    // high zoom costs MORE than fit, because each surviving arc gets longer on
+    // screen. Measured on Eviternity II MAP26 (1,668 links) against MAP33
+    // (118 links, near-identical line count): 285 ms against 12 ms at 8x.
+    //
+    // The different rule is safe because a link is an annotation about a pair
+    // of places rather than map geometry. Dropping a wall that crosses the view
+    // destroys structure the reader needs; dropping an arc whose two ends are
+    // both off screen removes something that says nothing about where it goes
+    // or where it came from (#162).
+    if (
+      !pointVisible(view, link.from[0], link.from[1]) &&
+      !pointVisible(view, link.to[0], link.to[1])
+    ) {
+      continue;
+    }
     const from = mapToScreen(t, link.from[0], link.from[1]);
     const to = mapToScreen(t, link.to[0], link.to[1]);
     const control = linkControlPoint(from, to);
