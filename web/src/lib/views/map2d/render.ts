@@ -15,6 +15,7 @@ import {
   CLASSIC_LINE_TELEPORT,
 } from './lines';
 import { pointVisible, segmentVisible, viewportRect } from './cull';
+import { selectArcs, type TeleportArcCap, type TeleportLink } from './teleportArcs';
 
 type LineKind = Map2d['lines'][number]['kind'];
 
@@ -304,11 +305,16 @@ function drawTeleportLinks(
   width: number,
   height: number,
   color: string,
+  cap: TeleportArcCap,
 ): void {
   if (!map.links?.length) return;
   const view = viewportRect(t, width, height, LINK_CULL_PAD_PX);
-  ctx.save();
-  ctx.strokeStyle = color;
+  // Cull FIRST, then cap what survived — never the other way round. Capping
+  // globally would pick the longest links in the whole map, nearly all of which
+  // are off screen at high zoom, so zooming in would reveal nothing. This order
+  // gives progressive disclosure instead: the longest arteries at fit, then
+  // every local pad once the candidate set falls below the cap (#154).
+  const candidates: TeleportLink[] = [];
   for (const link of map.links) {
     // Culled on the ENDPOINTS, not on whether the chord crosses the view —
     // deliberately unlike every other pass, which uses `segmentVisible`'s
@@ -325,11 +331,15 @@ function drawTeleportLinks(
     // both off screen removes something that says nothing about where it goes
     // or where it came from (#162).
     if (
-      !pointVisible(view, link.from[0], link.from[1]) &&
-      !pointVisible(view, link.to[0], link.to[1])
+      pointVisible(view, link.from[0], link.from[1]) ||
+      pointVisible(view, link.to[0], link.to[1])
     ) {
-      continue;
+      candidates.push(link);
     }
+  }
+  ctx.save();
+  ctx.strokeStyle = color;
+  for (const link of selectArcs(candidates, cap)) {
     const from = mapToScreen(t, link.from[0], link.from[1]);
     const to = mapToScreen(t, link.to[0], link.to[1]);
     const control = linkControlPoint(from, to);
@@ -506,13 +516,19 @@ export function drawMapLayers(
       dashOffset: DAMAGE_DASH_OFFSET,
       marked: (l) => l.damaging_sector === true,
     });
+  // Two passes, two preferences. The dashed source linedefs answer "where are
+  // the teleports"; the arcs answer "which connects to which". Capping or
+  // hiding the arcs therefore never hides a teleporter's location — which is
+  // what makes the cap defensible on a map with 1,668 of them (#154).
   if (mapPrefs.showTeleportLines) {
     drawLineOverlay(ctx, map, t, width, height, {
       color: colors.lineTeleport,
       dash: TELEPORT_DASH,
       marked: (l) => l.teleport === true,
     });
-    drawTeleportLinks(ctx, map, t, width, height, colors.lineTeleport);
+  }
+  if (mapPrefs.showTeleportArcs) {
+    drawTeleportLinks(ctx, map, t, width, height, colors.lineTeleport, mapPrefs.teleportArcCap);
   }
   if (mapPrefs.showThings) {
     drawThings(ctx, map, t, width, height, colors, game);
