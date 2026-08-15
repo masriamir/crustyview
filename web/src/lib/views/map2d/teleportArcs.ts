@@ -95,7 +95,13 @@ export function arcCapLabel(cap: TeleportArcCap, total: number | null): string {
   if (total === null) return cap === 'all' ? 'all' : `${cap}`;
   if (total === 0) return 'none';
   if (cap === 'all') return 'all';
-  return total > cap ? `${cap} of ${total.toLocaleString()}` : `${cap}`;
+  // Locale pinned, not defaulted. Bare `toLocaleString()` follows the host
+  // environment, so the same map reads `1,668` here and `1.668` under de-DE or
+  // `1 668` under fr-FR — and the unit test, which asserts the American form,
+  // would fail on a CI runner with a different default locale. The app's copy
+  // is American English throughout, so the separator is part of that copy
+  // rather than something to localize.
+  return total > cap ? `${cap} of ${total.toLocaleString('en-US')}` : `${cap}`;
 }
 
 /**
