@@ -13,7 +13,7 @@ links off. Eviternity II MAP33 is the control that isolates it — 62,307 lines 
 its link cost is +11 ms and it still redraws in 76 ms. The base map is the problem, not any overlay.
 
 Viewport culling (ADR-less, #153) does not help here: at fit zoom 60,459 of MAP26's 64,782 lines are
-on screen, so there is nothing to skip, and culled measured 248 ms against 246 ms uncalled. A
+on screen, so there is nothing to skip, and culled measured 248 ms against 246 ms unculled. A
 base/overlay canvas split does not help either, because the base layer changes on every pan frame by
 definition.
 
