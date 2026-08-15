@@ -620,11 +620,25 @@
   /** Step the arc cap, turning the overlay on if hidden — adjusting is
    *  immediate feedback, exactly as it is for the grid. */
   function adjustArcCap(direction: -1 | 1): void {
+    // `data` is guaranteed non-null here: `handleKeyDown` is wired on the
+    // canvas, and the canvas only exists in the `{#if data === null}` else
+    // branch below, so a press can never observe an unresolved map. `?? 0`
+    // is therefore never masking "unknown" as "zero" — teleportArcs.ts's
+    // `number | null` contract is about the button, which CAN render before
+    // a map resolves; this handler cannot fire that early.
+    const total = data?.links?.length ?? 0;
+    if (total === 0) {
+      // Mirror the toolbar button's own decline on a linkless map: no
+      // toggle, no cap step, no persisted change. Still announce — a
+      // keyboard user pressing a key that does nothing gets no other
+      // feedback, and `arcCapName(cap, 0)` already says the right thing.
+      arcCapAnnouncement = arcCapName(mapPrefs.teleportArcCap, 0);
+      return;
+    }
     if (!mapPrefs.showTeleportArcs) mapPrefs.toggleTeleportArcs();
     const next = stepArcCap(mapPrefs.teleportArcCap, direction);
     const clamped = next === mapPrefs.teleportArcCap;
     mapPrefs.setTeleportArcCap(next);
-    const total = data?.links?.length ?? 0;
     // A clamped press still announces, with distinct wording: identical
     // live-region text is skipped by both Svelte and screen readers.
     arcCapAnnouncement = clamped

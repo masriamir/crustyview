@@ -43,11 +43,17 @@ const MAP: Map2dPayload = {
   })),
 };
 
+/** Fix round 2, finding 2: a map with no `links` field at all, for the
+ *  zero-link decline test below. */
+const NO_LINKS_MAP: Map2dPayload = { ...MAP, links: undefined };
+
+let payload: Map2dPayload = MAP;
+
 vi.mock('../../stores/wad.svelte', () => ({
   wad: {
     phase: 'loaded',
     summary: { kind: 'PWAD', lump_count: 6, map_count: 1, game: null },
-    map2d: () => MAP,
+    map2d: () => payload,
     map2dError: () => null,
   },
 }));
@@ -61,12 +67,14 @@ installMapSizing();
 // `mapPrefs` is a module singleton, so a test that flips a preference and
 // walks away leaves it flipped for whatever runs next in this file (and in
 // files that share the page). Restore rather than reset-to-default, as
-// `teleport-links.browser.test.ts` does.
+// `teleport-links.browser.test.ts` does. `payload` resets too, so a test that
+// switches to `NO_LINKS_MAP` doesn't leak into the next.
 const showTeleportArcsDefault = mapPrefs.showTeleportArcs;
 const teleportArcCapDefault = mapPrefs.teleportArcCap;
 afterEach(() => {
   mapPrefs.showTeleportArcs = showTeleportArcsDefault;
   mapPrefs.teleportArcCap = teleportArcCapDefault;
+  payload = MAP;
 });
 
 interface Mounted {
@@ -151,5 +159,24 @@ describe('teleport arc cap keys', () => {
 
     press(canvas, ',');
     expect(mapPrefs.showTeleportArcs).toBe(true);
+  });
+
+  it('declines on a map with no links: no toggle, no cap step, no persisted change — but still announces', async () => {
+    // Mirrors the toolbar button's own `linkTotal !== 0` guard: a keyboard
+    // press on a linkless map must not switch the overlay on or step the cap
+    // for every OTHER map (the preference is a persisted singleton), the same
+    // property the button's `aria-disabled` protects on click.
+    payload = NO_LINKS_MAP;
+    mapPrefs.showTeleportArcs = false;
+    mapPrefs.teleportArcCap = 100;
+    const { canvas, live } = await mountPainted();
+
+    press(canvas, ',');
+    expect(mapPrefs.showTeleportArcs, 'a linkless map must not turn the overlay on').toBe(false);
+    expect(mapPrefs.teleportArcCap, 'a linkless map must not step the cap').toBe(100);
+    expect(
+      live.textContent,
+      'a keyboard user pressing an inert key still needs feedback',
+    ).toBe('Show teleport links, none on this map');
   });
 });
