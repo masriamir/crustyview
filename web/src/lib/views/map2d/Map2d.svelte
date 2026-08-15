@@ -655,16 +655,18 @@
       adjustGridSize(e.key === ']' ? 1 : -1);
       return;
     }
-    // `,` and `.` are the unshifted `<` and `>`, so they read as less/more, and
-    // unlike `[` / `]` they are not typed via AltGr or Option on common
-    // layouts — which is why that branch above needs its own modifier handling.
-    if ((e.key === ',' || e.key === '.') && !e.metaKey) {
+    // Leave modified keys to the browser and the OS.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // `,` and `.` are the unshifted `<` and `>`, so they read as less/more.
+    // They sit AFTER the blanket guard on purpose: unlike `[` / `]` above they
+    // are not typed via AltGr or Option on common layouts, so they need no
+    // exception of their own — and claiming one would swallow Ctrl+, which is
+    // a real browser shortcut.
+    if (e.key === ',' || e.key === '.') {
       e.preventDefault();
       adjustArcCap(e.key === '.' ? 1 : -1);
       return;
     }
-    // Leave modified keys to the browser and the OS.
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '0') {
       e.preventDefault();
       refit();

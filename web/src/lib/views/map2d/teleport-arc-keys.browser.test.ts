@@ -179,4 +179,19 @@ describe('teleport arc cap keys', () => {
       'a keyboard user pressing an inert key still needs feedback',
     ).toBe('Show teleport links, none on this map');
   });
+
+  it('leaves a modified comma to the browser', async () => {
+    // Ctrl+, is a real browser shortcut. The `[` / `]` branch above claims a
+    // modifier exception because AltGr and Option type those keys on common
+    // layouts; `,` and `.` need no such exception, so they must sit behind the
+    // blanket modifier guard rather than in front of it.
+    const before = mapPrefs.teleportArcCap;
+    const { canvas } = await mountPainted();
+    canvas.focus();
+    canvas.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    flushSync();
+    expect(mapPrefs.teleportArcCap, 'a modified press must not step the cap').toBe(before);
+  });
 });

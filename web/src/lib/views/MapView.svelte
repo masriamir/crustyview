@@ -128,8 +128,8 @@
           type="button"
           class="tool"
           title="Show teleport links — the arcs pairing each teleporter with its destination; , and . change how many draw. The Teleport lines chip marks the sources separately."
-          aria-pressed={mapPrefs.showTeleportArcs}
-          aria-disabled={linkTotal === 0}
+          aria-pressed={linkTotal === 0 ? undefined : mapPrefs.showTeleportArcs}
+          aria-disabled={linkTotal === 0 ? true : undefined}
           aria-label={arcCapName(mapPrefs.teleportArcCap, linkTotal)}
           onclick={() => {
             if (linkTotal !== 0) mapPrefs.toggleTeleportArcs();
