@@ -153,6 +153,52 @@
   } satisfies TileBudget;
 
   /**
+   * How long after the last scale change the tile is re-rendered crisply. Long
+   * enough to span a wheel burst, short enough that the soft state reads as
+   * transient.
+   */
+  const TILE_SETTLE_MS = 120;
+  /** Pending crisp re-render; 0 when none is armed. */
+  let tileSettleTimer = 0;
+  /**
+   * The scale the previous draw ran at, so a draw can tell a zoom tick from a
+   * pan. `NaN` before the first draw, which compares unequal to everything and
+   * so reads as "moved" — harmless, since the first draw has no tile to keep.
+   */
+  let lastDrawnScale = Number.NaN;
+
+  /**
+   * Arm the crisp re-render, restarting the window on every scale change so a
+   * continuing gesture keeps blitting.
+   *
+   * Cleared in `onDestroy` and nowhere else in the reactive graph. NOT in the
+   * redraw `$effect`'s teardown: that effect tracks `transform`, so it re-runs
+   * on every wheel notch, pinch move and pan keypress, and Svelte runs a
+   * cleanup before each re-run — clearing there would cancel the settle during
+   * the exact gesture it exists to serve. That is #127's defect, in a new
+   * place, and `zoom, then drag` is where it lands: the drag re-runs the effect
+   * at an unchanged scale, so the cancel would never be undone and the map
+   * would stay soft until the user let go.
+   */
+  function scheduleTileSettle(): void {
+    if (tileSettleTimer !== 0) window.clearTimeout(tileSettleTimer);
+    tileSettleTimer = window.setTimeout(() => {
+      tileSettleTimer = 0;
+      // Drop the tile and redraw: `draw()` then renders a fresh one at the
+      // scale the gesture landed on.
+      tileState = null;
+      scheduleDraw();
+    }, TILE_SETTLE_MS);
+  }
+
+  /** A tile re-render for any other reason supersedes a pending settle. */
+  function cancelTileSettle(): void {
+    if (tileSettleTimer === 0) return;
+    window.clearTimeout(tileSettleTimer);
+    tileSettleTimer = 0;
+  }
+
+  /**
    * Render every scale-dependent layer into the offscreen tile, replacing
    * whatever was there. Returns `null` when no usable tile can be made, which
    * the caller reads as "draw straight to the visible canvas" — the cache is an
@@ -324,15 +370,35 @@
     const game = wad.summary?.game ?? null;
     const dpr = window.devicePixelRatio || 1;
     const key = tileKeyValue;
-    const usable =
+    const live =
       tileState !== null &&
       tileState.key === key &&
       tileState.map === map &&
-      tileState.dpr === dpr &&
-      tileState.spec.transform.scale === t.scale &&
-      tileCovers(tileState.spec, t, width, height)
+      tileState.dpr === dpr
         ? tileState
-        : renderTile(map, t, colors, game, dpr, key);
+        : null;
+    // Whether the scale MOVED since the previous draw — not whether it differs
+    // from the tile's. A pan after a zoom still blits a stale-scale tile, but
+    // the gesture that produced it is over: re-arming on every stale-scale draw
+    // would hold the map soft for as long as the user kept dragging. It would
+    // also make the settle level-armed — re-armed by the next draw no matter
+    // what canceled it — which silently neutralizes the #127 rule the timer's
+    // cleanup follows, since the redraw `$effect` always schedules a draw.
+    const scaleMoved = t.scale !== lastDrawnScale;
+    lastDrawnScale = t.scale;
+    let usable: TileState | null;
+    if (live !== null && live.spec.transform.scale !== t.scale) {
+      // Scale changed mid-gesture: blit what we have, scaled. Geometry still
+      // lands in the right place at the right size; only stroke weights and
+      // antialiasing are stale until the gesture settles.
+      usable = live;
+      if (scaleMoved) scheduleTileSettle();
+    } else if (live !== null && tileCovers(live.spec, t, width, height)) {
+      usable = live;
+    } else {
+      cancelTileSettle();
+      usable = renderTile(map, t, colors, game, dpr, key);
+    }
     if (usable) {
       tileState = usable;
       blitTile(ctx, usable, t, dpr);
@@ -652,12 +718,15 @@
   // Not the redraw effect's teardown: that effect tracks `transform` and so re-runs
   // on every wheel tick, pinch move, pan and zoom keypress, and Svelte runs an
   // effect's cleanup before each re-run. Canceling there killed the pending
-  // announcement mid-gesture — the exact case it exists to cover (#127).
+  // announcement mid-gesture — the exact case it exists to cover (#127). The
+  // tile settle below is armed by a scale change and so lives on exactly the
+  // same ticks: it is unmount-only for the same reason (#152).
   onDestroy(() => {
     if (gridAnnounceTimer !== 0) {
       window.clearTimeout(gridAnnounceTimer);
       gridAnnounceTimer = 0;
     }
+    cancelTileSettle();
     // Sizing to zero releases the backing store immediately rather than
     // waiting on the collector; the tile can be tens of megabytes.
     if (tileCanvas) {
