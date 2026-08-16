@@ -27,8 +27,8 @@ export function installMapSizing(): void {
  * Wait for the ResizeObserver -> fit -> rAF draw chain to settle.
  *
  * Context-agnostic (#175): reads a 2D-bound canvas via getImageData and a
- * WebGL2-bound canvas via readPixels. The width gate runs BEFORE any
- * getContext call. It cannot fully prevent early binding: a fresh canvas is
+ * WebGL2-bound canvas via readPixels. The gate skips zero-dimension canvases
+ * (both axes) before any getContext call. It cannot fully prevent early binding: a fresh canvas is
  * 300×150 before anyone sizes it, and rAF polls can run before the
  * component's ResizeObserver fires. Harmless for the 2D path (re-requesting
  * '2d' returns the same context), but it means any WebGL-backed component
@@ -44,7 +44,7 @@ export function installMapSizing(): void {
 export async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
-    if (canvas.width === 0) continue;
+    if (canvas.width === 0 || canvas.height === 0) continue;
     const data = surfacePixels(canvas);
     if (!data) continue;
     const [r0, g0, b0, a0] = data;
@@ -59,6 +59,8 @@ export async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
 
 /** The full RGBA surface of whichever context type the canvas is bound to. */
 function surfacePixels(canvas: HTMLCanvasElement): Uint8ClampedArray | Uint8Array | null {
+  // Zero-dimension reads throw on getImageData and are pointless on readPixels, so guard here.
+  if (canvas.width === 0 || canvas.height === 0) return null;
   const ctx = canvas.getContext('2d');
   if (ctx) return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const gl = canvas.getContext('webgl2');

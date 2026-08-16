@@ -85,12 +85,19 @@ export function visibleLinks(
   links: readonly TeleportLink[],
   view: Rect,
 ): readonly TeleportLink[] {
-  const kept = links.filter(
-    (link) =>
+  let kept: TeleportLink[] | null = null;
+  for (let i = 0; i < links.length; i += 1) {
+    const link = links[i];
+    const visible =
       pointVisible(view, link.from[0], link.from[1]) ||
-      pointVisible(view, link.to[0], link.to[1]),
-  );
-  // Identity when nothing dropped, mirroring selectArcs' no-copy contract on
-  // the common path.
-  return kept.length === links.length ? links : kept;
+      pointVisible(view, link.to[0], link.to[1]);
+    if (!visible) {
+      if (kept === null) kept = links.slice(0, i);
+    } else if (kept !== null) {
+      kept.push(link);
+    }
+  }
+  // Identity when nothing dropped, mirroring selectArcs' no-copy contract; the
+  // common no-drop path allocates nothing at all.
+  return kept ?? links;
 }
