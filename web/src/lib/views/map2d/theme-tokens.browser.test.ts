@@ -22,12 +22,21 @@ import type { Transform } from './transform';
  * assertion is that the themed color DIFFERS from the classic one. Remove
  * `--map2d-wall` from `app.css` and `resolvePalette` returns `CLASSIC.wall`,
  * the two become equal, and this goes red — which is exactly the regression the
- * old tier could not see. Verified by doing it: with the token deleted, the
- * first case fails on `expected '#ff3b30' not to be '#ff3b30'`.
+ * old tier could not see.
+ *
+ * Each of those claims was checked by breaking it on purpose rather than
+ * reasoned about:
+ *
+ * | broken on purpose | result |
+ * |---|---|
+ * | `--map2d-wall` deleted from `app.css` | 3 red, `expected '#ff3b30' not to be '#ff3b30'` |
+ * | `--map2d-wall: not-a-color` | 2 red, `the themed wall token should hold a color` |
+ * | `setupFiles` wiring removed | 3 red — the tier goes blind again |
  *
  * It asserts a *difference* rather than the literal `#bf3a1e` on purpose. The
  * specific hue is a design decision that may be retuned; that the themed style
- * is distinguishable from classic at all is the contract.
+ * is distinguishable from classic at all is the contract. For the same reason
+ * nothing here parses hex — see `swatch` and `parsedColor`.
  */
 
 /** Identity scale, no offset: map (x, y) draws at screen (x, -y). */
@@ -43,20 +52,48 @@ const MAP: Map2dPayload = {
   damaging_sectors: 0,
 };
 
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.trim().replace('#', '');
-  const full =
-    h.length === 3
-      ? h
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : h;
-  return [
-    parseInt(full.slice(0, 2), 16),
-    parseInt(full.slice(2, 4), 16),
-    parseInt(full.slice(4, 6), 16),
-  ];
+function scratch(): CanvasRenderingContext2D {
+  const el = document.createElement('canvas');
+  el.width = 1;
+  el.height = 1;
+  return el.getContext('2d') as CanvasRenderingContext2D;
+}
+
+/**
+ * `color` as the canvas itself interprets it, or `null` if the canvas rejects
+ * it.
+ *
+ * Assigning an unparseable value to `fillStyle` is a no-op, leaving whatever was
+ * there before — so two attempts from different starting points agree only when
+ * the value actually parsed. That is what distinguishes "the token holds a color"
+ * from "the token holds nonsense", without this test having an opinion about
+ * which CSS syntax the design tokens are written in.
+ */
+function parsedColor(color: string): string | null {
+  const c = scratch();
+  c.fillStyle = '#000000';
+  c.fillStyle = color;
+  const first = c.fillStyle;
+  c.fillStyle = '#ffffff';
+  c.fillStyle = color;
+  return c.fillStyle === first ? first : null;
+}
+
+/**
+ * `color`'s RGB as the canvas paints it.
+ *
+ * Painting rather than parsing is deliberate: the tokens are `#rrggbb` today,
+ * but `rgb()`, `oklch()` or a named color are all equally valid CSS, and a test
+ * that parsed hex by hand would fail on a purely cosmetic retune while the app
+ * stayed correct. Letting the canvas do the conversion also compares against the
+ * exact bytes the real draw would produce.
+ */
+function swatch(color: string): [number, number, number] {
+  const c = scratch();
+  c.fillStyle = color;
+  c.fillRect(0, 0, 1, 1);
+  const { data } = c.getImageData(0, 0, 1, 1);
+  return [data[0], data[1], data[2]];
 }
 
 /**
@@ -88,7 +125,10 @@ describe('themed palette in the browser tier', () => {
     expect(themed.bg).not.toBe(classic.bg);
     expect(themed.grid).not.toBe(classic.grid);
     expect(themed.player).not.toBe(classic.player);
-    expect(themed.wall).toMatch(/^#[0-9a-f]{3,8}$/i);
+    // Not a syntax assertion — `parsedColor` asks the canvas whether the value
+    // is a color at all, so a token holding nonsense fails here while a retune
+    // to `rgb()` or `oklch()` passes.
+    expect(parsedColor(themed.wall), 'the themed wall token should hold a color').not.toBeNull();
   });
 
   it('puts the themed wall color on the canvas, not the classic one', () => {
@@ -108,8 +148,8 @@ describe('themed palette in the browser tier', () => {
     // Sample the band the wall sits on rather than the whole canvas, so the
     // assertion is about that line and not about anything else that painted.
     const { data } = c.getImageData(0, 698, width, 5);
-    const want = hexToRgb(themed.wall);
-    const classicRgb = hexToRgb(classic.wall);
+    const want = swatch(themed.wall);
+    const classicRgb = swatch(classic.wall);
     let themedPixels = 0;
     let classicPixels = 0;
     for (let p = 0; p < data.length; p += 4) {
