@@ -41,3 +41,6 @@ choices don't need an ADR.
   policy: single workspace version, git-cliff over release-plz
 - [ADR-0005](0005-scale-keyed-render-cache-for-the-2d-map.md) — Cache the 2D map
   in a scale-keyed bitmap and blit it, rather than drawing less or moving to a GPU
+- [ADR-0006](0006-webgl2-2d-renderer-succession.md) — Keep the 2D map on canvas 2D,
+  with a measured WebGL2 renderer recorded as its successor (spike #157; amends
+  ADR-0002's GPU line)
