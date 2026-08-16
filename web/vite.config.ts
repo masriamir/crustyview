@@ -45,6 +45,10 @@ export default defineConfig({
         test: {
           name: 'browser',
           include: ['src/**/*.browser.test.ts'],
+          // Loads `app.css`, so the `--map2d-*` design tokens exist and
+          // `resolvePalette` exercises its token path rather than silently
+          // falling back to the classic palette in every spec (#158).
+          setupFiles: ['./src/browser-test-setup.ts'],
           browser: {
             enabled: true,
             headless: true,
