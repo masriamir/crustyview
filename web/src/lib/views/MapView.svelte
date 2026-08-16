@@ -4,6 +4,7 @@
   import { mapPrefs } from '../stores/mapPrefs.svelte';
   import { nav, type MapMode } from '../stores/nav.svelte';
   import { gridDrawnSuffix, gridLabel, type GridSize } from './map2d/grid';
+  import { arcCapLabel, arcCapName } from './map2d/teleportArcs';
   import {
     CATEGORIES,
     CATEGORY_DESCRIPTIONS,
@@ -44,6 +45,7 @@
 
   const teleportLines = $derived(map2d?.teleportLineCount() ?? null);
   const sectorCounts = $derived(map2d?.sectorCounts() ?? null);
+  const linkTotal = $derived(map2d?.linkCount() ?? null);
 
   /** Swatch color per the active style, so the chips double as the legend. */
   function swatchColor(id: ThingCategory): string {
@@ -121,6 +123,19 @@
           onclick={() => mapPrefs.toggleGrid()}
         >
           Grid · {gridLabelText}
+        </button>
+        <button
+          type="button"
+          class="tool"
+          title="Show teleport links — the arcs pairing each teleporter with its destination; , and . change how many draw. The Teleport lines chip marks the sources separately."
+          aria-pressed={linkTotal === 0 ? undefined : mapPrefs.showTeleportArcs}
+          aria-disabled={linkTotal === 0 ? true : undefined}
+          aria-label={arcCapName(mapPrefs.teleportArcCap, linkTotal)}
+          onclick={() => {
+            if (linkTotal !== 0) mapPrefs.toggleTeleportArcs();
+          }}
+        >
+          Links · {arcCapLabel(mapPrefs.teleportArcCap, linkTotal)}
         </button>
         <button
           type="button"
@@ -276,6 +291,12 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accent-contrast);
+  }
+  /* Mirrors .chip[aria-disabled='true']: a zero-link map leaves the button
+     focusable (no `disabled` attribute — #74) but visibly inert. */
+  .tool[aria-disabled='true'] {
+    color: var(--text-muted);
+    cursor: not-allowed;
   }
   .zoom {
     /* Fixed width so the bar doesn't twitch as the digits change during a zoom. */

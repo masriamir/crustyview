@@ -1,6 +1,7 @@
 import type { MapStyle } from '../../stores/mapPrefs.svelte';
 import type { GridSize } from './grid';
 import { CATEGORIES, type ThingCategory } from './things';
+import type { TeleportArcCap } from './teleportArcs';
 
 /**
  * Everything baked into the cached tile (#152).
@@ -23,6 +24,8 @@ export interface TileKeyInput {
   showTeleportLines: boolean;
   showSecretSectors: boolean;
   showDamagingSectors: boolean;
+  showTeleportArcs: boolean;
+  teleportArcCap: TeleportArcCap;
 }
 
 /** The tile's inputs plus the two the visible canvas draws live. */
@@ -51,6 +54,8 @@ export function tileKey(input: TileKeyInput): string {
     // property insertion order.
     CATEGORIES.map((c) => input.categories[c.id]),
     input.showTeleportLines,
+    input.showTeleportArcs,
+    input.teleportArcCap,
     input.showSecretSectors,
     input.showDamagingSectors,
   ]);

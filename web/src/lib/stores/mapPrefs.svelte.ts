@@ -1,4 +1,9 @@
 import { DEFAULT_GRID_SIZE, isGridSize, type GridSize } from '../views/map2d/grid';
+import {
+  DEFAULT_TELEPORT_ARC_CAP,
+  isTeleportArcCap,
+  type TeleportArcCap,
+} from '../views/map2d/teleportArcs';
 import { CATEGORIES, type ThingCategory } from '../views/map2d/things';
 
 const STORAGE_KEY = 'crustyview-map-prefs';
@@ -16,6 +21,8 @@ interface StoredMapPrefs {
   showDamagingSectors: boolean;
   alwaysShowPlayerStart: boolean;
   gridSize: GridSize;
+  showTeleportArcs: boolean;
+  teleportArcCap: TeleportArcCap;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -28,6 +35,8 @@ const DEFAULTS: StoredMapPrefs = {
   showDamagingSectors: false,
   alwaysShowPlayerStart: true,
   gridSize: DEFAULT_GRID_SIZE,
+  showTeleportArcs: true,
+  teleportArcCap: DEFAULT_TELEPORT_ARC_CAP,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -46,6 +55,12 @@ export class MapPrefsStore {
   showDamagingSectors = $state(DEFAULTS.showDamagingSectors);
   alwaysShowPlayerStart = $state(DEFAULTS.alwaysShowPlayerStart);
   gridSize = $state<GridSize>(DEFAULT_GRID_SIZE);
+  /** The teleport ARC overlay — the source linedefs are `showTeleportLines`.
+   *  Two preferences because they are two independent passes: on a link-dense
+   *  map the useful combination is sources marked and arcs suppressed, which
+   *  one shared toggle could not express (#154). */
+  showTeleportArcs = $state(DEFAULTS.showTeleportArcs);
+  teleportArcCap = $state<TeleportArcCap>(DEFAULTS.teleportArcCap);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
 
   /** The player-1 arrow draws when things are shown or the always-show pref is on. */
@@ -79,6 +94,13 @@ export class MapPrefsStore {
     if (typeof v.alwaysShowPlayerStart === 'boolean')
       this.alwaysShowPlayerStart = v.alwaysShowPlayerStart;
     if (isGridSize(v.gridSize)) this.gridSize = v.gridSize;
+    // Stored preferences predating the arc/line split carry one flag that meant
+    // BOTH. Inherit it when the new key is absent, so a user who had teleports
+    // off does not have the arcs reappear on upgrade. A present `false` still
+    // wins — this only fills a gap, it never overrides an explicit choice.
+    if (typeof v.showTeleportArcs === 'boolean') this.showTeleportArcs = v.showTeleportArcs;
+    else if (typeof v.showTeleportLines === 'boolean') this.showTeleportArcs = v.showTeleportLines;
+    if (isTeleportArcCap(v.teleportArcCap)) this.teleportArcCap = v.teleportArcCap;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -102,6 +124,16 @@ export class MapPrefsStore {
 
   toggleTeleportLines(): void {
     this.showTeleportLines = !this.showTeleportLines;
+    this.#persist();
+  }
+
+  toggleTeleportArcs(): void {
+    this.showTeleportArcs = !this.showTeleportArcs;
+    this.#persist();
+  }
+
+  setTeleportArcCap(cap: TeleportArcCap): void {
+    this.teleportArcCap = cap;
     this.#persist();
   }
 
@@ -155,6 +187,8 @@ export class MapPrefsStore {
           showDamagingSectors: this.showDamagingSectors,
           alwaysShowPlayerStart: this.alwaysShowPlayerStart,
           gridSize: this.gridSize,
+          showTeleportArcs: this.showTeleportArcs,
+          teleportArcCap: this.teleportArcCap,
         } satisfies StoredMapPrefs),
       );
     } catch {

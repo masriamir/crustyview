@@ -15,6 +15,8 @@ const BASE: RenderKeyInput = {
   showTeleportLines: true,
   showSecretSectors: false,
   showDamagingSectors: false,
+  showTeleportArcs: true,
+  teleportArcCap: 100,
   showGrid: false,
   gridSize: 32,
 };
@@ -34,6 +36,8 @@ describe('tileKey', () => {
     ['showThings', { showThings: false }],
     ['alwaysShowPlayerStart', { alwaysShowPlayerStart: false }],
     ['showTeleportLines', { showTeleportLines: false }],
+    ['showTeleportArcs', { showTeleportArcs: false }],
+    ['teleportArcCap', { teleportArcCap: 25 as const }],
     ['showSecretSectors', { showSecretSectors: true }],
     ['showDamagingSectors', { showDamagingSectors: true }],
   ])('changes when %s changes', (_name, patch) => {
