@@ -3,6 +3,42 @@
 All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
 
+## [0.2.0] - 2026-08-16
+
+### Bug Fixes
+
+- Correct navigation and keyboard reach during a WAD load (#142)
+- Stop a map switch announcing the grid's drawable state (#143)
+
+### Documentation
+
+- Add README badges that read their values from the repo (#122)
+- Correct the Copilot identity table and its polling guidance (#150)
+- Record why the tile budget is a memory cap and a clipped blit is cheap (#167)
+- Record web-browser-test and analyze as required checks (#171)
+- Record the Dependabot merge procedure and its four traps (#173)
+
+### Features
+
+- Draw the visible subset of the grid when zoomed out (#128)
+- Expose the 2D grid's state to screen readers (#130)
+- Explain what the shell and map controls do, and keep empty filters reachable (#138)
+- Set the header wordmark in a DOS-era pixel font (#141)
+- Classify teleport sources by format and link them to their destinations (#147)
+- Give co-op and deathmatch starts their own chips and arrow markers (#151)
+- Cap the teleport link arcs drawn and give them their own toggle (#165)
+
+### Performance
+
+- Speed up opening a WAD and stop the main-view flash (#126)
+- Cull off-screen geometry from the 2D map (#155)
+- Blit a cached bitmap instead of redrawing the 2D map on every pan (#160)
+- Cull teleport links by endpoint proximity instead of chord crossing (#163)
+
+### Testing
+
+- Add a browser test tier that catches Svelte lifecycle bugs (#139)
+- Load app.css in the browser tier so themed tokens resolve (#170)
 ## [0.1.2] - 2026-08-11
 
 ### Documentation
