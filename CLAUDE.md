@@ -380,9 +380,63 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   `masriamir/crustyview`.
 - A PR is ready for human review only when **all** Copilot threads are resolved **and** all
   CI checks pass (`gh pr checks`). The ruleset now enforces both — unresolved threads and the
-  10 required checks block the merge — so this is no longer discipline alone. Two things still
+  required checks block the merge — so this is no longer discipline alone. Two things still
   are, because they are outside the ruleset: the codecov comment's missing-lines table, and the
   advisory `pr-type` warning.
+
+## Dependabot PRs
+
+They merge by a different route than a hand-written PR. The traps below are worth knowing
+because they are not all loud: two of them leave the merge looking perfectly fine while
+something is unverified or quietly broken.
+
+**The sequence, per PR:** update the branch → comment `@dependabot recreate` → wait for the
+rebuild → verify the required checks on the **new** head → merge. **Do not merge between the
+update and the recreate**; that window is the state the rule exists to avoid. `@dependabot
+rebase` is a different command and is not this.
+
+**Why a recreate rather than just an update.** `strict_required_status_checks_policy: true`
+means the PR must be up to date with `main` before it can merge, and `main` moves often.
+Updating the branch through GitHub produces a merge commit Dependabot did not author, leaving
+the PR in a state it no longer fully owns; `recreate` rebuilds it from scratch so the branch,
+the commit and the metadata are consistent again. Each merge also puts the *remaining* PRs
+behind `main`, so a queue of them is worked strictly one at a time.
+
+They are `chore(deps)`, which `cliff.toml` marks `skip = true` — they never reach
+`CHANGELOG.md` and never move the version. Merge them for currency, not for release notes.
+
+Three failures that actually happened, and one thing they should not be taken to prove:
+
+- **`gh pr update-branch` fails on a workflow-touching PR without a `workflow` token scope**,
+  and says so: *"refusing to allow an OAuth App to create or update workflow
+  .github/workflows/ci.yml without workflow scope"*. Not fatal — `recreate` rebuilds from
+  current `main` anyway — but it is easy to skim past. The signal that actually matters is
+  `mergeStateStatus` reading **`CLEAN`** rather than `BEHIND`, which under the strict policy is
+  precisely the up-to-date proof. Observed on #137.
+- **A green CI run does not always exercise the bumped action.** Both `upload-artifact` uses in
+  `ci.yml` are `if: failure()`, so a passing run never invokes them and #136's three-major bump
+  proved only that the YAML parsed — a break would have surfaced later, while debugging some
+  *other* failure, with no report artifact. Read the action's inputs at the pinned SHA instead:
+  ```sh
+  gh api "repos/actions/upload-artifact/contents/action.yml?ref=<sha>" --jq .content | base64 -d
+  ```
+  Quote the URL — zsh globs the `?` and the call fails with `no matches found`.
+- **Dependabot can propose half a change.** `github/codeql-action/init` and `.../analyze` are
+  two dependencies to it but one version to CodeQL, so #135 bumped only `init` and CodeQL
+  failed with *"Loaded a configuration file for version '4.37.7', but running version
+  '3.37.6'"*. **Before merging any action bump, check whether that action appears more than
+  once in the workflows.** #169 fixed this pair with a `groups:` entry in
+  `.github/dependabot.yml`; a future multi-path action will need the same treatment, and
+  `taiki-e/install-action` must **not** get it — its several SHAs are one per *tool*, not one
+  per release, and grouping them would collapse pins meant to differ.
+- **What made that one survivable was the shape of its failure, not the process.** CodeQL
+  errored outright, and `analyze` is a required check, so the PR blocked. A mismatch that
+  *degraded* rather than errored — scanning fewer queries, say — would have left every
+  required check green. So the "does this action appear twice?" question above is the control;
+  a red check is luck.
+
+Dependabot PRs also receive no repository secrets, which is fine here: the tokenless Codecov
+upload works on this public repo, so `codecov/patch` still posts (see the Testing section).
 
 ## Not yet built (tracked on the board)
 - The virtualized texture and lump browsers (need the `textureRgba(name)` contract change
