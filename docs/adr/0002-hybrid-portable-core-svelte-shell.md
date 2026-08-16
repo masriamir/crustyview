@@ -1,6 +1,8 @@
 # ADR-0002: Hybrid UI architecture — a portable Rust/wgpu core behind a Svelte web shell
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by [ADR-0006](0006-webgl2-2d-renderer-succession.md):
+  TypeScript may target WebGL2 for the 2D map when measured performance demands it;
+  `wgpu` and portable Rust remain 3D-only
 - **Date:** 2026-08-05
 - **Deciders:** Amir Masri (with collaborative design)
 - **Tracking issue / PR:** #12 · PR #6 (`docs/adr-0002-ui-architecture`)

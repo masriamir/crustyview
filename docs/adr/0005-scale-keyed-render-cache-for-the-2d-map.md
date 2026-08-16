@@ -158,3 +158,7 @@ the canvas clips cheaply.
 Revisit this decision if #156 lands and the two remaining blocking renders are still felt, or if
 #157's spike shows the GPU path is cheaper to adopt than expected. Related: ADR-0002 (the 2D/3D
 split this decision stays inside) and ADR-0003 (the viewer shell the map lives in).
+
+#157's spike has since concluded: the GPU path is viable and priced, this decision stays in
+force, and [ADR-0006](0006-webgl2-2d-renderer-succession.md) records the WebGL2 renderer as the
+successor with named adoption triggers.
