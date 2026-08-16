@@ -1,6 +1,6 @@
 # ADR-0006: Keep the 2D map on canvas 2D, with a measured WebGL2 renderer recorded as its successor
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-16
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** [#157](https://github.com/masriamir/crustyview/issues/157)
