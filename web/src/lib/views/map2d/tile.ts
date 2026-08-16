@@ -48,20 +48,23 @@ export interface BlitRects {
  * These two caps bound **memory**, not time, and that is worth stating because
  * the obvious reason to lower them does not exist.
  *
- * A tile's size has no measurable effect on what it costs to blit. Measured
- * per-`drawImage` with the rasterization outside the timed region, at dpr 2 onto
- * a 1010×700 canvas (#161): from 4.0 Mpx to 16.8 Mpx the blit is flat at
- * 2.8–2.9 ms in Chrome and 1.9–2.1 ms in Firefox. The cost tracks the
- * destination, which is the viewport and therefore the same in every case.
+ * **So long as the tile contains the source rect**, its size has no measurable
+ * effect on what it costs to blit. Measured per-`drawImage` with the
+ * rasterization outside the timed region, at dpr 2 onto a 1010×700 canvas
+ * (#161): from 4.0 Mpx to 16.8 Mpx the blit is flat at 2.8–2.9 ms in Chrome and
+ * 1.9–2.1 ms in Firefox. The cost tracks the destination, which is the viewport
+ * and therefore the same in every case. That qualifier is load-bearing rather
+ * than pedantic — a tile *smaller* than the source rect on both axes is about
+ * five times slower in Chrome, which is why `Map2d.renderTile` plans against the
+ * viewport as well as the map's bounds; the comment there has the numbers.
  *
- * So shrinking the budget buys nothing on the blit and costs re-renders, which
+ * So shrinking these caps buys nothing on the blit and costs re-renders, which
  * is the trade #152 measured and rejected — now with both halves measured rather
- * than one. The ladder, on Eviternity II MAP26 at 4× in Chrome: `shipped`
- * (16.8 Mpx cap) re-renders 11 times per 100 frames, `small` (4.0 Mpx)
- * re-renders 49, and `tiny` (2.5 Mpx) collapses the margin to nothing and
- * re-renders on *every* frame — a 125 ms median at fit, which is the cache
- * switched off. Lower these only to fit a device that cannot hold the tile at
- * all.
+ * than one. Re-renders per 100 frames, on Eviternity II MAP26 at 4× in Chrome:
+ * at the caps below (16.8 Mpx) 11; at a 4.0 Mpx cap 49; at 2.5 Mpx the margin
+ * collapses to nothing and the tile re-renders on *every* frame — a 125 ms
+ * median at fit, which is the cache switched off. Lower these only to fit a
+ * device that cannot hold the tile at all.
  */
 /** Device pixels per axis. Below the universal canvas limit and below the
  *  per-canvas ceiling on older mobile hardware. */
