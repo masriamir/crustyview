@@ -16,7 +16,14 @@ updates:
     # Deliberately narrow. `taiki-e/install-action` also appears at several SHAs,
     # but one per TOOL rather than one per release, and grouping those would
     # collapse pins that are meant to differ (see CLAUDE.md).
+    #
+    # Two patterns rather than one `github/codeql-action*`: a github-actions
+    # dependency name carries its path (`github/codeql-action/init`), and whether
+    # `*` matches across `/` depends on Dependabot's matcher, which cannot be
+    # tested on demand — grouping only shows itself when a release lands. These
+    # two are correct either way, and cover the bare form as well as sub-actions.
     groups:
       codeql-action:
         patterns:
-          - "github/codeql-action*"
+          - "github/codeql-action"
+          - "github/codeql-action/*"
