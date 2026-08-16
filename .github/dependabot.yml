@@ -8,3 +8,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # `github/codeql-action/init` and `.../analyze` are separate dependencies to
+    # Dependabot but one version to CodeQL, which refuses to run a mismatched
+    # pair. Ungrouped, a release bumps whichever it sees first and breaks the
+    # `analyze` job (#168, observed on #135). Grouping proposes them as one PR.
+    #
+    # Deliberately narrow. `taiki-e/install-action` also appears at several SHAs,
+    # but one per TOOL rather than one per release, and grouping those would
+    # collapse pins that are meant to differ (see CLAUDE.md).
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
