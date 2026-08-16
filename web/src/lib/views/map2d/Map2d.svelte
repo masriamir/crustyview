@@ -228,6 +228,18 @@
     // where the cache earns its keep. `culling.browser.test.ts`'s pad fixtures
     // are the case that proves it: they place geometry outside the bounds they
     // declare, and go red against a bounds-clipped tile.
+    //
+    // The union carries a second consequence that is easy to lose, because the
+    // reasoning above is entirely about correctness: it also guarantees the tile
+    // is at least viewport-sized on **both** axes, and Chrome has a slow path
+    // for exactly the case that would break that guarantee. Measured at dpr 2
+    // onto a 1010×700 canvas (#161), a tile smaller than the source rect on
+    // both axes blits at ~13 ms against ~2 ms for every larger tile — five
+    // times slower while copying fewer pixels than any other case #161
+    // measured. Overhanging on one axis only is normal-speed, so it takes
+    // both. A tile clipped to `map.bounds` on a map smaller than the viewport
+    // would land precisely there, which means this union is load-bearing for
+    // frame time as well as for what gets drawn.
     const view = viewportRect(t, width, height, 0);
     const covered = {
       min_x: Math.min(map.bounds.min_x, view.minX),

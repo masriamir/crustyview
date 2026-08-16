@@ -44,6 +44,29 @@ export interface BlitRects {
   dh: number;
 }
 
+/**
+ * These two caps bound **memory**, not time, and that is worth stating because
+ * the obvious reason to lower them does not exist.
+ *
+ * **So long as the tile contains the source rect**, its size has no measurable
+ * effect on what it costs to blit. Measured per-`drawImage` with the
+ * rasterization outside the timed region, at dpr 2 onto a 1010×700 canvas
+ * (#161): from 4.0 Mpx to 16.8 Mpx the blit is flat at 2.8–2.9 ms in Chrome and
+ * 1.9–2.1 ms in Firefox. The cost tracks the destination, which is the viewport
+ * and therefore the same in every case. That qualifier is load-bearing rather
+ * than pedantic — a tile *smaller* than the source rect on both axes is about
+ * five times slower in Chrome, which is why the tile is planned against the
+ * viewport as well as the map's bounds (`Map2d.svelte`, `renderTile`); the
+ * comment there has the numbers.
+ *
+ * So shrinking these caps buys nothing on the blit and costs re-renders, which
+ * is the trade #152 measured and rejected — now with both halves measured rather
+ * than one. Re-renders per 100 frames, on Eviternity II MAP26 at 4× in Chrome:
+ * at the caps below (16.8 Mpx) 11; at a 4.0 Mpx cap 49; at 2.5 Mpx the margin
+ * collapses to nothing and the tile re-renders on *every* frame — a 125 ms
+ * median at fit, which is the cache switched off. Lower these only to fit a
+ * device that cannot hold the tile at all.
+ */
 /** Device pixels per axis. Below the universal canvas limit and below the
  *  per-canvas ceiling on older mobile hardware. */
 export const MAX_TILE_SIDE_PX = 4096;
@@ -207,6 +230,15 @@ export function tileCovers(spec: TileSpec, t: Transform, width: number, height: 
  * tile panned toward its edge: the canvas specification clips source and
  * destination together, so the visible part composites correctly and the rest
  * is simply absent.
+ *
+ * It is also **cheaper**, which is worth recording because #161 guessed the
+ * opposite and proposed clamping the source rect here. Measured on both engines,
+ * with the same source extent and destination in every condition (#161): a
+ * source overhanging 25% on one axis costs 0.72–0.86× a fully-inside blit in
+ * Chrome, 25% on both axes costs 0.59×, and 60% on both costs 0.14× — tracking
+ * the surviving area almost exactly, because clipping is what a clip does.
+ * Firefox is flat within noise. Clamping would add arithmetic to reach the same
+ * pixels, so do not add it.
  */
 export function blitRects(
   spec: TileSpec,
