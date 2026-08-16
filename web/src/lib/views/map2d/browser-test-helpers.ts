@@ -28,11 +28,13 @@ export function installMapSizing(): void {
  *
  * Context-agnostic (#175): reads a 2D-bound canvas via getImageData and a
  * WebGL2-bound canvas via readPixels. The width gate runs BEFORE any
- * getContext call and is load-bearing: getContext on an unbound canvas would
- * BIND it, and binding '2d' first would make the component's own
- * getContext('webgl2') return null. A sized canvas is an already-bound canvas
- * (the component sizes it inside its first draw), so probing after the gate
- * can only ever return the context the component created.
+ * getContext call. It cannot fully prevent early binding: a fresh canvas is
+ * 300×150 before anyone sizes it, and rAF polls can run before the
+ * component's ResizeObserver fires. Harmless for the 2D path (re-requesting
+ * '2d' returns the same context), but it means any WebGL-backed component
+ * must create its context AT MOUNT — before the rAF phase — never inside
+ * its first rAF draw, or this probe's early '2d' request would win the
+ * canvas and force the fallback.
  *
  * Reading a WebGL2 canvas across frames additionally requires the context to
  * hold preserveDrawingBuffer: true — otherwise the buffer is cleared after

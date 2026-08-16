@@ -548,10 +548,9 @@
     // With no transform there is no view to describe, so say nothing about
     // drawing rather than claim the grid is too small. (Barely reachable: the
     // key only arrives when the canvas has focus, which means a map is drawn.)
-    let shown = '';
     if (transform) {
       const drawn = effectiveGridSize(next, transform.scale);
-      shown = gridDrawnSuffix(next, drawn);
+      const shown = gridDrawnSuffix(next, drawn);
       gridAnnouncer.announceNow(`Grid ${next}${limit}${shown}`, drawn !== null);
     } else {
       gridAnnouncer.announceNow(`Grid ${next}${limit}`);
