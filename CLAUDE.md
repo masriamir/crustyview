@@ -386,9 +386,10 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 
 ## Dependabot PRs
 
-They merge by a different route than a hand-written PR. The traps below are worth knowing
-because they are not all loud: two of them leave the merge looking perfectly fine while
-something is unverified or quietly broken.
+They merge by a different route than a hand-written PR. What makes the traps below worth
+writing down is that several of them are not loud — the merge looks perfectly fine and
+something is left unverified or quietly broken. Each one names its own failure mode; do not
+rely on a red check to catch any of them.
 
 **The sequence, per PR:** update the branch → comment `@dependabot recreate` → wait for the
 rebuild → verify the required checks on the **new** head → merge. **Do not merge between the
