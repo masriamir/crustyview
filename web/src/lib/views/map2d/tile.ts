@@ -55,8 +55,9 @@ export interface BlitRects {
  * 1.9–2.1 ms in Firefox. The cost tracks the destination, which is the viewport
  * and therefore the same in every case. That qualifier is load-bearing rather
  * than pedantic — a tile *smaller* than the source rect on both axes is about
- * five times slower in Chrome, which is why `Map2d.renderTile` plans against the
- * viewport as well as the map's bounds; the comment there has the numbers.
+ * five times slower in Chrome, which is why the tile is planned against the
+ * viewport as well as the map's bounds (`Map2d.svelte`, `renderTile`); the
+ * comment there has the numbers.
  *
  * So shrinking these caps buys nothing on the blit and costs re-renders, which
  * is the trade #152 measured and rejected — now with both halves measured rather
