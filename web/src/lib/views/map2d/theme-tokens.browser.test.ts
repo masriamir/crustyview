@@ -56,7 +56,12 @@ function scratch(): CanvasRenderingContext2D {
   const el = document.createElement('canvas');
   el.width = 1;
   el.height = 1;
-  return el.getContext('2d') as CanvasRenderingContext2D;
+  const ctx = el.getContext('2d');
+  // Asserted rather than bare-cast, matching the rest of the browser tier: a
+  // null context here would otherwise surface as a null-deref inside a color
+  // helper, several frames from the thing that actually went wrong.
+  expect(ctx, 'a 2D context is required for this test').not.toBeNull();
+  return ctx as CanvasRenderingContext2D;
 }
 
 /**
