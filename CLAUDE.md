@@ -282,28 +282,43 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     and being mistaken for a verdict on the new head.
   - `required_review_thread_resolution: true` — "never merge over an unresolved thread" is now
     enforced by the ruleset instead of by discipline.
-- The ruleset also requires 11 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
-  `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`, and
-  `codecov/patch`. Merges are squash-only by ruleset as well as by repo setting (#97).
-  What is deliberately **excluded**, and why — re-affirmed by the #108 audit:
-  - **`web-e2e`** — a documented smoke signal, not a merge gate.
+- The ruleset also requires 13 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
+  `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`,
+  `codecov/patch`, `analyze`, and `web-browser-test`. Merges are squash-only by ruleset as
+  well as by repo setting (#97).
+
+  **This list drifts, and it drifted silently once already.** `analyze` became required when
+  #112 removed the guard that had deferred it, and this inventory went on calling it excluded
+  until #140 noticed — a doc claiming a job is not a merge gate when it is. Read the ruleset,
+  not this paragraph, when the answer matters:
+  `gh api repos/masriamir/crustyview/rulesets/20409829 --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'`
+
+  Two things about the required list that are easy to get wrong:
+  - **A check run whose conclusion is `skipped` SATISFIES a required check.** So a required
+    job that can skip gates on nothing. This is not hypothetical — while `codeql.yml` carried
+    `if: github.event.repository.visibility == 'public'`, `analyze` skipped and would have
+    passed by not running (observed on `191cfc0`). That guard is gone, and neither `analyze`
+    nor `web-browser-test` carries an `if:` or a `paths:` filter today. **Adding one to a
+    required job silently disarms it**, which is the single most important thing to know
+    before editing either job.
+  - **`analyze` and `CodeQL` are different checks.** `analyze` (app `github-actions`) is the
+    job; `CodeQL` (app `github-advanced-security`) is the code-scanning result, and it is
+    absent entirely when no analysis uploads — so requiring *that* one blocks rather than
+    silently passes. The ruleset requires `analyze`.
+
+  What is deliberately **excluded**, and why — re-affirmed by the #108 audit and again by #140:
+  - **`web-e2e`** — a documented smoke signal, not a merge gate. Permanent, unlike the two
+    deferrals above, both of which have now been resolved into requirements.
   - **`pr-type`** — advisory by construction; it can never fail, so requiring it would gate
     on nothing.
-  - **`analyze` (CodeQL)** — deferred, not declined, and the reason is a trap worth knowing:
-    GitHub treats a check run whose conclusion is `skipped` as **satisfying** a required
-    check. While `codeql.yml` still carries `if: github.event.repository.visibility ==
-    'public'`, the job can skip and the gate would pass by not running (observed on
-    `191cfc0`: `analyze` → `skipped`). Require it only after #112 removes that guard. Note
-    `analyze` (app `github-actions`, the job) and `CodeQL` (app `github-advanced-security`,
-    the code-scanning result) are **different checks** — the latter is absent entirely when
-    no analysis uploads, so requiring it blocks rather than silently passes.
-  - **`web-browser-test`** — deferred, not declined, unlike `web-e2e`'s permanent exclusion
-    as a smoke signal. It is the compensating control for the Svelte timing/lifecycle blind
-    spot exactly as `wasm-test` is for the wasm one, and a compensating control that cannot
-    block a merge is not a control — so it belongs in the required list once it has run
-    green for a while. Adding it to the ruleset is a separate, explicit action, tracked
-    by **#140** — which also carries the two ruleset traps (`PUT` not `PATCH`, and
-    `skipped`-satisfies-required) and the one flake to watch for first.
+
+  `web-browser-test` joined the list in #140, on the reasoning that a compensating control
+  which cannot block a merge is not a control: it is to Svelte timing and lifecycle bugs what
+  `wasm-test` is to the wasm blind spot. The precondition was that it run green for a while,
+  checked before requiring it — 35 successes and no failures across the 40 most recent CI
+  runs (the 5 non-successes were concurrency cancellations). If it ever does flake, look
+  first at `map2d-mount.browser.test.ts`'s `painted()` helper, which polls up to 60 animation
+  frames for a first paint and is the one timeout in the tier.
 - Three ruleset parameters that look like defaults but are decisions (#108):
   - **`bypass_actors`: admin, mode `always`** — load-bearing, do not narrow. `just release`
     pushes the release commit **directly to `main`** with `git push --follow-tags` (ADR-0004),

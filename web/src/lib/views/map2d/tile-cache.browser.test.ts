@@ -1,10 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-// The browser tier gives each file a bare page, so nothing loads the app's
-// stylesheet the way `main.ts` does. Without it every `--map2d-*` token is
-// empty and `resolvePalette` falls back to the classic palette for BOTH
-// styles, which would make the style-toggle case below unable to observe any
-// change at all — it would fail against a perfectly correct cache.
-import '../../../app.css';
 import type { Map2d as Map2dPayload } from '../../format';
 import { installMapSizing, painted } from './browser-test-helpers';
 import { CLASSIC_LINE_SECTOR_SECRET, CLASSIC_LINE_TELEPORT } from './lines';
