@@ -235,11 +235,11 @@
     // for exactly the case that would break that guarantee. Measured at dpr 2
     // onto a 1010×700 canvas (#161), a tile smaller than the source rect on
     // both axes blits at ~13 ms against ~2 ms for every larger tile — five
-    // times slower while copying the fewest pixels in the table. Overhanging
-    // on one axis only is normal-speed, so it takes both. A tile clipped to
-    // `map.bounds` on a map smaller than the viewport would land precisely
-    // there, which means this union is load-bearing for frame time as well as
-    // for what gets drawn.
+    // times slower while copying fewer pixels than any other case #161
+    // measured. Overhanging on one axis only is normal-speed, so it takes
+    // both. A tile clipped to `map.bounds` on a map smaller than the viewport
+    // would land precisely there, which means this union is load-bearing for
+    // frame time as well as for what gets drawn.
     const view = viewportRect(t, width, height, 0);
     const covered = {
       min_x: Math.min(map.bounds.min_x, view.minX),

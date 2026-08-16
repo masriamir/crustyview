@@ -57,10 +57,11 @@ export interface BlitRects {
  * So shrinking the budget buys nothing on the blit and costs re-renders, which
  * is the trade #152 measured and rejected — now with both halves measured rather
  * than one. The ladder, on Eviternity II MAP26 at 4× in Chrome: `shipped`
- * (16.8 Mpx cap) re-renders 11 times per 100 frames, `small` (4.0) re-renders 49,
- * and `tiny` (2.5) collapses the margin to nothing and re-renders on *every*
- * frame — a 125 ms median at fit, which is the cache switched off. Lower these
- * only to fit a device that cannot hold the tile at all.
+ * (16.8 Mpx cap) re-renders 11 times per 100 frames, `small` (4.0 Mpx)
+ * re-renders 49, and `tiny` (2.5 Mpx) collapses the margin to nothing and
+ * re-renders on *every* frame — a 125 ms median at fit, which is the cache
+ * switched off. Lower these only to fit a device that cannot hold the tile at
+ * all.
  */
 /** Device pixels per axis. Below the universal canvas limit and below the
  *  per-canvas ceiling on older mobile hardware. */
