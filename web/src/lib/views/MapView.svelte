@@ -69,6 +69,20 @@
       : 'var(--map2d-line-sector-damage)';
   }
 
+  /**
+   * `?renderer=gl` / `?renderer=canvas` picks the 2D map's backend for the
+   * session — the human and E2E way in, matching the prop browser tests pass
+   * directly (#177). Anything else, including the parameter's absence, leaves
+   * the component's own default in force.
+   *
+   * Read once rather than reactively: the backend is a mount-time choice (a
+   * canvas keeps its first context for life), so there is nothing for a
+   * later reading to do.
+   */
+  const rendererParam = new URLSearchParams(location.search).get('renderer');
+  const rendererOverride: 'gl' | 'canvas' | undefined =
+    rendererParam === 'gl' ? 'gl' : rendererParam === 'canvas' ? 'canvas' : undefined;
+
   const modeOptions: {
     value: MapMode;
     label: string;
@@ -244,7 +258,7 @@
     {/if}
   </div>
   {#if nav.mapMode === '2d'}
-    <Map2d {name} bind:this={map2d} bind:drawnGridSize />
+    <Map2d {name} renderer={rendererOverride} bind:this={map2d} bind:drawnGridSize />
   {:else}
     <div class="placeholder"><p>The 3D viewport arrives with phase 3.</p></div>
   {/if}
