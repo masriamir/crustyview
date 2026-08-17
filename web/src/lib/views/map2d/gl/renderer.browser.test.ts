@@ -91,7 +91,6 @@ function makeCanvas(width = WIDTH, height = HEIGHT): HTMLCanvasElement {
 function makeRenderer(canvas: HTMLCanvasElement): GlMapRenderer {
   const renderer = createGlRenderer(canvas, {
     msaa: false,
-    feather: true,
     preserveDrawingBuffer: true,
   });
   expect(renderer, 'WebGL2 is required for this test').not.toBeNull();
@@ -620,7 +619,7 @@ describe('createGlRenderer', () => {
     const ctx2d = canvas.getContext('2d');
     expect(ctx2d, 'the fixture must actually bind 2d first').not.toBeNull();
 
-    const renderer = createGlRenderer(canvas, { msaa: false, feather: true });
+    const renderer = createGlRenderer(canvas, { msaa: false });
     expect(renderer).toBeNull();
   });
 });

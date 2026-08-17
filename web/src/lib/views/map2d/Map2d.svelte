@@ -936,7 +936,6 @@
       if (!glActive || !el) return;
       const instance = createGlRenderer(el, {
         msaa: mapPrefs.glMsaa,
-        feather: mapPrefs.glFeather,
         preserveDrawingBuffer: glProbe,
       });
       if (instance === null) {

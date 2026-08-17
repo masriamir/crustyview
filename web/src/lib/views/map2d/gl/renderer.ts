@@ -238,9 +238,6 @@ export interface GlRendererOptions {
   /** Context `antialias` attribute (MSAA). A context-creation choice, not a
    *  live setting — changing it means a new canvas/renderer, not a redraw. */
   msaa: boolean;
-  /** The shader AA apron (`uFeather`). A live uniform: this can change
-   *  between draws without recreating anything. */
-  feather: boolean;
   /** Required for `readPixels` to see a composited frame after the browser's
    *  own compositing step; tests only. Defaults to `false` in production,
    *  where nothing ever reads the drawing buffer back. */
@@ -359,9 +356,9 @@ type RectThingCategory = Exclude<ThingCategory, (typeof ARROW_CATEGORY_ORDER)[nu
  * context being available at all. `createGlRenderer` treats the two
  * differently: no context is an expected, silent fallback (the product
  * works everywhere); a shader that fails to compile or link is a real bug in
- * this file and must never look identical to an old browser (design.md,
- * Error handling summary). The message always carries the driver's own
- * info-log text, which is what makes it worth a `console.error`.
+ * this file's GLSL and must never look identical to an old browser, so it is
+ * surfaced via console.error. The message always carries the driver's own
+ * info-log text, which is what makes it worth reporting.
  */
 class ShaderError extends Error {}
 
@@ -396,7 +393,13 @@ function link(gl: WebGL2RenderingContext, vert: string, frag: string): WebGLProg
   const program = gl.createProgram();
   if (!program) throw new Error('createProgram failed');
   const vertShader = compileShader(gl, gl.VERTEX_SHADER, vert);
-  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, frag);
+  let fragShader: WebGLShader;
+  try {
+    fragShader = compileShader(gl, gl.FRAGMENT_SHADER, frag);
+  } catch (error) {
+    gl.deleteShader(vertShader);
+    throw error;
+  }
   gl.attachShader(program, vertShader);
   gl.attachShader(program, fragShader);
   gl.linkProgram(program);
@@ -407,6 +410,7 @@ function link(gl: WebGL2RenderingContext, vert: string, frag: string): WebGLProg
   gl.deleteShader(vertShader);
   gl.deleteShader(fragShader);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    gl.deleteProgram(program);
     throw new ShaderError(gl.getProgramInfoLog(program) ?? 'program link failed');
   }
   return program;
@@ -1225,7 +1229,7 @@ export class GlMapRenderer {
  * canvas without comment. A `ShaderError` — a compile or link failure in
  * *this file's own* GLSL — is not expected on any device and must not look
  * identical to that case, so it is surfaced via `console.error` before
- * returning `null` (design.md, Error handling summary).
+ * returning `null`.
  */
 export function createGlRenderer(
   canvas: HTMLCanvasElement,
