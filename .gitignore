@@ -10,8 +10,9 @@ crates/crustyview-web/web/pkg-node/
 .DS_Store
 # AI planning artifacts — never committed
 docs/superpowers/
-# web app
-web/node_modules/
+# web app — node_modules at any depth (a stray root-level npm/vitest run once
+# created one and its cache got committed; PR #180 review caught it)
+node_modules/
 web/dist/
 web/src/wasm/
 
