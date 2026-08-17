@@ -410,28 +410,30 @@ function compileShader(gl: WebGL2RenderingContext, type: number, source: string)
 function link(gl: WebGL2RenderingContext, vert: string, frag: string): WebGLProgram {
   const program = gl.createProgram();
   if (!program) throw new Error('createProgram failed');
-  const vertShader = compileShader(gl, gl.VERTEX_SHADER, vert);
-  let fragShader: WebGLShader;
+  let vertShader: WebGLShader | null = null;
+  let fragShader: WebGLShader | null = null;
   try {
+    vertShader = compileShader(gl, gl.VERTEX_SHADER, vert);
     fragShader = compileShader(gl, gl.FRAGMENT_SHADER, frag);
-  } catch (error) {
+    gl.attachShader(program, vertShader);
+    gl.attachShader(program, fragShader);
+    gl.linkProgram(program);
+    // Standard cleanup: once a program is linked (or has failed to link), the
+    // compiled shader objects behind it are never needed again — the program
+    // itself is what draw calls use. Skipping this leaks a shader pair per
+    // construction and per context restore.
     gl.deleteShader(vertShader);
+    gl.deleteShader(fragShader);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new ShaderError(gl.getProgramInfoLog(program) ?? 'program link failed');
+    }
+    return program;
+  } catch (error) {
+    gl.deleteProgram(program);
+    if (vertShader) gl.deleteShader(vertShader);
+    if (fragShader) gl.deleteShader(fragShader);
     throw error;
   }
-  gl.attachShader(program, vertShader);
-  gl.attachShader(program, fragShader);
-  gl.linkProgram(program);
-  // Standard cleanup: once a program is linked (or has failed to link), the
-  // compiled shader objects behind it are never needed again — the program
-  // itself is what draw calls use. Skipping this leaks a shader pair per
-  // construction and per context restore.
-  gl.deleteShader(vertShader);
-  gl.deleteShader(fragShader);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    gl.deleteProgram(program);
-    throw new ShaderError(gl.getProgramInfoLog(program) ?? 'program link failed');
-  }
-  return program;
 }
 
 /** Which `GlPalette` field colors each base line kind — mirrors render.ts's
