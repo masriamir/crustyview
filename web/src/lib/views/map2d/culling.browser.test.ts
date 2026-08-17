@@ -108,7 +108,9 @@ interface Snap {
  * of trusting a single one.
  */
 async function snapshot(expectPainted: boolean): Promise<Snap> {
-  const screen = await render(Map2d, { name: 'MAP01' });
+  // This suite tests the canvas path — the fallback once GL is the default
+  // (#178) — pinned deliberately, not by default.
+  const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
   const canvas = screen.container.querySelector('canvas');
   // Assert before casting: without this a missing canvas throws an opaque
   // null dereference inside `painted()` instead of naming what went wrong.

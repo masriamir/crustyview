@@ -43,11 +43,11 @@
      */
     drawnGridSize?: GridSize | null;
     /**
-     * Which backend draws the map (#177). `'canvas'` — the default, and what
-     * every caller gets until PR 3 introduces the auto choice — is the 2D path
-     * this component has always had. `'gl'` selects the WebGL2 renderer, which
-     * falls back to the canvas path by itself when its context cannot be
-     * created or is lost for good, so a caller never has to handle that.
+     * Which backend draws the map (#177). `'gl'` — the default — selects the
+     * WebGL2 renderer, which falls back to the canvas path by itself when its
+     * context cannot be created or is lost for good, so a caller never has to
+     * handle that. `'canvas'` is the original 2D path this component has
+     * always had; `?renderer=canvas` (MapView) is the escape hatch back to it.
      *
      * Mount-time, not a live setting: switching it replaces the canvas element
      * (see the `{#key}` block below), because a canvas keeps its first context
@@ -65,7 +65,7 @@
   let {
     name,
     drawnGridSize = $bindable(undefined),
-    renderer = 'canvas',
+    renderer = 'gl',
     glProbe = false,
   }: Props = $props();
 

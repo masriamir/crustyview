@@ -43,4 +43,5 @@ choices don't need an ADR.
   in a scale-keyed bitmap and blit it, rather than drawing less or moving to a GPU
 - [ADR-0006](0006-webgl2-2d-renderer-succession.md) — Keep the 2D map on canvas 2D,
   with a measured WebGL2 renderer recorded as its successor (spike #157; amends
-  ADR-0002's GPU line)
+  ADR-0002's GPU line) (successor shipped via #175 — WebGL2 is the default since
+  #178; canvas 2D is the fallback)

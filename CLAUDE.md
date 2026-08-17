@@ -244,6 +244,22 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     *within* one WAD, since `openWad` resets navigation on every load. `loadBrokenMapWad` is a
     fine template for building that fixture; it is not itself the test, and the browser-tier route
     above is the cheaper path to the same defect.
+  - **The tier now also carries the GL renderer suites (#175).**
+    `gl/renderer.browser.test.ts` exercises the raw WebGL2 canvas renderer directly;
+    `gl-mount.browser.test.ts` mounts the real `Map2d` component against it. The nine
+    canvas-path suites (`map2d-mount`, `culling`, `grid-announcement`,
+    `map-switch-announcement`, `start-markers`, `teleport-arc-keys`, `teleport-links`,
+    `tile-cache`, `tile-zoom`) are pinned to `renderer: 'canvas'` deliberately — WebGL2 is now
+    the default (ADR-0006), so an unpinned mount would silently stop testing the fallback path
+    those suites exist to cover.
+  - **`painted()` (`browser-test-helpers.ts`) is dual-context**, reading a 2D-bound canvas via
+    `getImageData` and a WebGL2-bound canvas via `readPixels`. `toDataURL()` on a GL canvas
+    without `preserveDrawingBuffer` is a documented false green — the browser clears the
+    drawing buffer right after composite, so a before/after comparison compares blank to blank
+    and passes vacuously. The E2E tier avoids the same trap by hashing pixels instead:
+    `mapCanvasPixelHash` (`web/e2e/helpers.ts`) reads whichever context the canvas is bound to
+    and folds it to an FNV-1a hash, gated behind `gotoApp`'s `?glprobe=1`, which turns on
+    `preserveDrawingBuffer` for the test session only.
 - **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
   throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
   upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
