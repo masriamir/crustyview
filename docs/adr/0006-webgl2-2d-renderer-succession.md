@@ -4,6 +4,8 @@
 - **Date:** 2026-08-16
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** [#157](https://github.com/masriamir/crustyview/issues/157)
+- **Shipped:** 2026-08-17 — the successor landed across #175 (#179, #180, #178); see
+  "More information" below.
 
 ## Context and problem statement
 
@@ -186,3 +188,12 @@ information anticipated this spike), #148/#156 (the queued work the triggers ref
 
 Revisit if a trigger fires — re-verify the measurements before building — or if `wgpu`'s phase-3
 viewport lands with line-rendering machinery that changes option 4's economics.
+
+**Shipped 2026-08-17 (#175).** The successor landed across three PRs: #179 extracted the
+renderer-agnostic map2d logic and ported the pixel probe off `toDataURL`, #180 added the WebGL2
+renderer dark behind a `renderer` prop, and #178 flipped the default. WebGL2 is now the default
+2D map renderer; canvas 2D is demoted to the fallback, used only when WebGL2 is unavailable at
+mount or the context is lost terminally. The ADR-0005 cache remains in force, but only on that
+fallback path — the WebGL2 path redraws the full map every frame and has no cache to key. The
+"Adoption triggers" section above is therefore historical record, not an open question: trigger 3
+(#156) is the one that fired, and the decision it named has been executed.

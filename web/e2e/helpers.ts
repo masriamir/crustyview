@@ -162,7 +162,7 @@ export async function expectMapCanvasPainted(page: Page): Promise<void> {
  * unequal — the restore-to-exact-pixels assertions this feeds stay just as
  * strict as they were against a raw data URL.
  */
-export async function mapCanvasPixelHash(page: Page): Promise<string | number> {
+export async function mapCanvasPixelHash(page: Page): Promise<number> {
   return mapCanvas(page).evaluate((element) => {
     const c = element as HTMLCanvasElement;
     let data: Uint8ClampedArray | Uint8Array;
