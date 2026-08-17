@@ -15,6 +15,36 @@ describe('MapPrefsStore', () => {
     expect(p.style).toBe('theme');
   });
 
+  it('defaults: GL MSAA off, GL feather on', () => {
+    const p = new MapPrefsStore();
+    expect(p.glMsaa).toBe(false);
+    expect(p.glFeather).toBe(true);
+  });
+
+  it('GL prefs toggle, persist, and restore', () => {
+    const p = new MapPrefsStore();
+    p.toggleGlMsaa();
+    p.toggleGlFeather();
+    expect(p.glMsaa).toBe(true);
+    expect(p.glFeather).toBe(false);
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as {
+      glMsaa: boolean;
+      glFeather: boolean;
+    };
+    expect(stored.glMsaa).toBe(true);
+    expect(stored.glFeather).toBe(false);
+    const q = new MapPrefsStore();
+    expect(q.glMsaa).toBe(true);
+    expect(q.glFeather).toBe(false);
+  });
+
+  it('non-boolean stored GL prefs are ignored', () => {
+    localStorage.setItem(KEY, JSON.stringify({ glMsaa: 'nope', glFeather: 1 }));
+    const p = new MapPrefsStore();
+    expect(p.glMsaa).toBe(false);
+    expect(p.glFeather).toBe(true);
+  });
+
   it('toggles persist as JSON', () => {
     const p = new MapPrefsStore();
     p.toggleGrid();
@@ -31,6 +61,8 @@ describe('MapPrefsStore', () => {
       gridSize: 32,
       showTeleportArcs: true,
       teleportArcCap: 100,
+      glMsaa: false,
+      glFeather: true,
     });
     const q = new MapPrefsStore();
     expect(q.showGrid).toBe(true);

@@ -19,6 +19,7 @@ const BASE: RenderKeyInput = {
   teleportArcCap: 100,
   showGrid: false,
   gridSize: 32,
+  glFeather: true,
 };
 
 describe('tileKey', () => {
@@ -79,6 +80,22 @@ describe('renderKey', () => {
 
   it('changes when a baked preference changes', () => {
     expect(renderKey({ ...BASE, showSecretSectors: true })).not.toBe(renderKey(BASE));
+  });
+
+  it('changes when glFeather changes', () => {
+    // Feather is a live GL uniform, not baked into any tile, so it belongs
+    // in renderKey (schedules a redraw) but must NOT reach tileKey.
+    expect(renderKey({ ...BASE, glFeather: false })).not.toBe(renderKey(BASE));
+  });
+
+  it('does not add glFeather to tileKey', () => {
+    // tileKey accepts a wider object at runtime due to TypeScript structural
+    // typing, so this assertion is a real runtime guard that extra RenderKey-only
+    // fields — glFeather here — never leak into tileKey's output. TypeScript's
+    // narrower TileKeyInput type enforces the compile-time half of the guarantee.
+    const featherOn: RenderKeyInput = { ...BASE, glFeather: true };
+    const featherOff: RenderKeyInput = { ...BASE, glFeather: false };
+    expect(tileKey(featherOn)).toBe(tileKey(featherOff));
   });
 
   it('separates its fields so adjacent values cannot collide', () => {

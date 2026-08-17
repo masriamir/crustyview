@@ -62,8 +62,8 @@ const CLASSIC: Palette = {
 };
 
 /** Fixed CSS-pixel sizes — screen-space glyphs, so they don't scale with zoom. */
-const THING_PX = 3;
-const PLAYER_ARROW_PX = 10;
+export const THING_PX = 3;
+export const PLAYER_ARROW_PX = 10;
 /** Start markers below player 1, so the flagship arrow stays dominant where
  *  a level clusters all four starts in one room (#72). Sized independently —
  *  they were tuned separately and may diverge — and both landed on 7. */
@@ -72,22 +72,22 @@ const DEATHMATCH_ARROW_PX = 7;
 /** Arrow size per `ARROW_CATEGORY_ORDER` member. Keyed off that array's
  *  element type, so adding a category there fails to compile here until it
  *  is given a size (things.ts). */
-const ARROW_SIZES: Record<(typeof ARROW_CATEGORY_ORDER)[number], number> = {
+export const ARROW_SIZES: Record<(typeof ARROW_CATEGORY_ORDER)[number], number> = {
   deathmatch: DEATHMATCH_ARROW_PX,
   coop: COOP_ARROW_PX,
 };
-const PLAYER_THING_TYPE = 1;
+export const PLAYER_THING_TYPE = 1;
 /** Back-to-front, so the rarer kinds stay legible where lines overlap. */
-const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
-const KIND_WIDTH: Record<LineKind, number> = { two_sided: 1, one_sided: 2, secret: 1.5 };
+export const KIND_ORDER = ['two_sided', 'one_sided', 'secret'] as const satisfies readonly LineKind[];
+export const KIND_WIDTH: Record<LineKind, number> = { two_sided: 1, one_sided: 2, secret: 1.5 };
 /** Dashed overlay strokes above the base kind colors. Teleport keeps its
  *  own rhythm; the two sector overlays share [4,4] with the damage pass
  *  phase-shifted, so a line bordering both a secret and a damaging sector
  *  interleaves the two colors instead of one hiding the other. */
-const TELEPORT_DASH = [6, 4];
-const SECTOR_DASH = [4, 4];
-const OVERLAY_WIDTH = 2;
-const DAMAGE_DASH_OFFSET = 4;
+export const TELEPORT_DASH = [6, 4];
+export const SECTOR_DASH = [4, 4];
+export const OVERLAY_WIDTH = 2;
+export const DAMAGE_DASH_OFFSET = 4;
 /** Cull padding in screen px. Each pad is derived from the constant(s) that
  *  size the ink it covers — the whole stroke width or glyph size, not a
  *  hand-computed half-extent — so a pad can never fall out of sync with the

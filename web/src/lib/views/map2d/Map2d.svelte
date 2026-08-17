@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import type { Map2d } from '../../format';
   import { wad } from '../../stores/wad.svelte';
   import { mapCursor } from '../../stores/mapCursor.svelte';
@@ -8,7 +8,8 @@
   import { fitTransform, panBy, screenToMap, zoomAt, type Transform } from './transform';
   import { countByCategory, type ThingCategory } from './things';
   import { effectiveGridSize, gridDrawnSuffix, stepGridSize, type GridSize } from './grid';
-  import { arcCapName, stepArcCap } from './teleportArcs';
+  import { arcCapName, selectArcs, stepArcCap } from './teleportArcs';
+  import { LINK_CULL_PAD_PX, visibleLinks } from './linkGeometry';
   import { viewportRect } from './cull';
   import { renderKey, tileKey, type TileKeyInput } from './renderKey';
   import {
@@ -23,6 +24,13 @@
   } from './tile';
   import { drawGrid, drawMapLayers, resolvePalette, TILE_PAD_PX, type Palette } from './render';
   import { createGridAnnouncer } from './gridAnnouncer';
+  import {
+    createGlRenderer,
+    parsePalette,
+    type GlFrame,
+    type GlMapRenderer,
+    type GlPalette,
+  } from './gl/renderer';
 
   interface Props {
     name: string;
@@ -34,8 +42,32 @@
      * it, for the toolbar label (#76).
      */
     drawnGridSize?: GridSize | null;
+    /**
+     * Which backend draws the map (#177). `'canvas'` — the default, and what
+     * every caller gets until PR 3 introduces the auto choice — is the 2D path
+     * this component has always had. `'gl'` selects the WebGL2 renderer, which
+     * falls back to the canvas path by itself when its context cannot be
+     * created or is lost for good, so a caller never has to handle that.
+     *
+     * Mount-time, not a live setting: switching it replaces the canvas element
+     * (see the `{#key}` block below), because a canvas keeps its first context
+     * for life.
+     */
+    renderer?: 'gl' | 'canvas';
+    /**
+     * Test mounts only: threads `preserveDrawingBuffer: true` into the GL
+     * context so a browser test can `readPixels` a frame after the browser has
+     * composited it. Off in production, where nothing reads the buffer back
+     * and the flag costs a copy per frame.
+     */
+    glProbe?: boolean;
   }
-  let { name, drawnGridSize = $bindable(undefined) }: Props = $props();
+  let {
+    name,
+    drawnGridSize = $bindable(undefined),
+    renderer = 'canvas',
+    glProbe = false,
+  }: Props = $props();
 
   /** aria-describedby target for the canvas operating instructions. */
   const instructionsId = $props.id();
@@ -70,6 +102,30 @@
     gridAnnouncement = text;
   });
 
+  /**
+   * The live WebGL2 renderer, or `null` on the canvas path. Deliberately NOT
+   * reactive: one effect creates and tears it down, and `draw()` — which runs
+   * inside a rAF callback, outside any tracking context — is the only reader.
+   * `glActive` is the reactive signal, so nothing has to observe this handle.
+   */
+  let glRenderer: GlMapRenderer | null = null;
+  /**
+   * GL was asked for and is unusable: `createGlRenderer` returned `null`, or a
+   * lost context never came back. One-way for the life of the component —
+   * a device that cannot give us a context will not give us one on retry, and
+   * a retry loop would be invisible except as a stutter.
+   */
+  let glFailed = $state(false);
+  /** The backend actually in force. */
+  const glActive = $derived(renderer === 'gl' && !glFailed);
+  /**
+   * The map already uploaded into the CURRENT `glRenderer`, compared by
+   * identity. Plain bookkeeping, like `fittedFor`: it keeps the two upload
+   * sites (a fresh renderer, and a map switch) from packing the same map
+   * twice, which costs ~20 ms on a large one.
+   */
+  let glLoadedMap: Map2d | null = null;
+
   // `wad.map2d` caches per name behind non-reactive fields, so depend on `phase`
   // explicitly: loading another WAD must re-derive rather than serve a stale map.
   const data = $derived.by((): Map2d | null => {
@@ -89,6 +145,17 @@
 
   /** Last resolved palette, kept with the `style:theme` key it was resolved for. */
   let cached: { key: string; colors: Palette } | null = null;
+  /** The same, for the GL path's parsed floats. */
+  let cachedGl: { key: string; colors: GlPalette } | null = null;
+
+  /**
+   * The only two things either palette depends on. Spelled once so the two
+   * memos below cannot key on different things — the drift that produces a
+   * picture updating on one path and not the other (#152's shape).
+   */
+  function paletteKey(): string {
+    return `${mapPrefs.style}:${theme.resolved}`;
+  }
 
   /**
    * Resolve the palette, memoized on the only two things it depends on — the
@@ -98,10 +165,26 @@
    * internally consistent.
    */
   function palette(el: HTMLCanvasElement): Palette {
-    const key = `${mapPrefs.style}:${theme.resolved}`;
+    const key = paletteKey();
     if (cached !== null && cached.key === key) return cached.colors;
     const colors = resolvePalette(el, mapPrefs.style);
     cached = { key, colors };
+    return colors;
+  }
+
+  /**
+   * The GL renderer's palette: the same resolved colors, parsed to floats.
+   * Memoized beside `palette()` and on the same key, and derived from it
+   * rather than from the tokens directly, so the two can never describe
+   * different colors. `parsePalette` is deliberately unmemoized itself (it is
+   * a plain function of its input); this is the caller that knows when the
+   * input actually changed.
+   */
+  function glPalette(el: HTMLCanvasElement): GlPalette {
+    const key = paletteKey();
+    if (cachedGl !== null && cachedGl.key === key) return cachedGl.colors;
+    const colors = parsePalette(palette(el));
+    cachedGl = { key, colors };
     return colors;
   }
 
@@ -115,6 +198,20 @@
     if (el.width !== backingWidth) el.width = backingWidth;
     if (el.height !== backingHeight) el.height = backingHeight;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /**
+   * `sizeCanvas` for the GL path: the same device-pixel backing store and the
+   * same only-on-change rule (assigning either dimension reallocates and
+   * clears the drawing buffer), minus the context transform — GL takes `dpr`
+   * as a uniform and does the scaling in the vertex shader.
+   */
+  function sizeGlCanvas(el: HTMLCanvasElement): void {
+    const dpr = window.devicePixelRatio || 1;
+    const backingWidth = Math.max(1, Math.round(width * dpr));
+    const backingHeight = Math.max(1, Math.round(height * dpr));
+    if (el.width !== backingWidth) el.width = backingWidth;
+    if (el.height !== backingHeight) el.height = backingHeight;
   }
 
   /** What a rendered tile carries besides its pixels. */
@@ -276,24 +373,105 @@
     ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh);
   }
 
+  /**
+   * What this draw paints through. A discriminated union rather than two
+   * nullable locals, so the canvas half of `draw()` keeps a non-null `ctx`
+   * after the GL branch returns without an assertion propping it up.
+   */
+  type DrawSurface =
+    | { kind: 'gl'; renderer: GlMapRenderer }
+    | { kind: '2d'; ctx: CanvasRenderingContext2D };
+
+  /**
+   * The GL path must never ask for a 2D context. A canvas keeps its first
+   * context for life, so `getContext('2d')` on a WebGL2-bound canvas answers
+   * `null` — which the canvas path reads as "no context available" and bails
+   * on, drawing nothing and resetting `drawnGridSize`. When glActive is true,
+   * we return null if the renderer isn't ready yet, rather than falling through
+   * to bind a 2D context. Binding 2D while GL initialization is in flight is
+   * irreversible and permanently prevents WebGL on that canvas. A null return
+   * skips the frame, and the renderer arrives within the same flush or the next;
+   * a skipped frame self-heals.
+   */
+  function resolveSurface(el: HTMLCanvasElement): DrawSurface | null {
+    if (glActive) {
+      return glRenderer === null ? null : { kind: 'gl', renderer: glRenderer };
+    }
+    const ctx = el.getContext('2d');
+    return ctx === null ? null : { kind: '2d', ctx };
+  }
+
+  /**
+   * Everything one GL frame needs, read from the same state the canvas path
+   * draws from — the renderer holds no preferences of its own.
+   *
+   * `arcs` runs the identical cull-then-cap pipeline `drawTeleportLinks`
+   * (render.ts) runs, in the same order (#154): cull by endpoint first, then
+   * cap what survived. The renderer takes the arcs pre-selected, so a hidden
+   * overlay is expressed as an empty array rather than a flag it would have to
+   * know about.
+   */
+  function glFrame(
+    el: HTMLCanvasElement,
+    map: Map2d,
+    t: Transform,
+    gridStep: GridSize | null,
+  ): GlFrame {
+    return {
+      transform: t,
+      widthCss: width,
+      heightCss: height,
+      dpr: window.devicePixelRatio || 1,
+      palette: glPalette(el),
+      // A live uniform: it arrives per frame, which is why the init effect
+      // below must not treat it as a reason to rebuild the renderer.
+      feather: mapPrefs.glFeather,
+      grid: mapPrefs.showGrid ? gridStep : null,
+      show: {
+        teleportLines: mapPrefs.showTeleportLines,
+        secretSectors: mapPrefs.showSecretSectors,
+        damagingSectors: mapPrefs.showDamagingSectors,
+        things: mapPrefs.showThings,
+        playerStart: mapPrefs.showPlayerStart,
+        categories: mapPrefs.showCategories,
+      },
+      arcs:
+        mapPrefs.showTeleportArcs && map.links
+          ? selectArcs(
+              visibleLinks(map.links, viewportRect(t, width, height, LINK_CULL_PAD_PX)),
+              mapPrefs.teleportArcCap,
+            )
+          : [],
+    };
+  }
+
   function draw(): void {
     const el = canvas;
     if (!el) {
       drawnGridSize = undefined;
       return;
     }
-    const ctx = el.getContext('2d');
-    if (!ctx) {
+    const surface = resolveSurface(el);
+    if (surface === null) {
       drawnGridSize = undefined;
       return;
     }
-    sizeCanvas(el, ctx);
+    if (surface.kind === 'gl') sizeGlCanvas(el);
+    else sizeCanvas(el, surface.ctx);
     const colors = palette(el);
-    ctx.fillStyle = colors.bg;
-    ctx.fillRect(0, 0, width, height);
+    if (surface.kind === '2d') {
+      surface.ctx.fillStyle = colors.bg;
+      surface.ctx.fillRect(0, 0, width, height);
+    }
     const map = data;
     const t = transform;
     if (!map || !t) {
+      // The canvas path already filled its background above; the GL path has
+      // to fill its own here, because an `alpha: false` drawing buffer that
+      // has never been cleared composites opaque black. Without this, the
+      // frame between mount and the first fit flashes black — against a light
+      // theme, a visible white-black-map flicker on every GL mount.
+      if (surface.kind === 'gl') surface.renderer.clear(glPalette(el).bg);
       drawnGridSize = undefined;
       return;
     }
@@ -315,6 +493,19 @@
     } else {
       gridAnnouncer.observe(false, false, '');
     }
+    // Everything above this line is renderer-independent and has to stay that
+    // way: the `drawnGridSize` contract (#76) and the announcement machine
+    // (#127/#128/#131) must behave identically on both backends. That is why
+    // the GL branch returns HERE rather than at the top of `draw()` —
+    // returning any earlier silently drops the toolbar label and the live
+    // region on the GL path, with no test on either that would notice.
+    if (surface.kind === 'gl') {
+      surface.renderer.draw(glFrame(el, map, t, gridStep));
+      return;
+    }
+    // Narrowed to the 2d surface by the return above; everything below is the
+    // canvas path exactly as it was.
+    const ctx = surface.ctx;
     if (mapPrefs.showGrid && gridStep !== null)
       drawGrid(ctx, t, width, height, colors.grid, gridStep);
 
@@ -693,8 +884,103 @@
   const tileKeyValue = $derived(tileKey(bakedInput));
   /** The tile's identity plus the two layers drawn live. */
   const renderKeyValue = $derived(
-    renderKey({ ...bakedInput, showGrid: mapPrefs.showGrid, gridSize: mapPrefs.gridSize }),
+    renderKey({
+      ...bakedInput,
+      showGrid: mapPrefs.showGrid,
+      gridSize: mapPrefs.gridSize,
+      glFeather: mapPrefs.glFeather,
+    }),
   );
+
+  /**
+   * Pack and upload the current map into `instance`, skipping a map that is
+   * already in there. Both upload sites go through this so the `game` argument
+   * — which decides how every thing is categorized — cannot differ between
+   * them.
+   *
+   * The identity guard assumes `game` cannot change without `data` changing.
+   * True today: both come out of one WAD load, and `data` re-derives on
+   * `wad.phase`, so a new WAD always hands over a new `Map2d` object. Note
+   * that the canvas path does NOT rest on that assumption — `game` is a field
+   * of `bakedInput`, so it invalidates the tile and the redraw on its own. If
+   * the store ever lets the game change in place, this is the site that goes
+   * stale.
+   */
+  function uploadGlMap(instance: GlMapRenderer): void {
+    const map = data;
+    if (map === null || glLoadedMap === map) return;
+    instance.loadMap(map, wad.summary?.game ?? null);
+    glLoadedMap = map;
+  }
+
+  // Bind the GL context AT MOUNT, never inside a draw. A canvas keeps its first
+  // context for life, and the browser tier's `painted()` probe can request a 2D
+  // context on a still-unsized canvas before the first rAF — so a renderer
+  // created inside the first rAF draw would find the canvas already taken and
+  // silently exercise the fallback (browser-test-helpers.ts).
+  //
+  // The three `void` reads ARE this effect's reactive surface: the body runs
+  // inside `untrack`, so nothing can join it by accident. That matters most for
+  // `glFeather`, a live uniform delivered per frame through `GlFrame` —
+  // tracking it here would rebuild the programs, the buffers and the map upload
+  // every time an antialiasing toggle moved. `data` is likewise untracked; the
+  // upload effect below owns that dependency. `glProbe` is likewise read
+  // untracked — a mount-time test-harness constant that tracking could not honor
+  // anyway: `preserveDrawingBuffer` is a context-creation attribute, and
+  // re-running this effect against the same canvas returns the original context
+  // with its original attributes (single-context-for-life); honoring a change
+  // would need an element swap like MSAA's, which a test-only knob does not
+  // warrant.
+  $effect(() => {
+    void canvas;
+    void glActive;
+    void mapPrefs.glMsaa;
+    return untrack(() => {
+      const el = canvas;
+      if (!glActive || !el) return;
+      const instance = createGlRenderer(el, {
+        msaa: mapPrefs.glMsaa,
+        preserveDrawingBuffer: glProbe,
+      });
+      if (instance === null) {
+        // No usable WebGL2 here. `glActive` goes false, the `{#key}` block
+        // hands the canvas path a fresh element, and this effect re-runs into
+        // the early return above rather than retrying.
+        glFailed = true;
+        return;
+      }
+      glRenderer = instance;
+      // A fresh renderer holds no map, whatever the last one held.
+      glLoadedMap = null;
+      // Fires only when a lost context did NOT come back inside the renderer's
+      // grace period; a blip that restores is handled in there and never
+      // reaches us.
+      instance.onContextLost(() => {
+        glFailed = true;
+      });
+      // A re-run at an unchanged map — an MSAA change, which replaces the
+      // element and so this renderer — gets no help from the upload effect
+      // below, whose dependencies did not move. So upload here too.
+      uploadGlMap(instance);
+      return () => {
+        instance.dispose();
+        glRenderer = null;
+        glLoadedMap = null;
+      };
+    });
+  });
+
+  // Re-upload when the map changes. Separate from the init effect so a map
+  // switch costs a buffer upload rather than a whole new context — and so the
+  // init effect never has to track `data`.
+  $effect(() => {
+    void data;
+    void glActive;
+    untrack(() => {
+      if (!glActive || glRenderer === null) return;
+      uploadGlMap(glRenderer);
+    });
+  });
 
   // Redraw on anything the picture depends on. `draw()` runs outside this
   // effect's tracking context, so its dependencies have to be named here — but
@@ -748,28 +1034,36 @@
   {/if}
 {:else}
   <div class="map2d" bind:this={container}>
-    <!-- ARIA files `application` under structure, so Svelte's tables call it
-         non-interactive; for this keyboard-operated canvas it is the correct
-         role (ARIA authoring practices), making the warning below noise. -->
-    <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
-    <canvas
-      bind:this={canvas}
-      role="application"
-      aria-roledescription="2D map"
-      aria-label={`2D map of ${name}`}
-      aria-describedby={instructionsId}
-      tabindex="0"
-      class:dragging
-      onwheel={handleWheel}
-      onpointerdown={handlePointerDown}
-      onpointermove={handlePointerMove}
-      onpointerup={handlePointerUp}
-      onpointercancel={handlePointerUp}
-      onlostpointercapture={handlePointerUp}
-      onpointerleave={() => mapCursor.clear()}
-      ondblclick={refit}
-      onkeydown={handleKeyDown}
-    ></canvas>
+    <!-- A canvas keeps its first context for life, and `getContext` with
+         different attributes silently returns that context rather than a new
+         one — so changing backend, or changing MSAA (a context-creation
+         attribute), needs a NEW element rather than a new call. On the canvas
+         path this key is constant; MSAA participates in the key only while the
+         GL backend is active. -->
+    {#key glActive ? `gl:${mapPrefs.glMsaa}` : 'canvas'}
+      <!-- ARIA files `application` under structure, so Svelte's tables call it
+           non-interactive; for this keyboard-operated canvas it is the correct
+           role (ARIA authoring practices), making the warning below noise. -->
+      <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+      <canvas
+        bind:this={canvas}
+        role="application"
+        aria-roledescription="2D map"
+        aria-label={`2D map of ${name}`}
+        aria-describedby={instructionsId}
+        tabindex="0"
+        class:dragging
+        onwheel={handleWheel}
+        onpointerdown={handlePointerDown}
+        onpointermove={handlePointerMove}
+        onpointerup={handlePointerUp}
+        onpointercancel={handlePointerUp}
+        onlostpointercapture={handlePointerUp}
+        onpointerleave={() => mapCursor.clear()}
+        ondblclick={refit}
+        onkeydown={handleKeyDown}
+      ></canvas>
+    {/key}
     <p id={instructionsId} class="visually-hidden">
       Drag or use the arrow keys to pan. Zoom with the scroll wheel, a pinch, or the plus
       and minus keys. Press 0 or double-click to fit the whole map. Press [ or ] to shrink
