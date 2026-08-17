@@ -11,7 +11,7 @@ import {
   loadTinyJunk,
   loadWad,
   mapCanvas,
-  mapCanvasDataUrl,
+  mapCanvasPixelHash,
 } from './helpers';
 
 test.describe('desktop shell smoke', () => {
@@ -128,12 +128,12 @@ test.describe('desktop shell smoke', () => {
 
     // Hiding a populated category changes the canvas; restoring it restores
     // the exact pixels (the draw is deterministic).
-    const before = await mapCanvasDataUrl(page);
+    const before = await mapCanvasPixelHash(page);
     await monsters.click();
     await expect(monsters).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(before);
     await monsters.click();
-    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).toBe(before);
 
     // The master Things toggle owns the whole row.
     const tools = page.getByRole('group', { name: '2D map view controls' });
@@ -158,12 +158,12 @@ test.describe('desktop shell smoke', () => {
 
     // Hiding the overlay changes the canvas; restoring it restores the exact
     // pixels (the draw is deterministic).
-    const before = await mapCanvasDataUrl(page);
+    const before = await mapCanvasPixelHash(page);
     await chip.click();
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(before);
     await chip.click();
-    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).toBe(before);
   });
 
   test('sector overlay chips toggle secret and damage boundaries', async ({ page }) => {
@@ -185,20 +185,20 @@ test.describe('desktop shell smoke', () => {
 
     // Enabling an overlay changes the canvas; disabling restores the exact
     // pixels (the draw is deterministic).
-    const before = await mapCanvasDataUrl(page);
+    const before = await mapCanvasPixelHash(page);
     await secrets.click();
     await expect(secrets).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(before);
     await secrets.click();
     await expect(secrets).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).toBe(before);
 
     await damage.click();
     await expect(damage).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(before);
     await damage.click();
     await expect(damage).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).toBe(before);
   });
 
   test('player start toggle governs the arrow independently of Things', async ({ page }) => {
@@ -214,16 +214,16 @@ test.describe('desktop shell smoke', () => {
 
     // With Things off, the arrow alone remains — and answers only to Start.
     // Poll past the things-off redraw (rAF-scheduled) before trusting the canvas.
-    const withThings = await mapCanvasDataUrl(page);
+    const withThings = await mapCanvasPixelHash(page);
     await tools.getByRole('button', { name: 'Show things' }).click();
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(withThings);
-    const before = await mapCanvasDataUrl(page);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(withThings);
+    const before = await mapCanvasPixelHash(page);
     await start.click();
     await expect(start).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => mapCanvasDataUrl(page)).not.toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).not.toBe(before);
     await start.click();
     await expect(start).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => mapCanvasDataUrl(page)).toBe(before);
+    await expect.poll(() => mapCanvasPixelHash(page)).toBe(before);
 
     // The off state survives a reload. No URL router: reloading drops the
     // loaded WAD, so re-load and re-navigate before asserting.
