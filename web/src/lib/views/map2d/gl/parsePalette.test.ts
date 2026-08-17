@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { Palette } from '../render';
 import { parsePalette } from './renderer';
 
@@ -72,5 +72,52 @@ describe('parsePalette', () => {
     expect(a).toEqual(b);
     expect(a).not.toBe(b);
     expect(a.things).not.toBe(b.things);
+  });
+
+  it('renders non-hex palette values as black and logs a diagnostic', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const badPalette: Palette = { ...PALETTE, wall: 'rgb(255, 0, 0)' };
+      const gl = parsePalette(badPalette);
+      expect(gl.wall).toEqual([0, 0, 0]);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('GL palette field "wall"'),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('rgb(255, 0, 0)'),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('does not call console.error for valid hex values', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      parsePalette(PALETTE);
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs non-hex errors for thing categories with field-qualified names', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const badPalette: Palette = {
+        ...PALETTE,
+        things: { ...PALETTE.things, weapons: 'oklch(70% 0.1 30)' },
+      };
+      const gl = parsePalette(badPalette);
+      expect(gl.things.weapons).toEqual([0, 0, 0]);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('GL palette field "things.weapons"'),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('oklch(70% 0.1 30)'),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

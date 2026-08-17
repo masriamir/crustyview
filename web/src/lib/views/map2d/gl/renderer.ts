@@ -258,12 +258,30 @@ export interface GlPalette {
   player: Rgb;
 }
 
-/** `#rrggbb` → `[r, g, b]` floats in `[0, 1]`. Assumes a 6-digit hex string
- *  with a leading `#` — the only shape `resolvePalette` ever produces. */
-function hexToRgb(hex: string): Rgb {
+/** `#rrggbb` → `[r, g, b]` floats in `[0, 1]`. Validates input against the
+ *  required format — a 6-digit hex string with a leading `#`. Invalid input
+ *  triggers a console.error diagnostic and returns black `[0, 0, 0]`. */
+function hexToRgb(hex: string, fieldName: string): Rgb {
+  const hexRegex = /^#[0-9a-fA-F]{6}$/;
+  if (!hexRegex.test(hex)) {
+    // Track warned (fieldName, value) pairs at module scope to log each unique
+    // problem only once across the page lifetime.
+    const key = `${fieldName}:${hex}`;
+    if (!warnedPaletteValues.has(key)) {
+      warnedPaletteValues.add(key);
+      console.error(
+        `crustyview: GL palette field "${fieldName}" is not #rrggbb (got "${hex}"); rendering it black — extend parsePalette if theme tokens move off hex`,
+      );
+    }
+    return [0, 0, 0];
+  }
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 0xff) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
 }
+
+/** Tracks which (fieldName, value) palette problems we have already warned
+ *  about, to suppress duplicate diagnostics across the page lifetime. */
+const warnedPaletteValues = new Set<string>();
 
 /**
  * Parses every field of a canvas `Palette` into `GlPalette` floats.
@@ -276,21 +294,21 @@ function hexToRgb(hex: string): Rgb {
  */
 export function parsePalette(palette: Palette): GlPalette {
   return {
-    bg: hexToRgb(palette.bg),
-    grid: hexToRgb(palette.grid),
-    wall: hexToRgb(palette.wall),
-    twoSided: hexToRgb(palette.twoSided),
-    secret: hexToRgb(palette.secret),
-    lineTeleport: hexToRgb(palette.lineTeleport),
-    lineSectorSecret: hexToRgb(palette.lineSectorSecret),
-    lineSectorDamage: hexToRgb(palette.lineSectorDamage),
+    bg: hexToRgb(palette.bg, 'bg'),
+    grid: hexToRgb(palette.grid, 'grid'),
+    wall: hexToRgb(palette.wall, 'wall'),
+    twoSided: hexToRgb(palette.twoSided, 'twoSided'),
+    secret: hexToRgb(palette.secret, 'secret'),
+    lineTeleport: hexToRgb(palette.lineTeleport, 'lineTeleport'),
+    lineSectorSecret: hexToRgb(palette.lineSectorSecret, 'lineSectorSecret'),
+    lineSectorDamage: hexToRgb(palette.lineSectorDamage, 'lineSectorDamage'),
     things: Object.fromEntries(
       (Object.entries(palette.things) as [ThingCategory, string][]).map(([category, hex]) => [
         category,
-        hexToRgb(hex),
+        hexToRgb(hex, `things.${category}`),
       ]),
     ) as Record<ThingCategory, Rgb>,
-    player: hexToRgb(palette.player),
+    player: hexToRgb(palette.player, 'player'),
   };
 }
 
