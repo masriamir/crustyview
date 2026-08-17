@@ -386,19 +386,17 @@
    * The GL path must never ask for a 2D context. A canvas keeps its first
    * context for life, so `getContext('2d')` on a WebGL2-bound canvas answers
    * `null` — which the canvas path reads as "no context available" and bails
-   * on, drawing nothing and resetting `drawnGridSize`. Deciding the surface up
-   * front is what keeps the GL path clear of that guard.
-   *
-   * The fall-through below (GL wanted, no renderer yet) stays closed by
-   * DECLARATION ORDER: the init effect is declared before the redraw effect,
-   * so a mount or a `{#key}` swap re-creates the renderer earlier in the same
-   * flush than any draw the redraw effect schedules. Swapping those two
-   * effects reopens the window, and it would show up as a silent downgrade to
-   * canvas — this line binds the element to 2d, after which GL init on it can
-   * only fail — rather than as anything that looks like a bug.
+   * on, drawing nothing and resetting `drawnGridSize`. When glActive is true,
+   * we return null if the renderer isn't ready yet, rather than falling through
+   * to bind a 2D context. Binding 2D while GL initialization is in flight is
+   * irreversible and permanently prevents WebGL on that canvas. A null return
+   * skips the frame, and the renderer arrives within the same flush or the next;
+   * a skipped frame self-heals.
    */
   function resolveSurface(el: HTMLCanvasElement): DrawSurface | null {
-    if (glActive && glRenderer !== null) return { kind: 'gl', renderer: glRenderer };
+    if (glActive) {
+      return glRenderer === null ? null : { kind: 'gl', renderer: glRenderer };
+    }
     const ctx = el.getContext('2d');
     return ctx === null ? null : { kind: '2d', ctx };
   }
