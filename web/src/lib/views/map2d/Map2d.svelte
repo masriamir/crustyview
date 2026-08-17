@@ -1034,8 +1034,9 @@
          different attributes silently returns that context rather than a new
          one — so changing backend, or changing MSAA (a context-creation
          attribute), needs a NEW element rather than a new call. On the canvas
-         path this key is constant, so the element is never replaced. -->
-    {#key [glActive, mapPrefs.glMsaa].join(':')}
+         path this key is constant; MSAA participates in the key only while the
+         GL backend is active. -->
+    {#key glActive ? `gl:${mapPrefs.glMsaa}` : 'canvas'}
       <!-- ARIA files `application` under structure, so Svelte's tables call it
            non-interactive; for this keyboard-operated canvas it is the correct
            role (ARIA authoring practices), making the warning below noise. -->
