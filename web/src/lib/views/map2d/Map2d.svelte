@@ -924,7 +924,13 @@
   // `glFeather`, a live uniform delivered per frame through `GlFrame` —
   // tracking it here would rebuild the programs, the buffers and the map upload
   // every time an antialiasing toggle moved. `data` is likewise untracked; the
-  // upload effect below owns that dependency.
+  // upload effect below owns that dependency. `glProbe` is likewise read
+  // untracked — a mount-time test-harness constant that tracking could not honor
+  // anyway: `preserveDrawingBuffer` is a context-creation attribute, and
+  // re-running this effect against the same canvas returns the original context
+  // with its original attributes (single-context-for-life); honoring a change
+  // would need an element swap like MSAA's, which a test-only knob does not
+  // warrant.
   $effect(() => {
     void canvas;
     void glActive;
