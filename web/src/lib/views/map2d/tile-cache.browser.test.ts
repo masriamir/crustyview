@@ -229,7 +229,9 @@ async function frames(n = 3): Promise<void> {
 
 /** Mount and wait for the fit and first paint. */
 async function mount(name = 'MAP01') {
-  const screen = await render(Map2d, { name });
+  // This suite tests the canvas path — the fallback once GL is the default
+  // (#178) — pinned deliberately, not by default.
+  const screen = await render(Map2d, { name, renderer: 'canvas' });
   const canvas = screen.container.querySelector('canvas');
   expect(canvas, 'Map2d should render a canvas').not.toBeNull();
   const el = canvas as HTMLCanvasElement;
@@ -337,7 +339,7 @@ describe('the blit lands geometry where a direct render would', () => {
 
 describe('the cache decides correctly when to rasterize', () => {
   it('does not re-render the tile while panning', async () => {
-    const screen = await render(Map2d, { name: 'MAP01' });
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const el = screen.container.querySelector('canvas') as HTMLCanvasElement;
     expect(await painted(el)).toBe(true);
     const before = control.renders;
@@ -352,7 +354,7 @@ describe('the cache decides correctly when to rasterize', () => {
   });
 
   it('re-renders the tile when a preference changes', async () => {
-    const screen = await render(Map2d, { name: 'MAP01' });
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const el = screen.container.querySelector('canvas') as HTMLCanvasElement;
     expect(await painted(el)).toBe(true);
     const before = control.renders;

@@ -79,7 +79,9 @@ function settleFrame(): void {
 
 describe('grid announcement across a map switch', () => {
   it('stays silent on the switch, and still announces transitions on the new map', async () => {
-    const screen = await render(Map2d, { name: 'MAP01' });
+    // This suite tests the canvas path — the fallback once GL is the default
+    // (#178) — pinned deliberately, not by default.
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
     expect(await painted(canvas), 'the map must paint before timers are faked').toBe(true);
     const live = screen.container.querySelector('p.visually-hidden[role="status"]') as HTMLElement;

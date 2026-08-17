@@ -42,7 +42,9 @@ installMapSizing();
 
 describe('Map2d in the browser tier', () => {
   it('mounts, sizes itself, and paints more than a background fill', async () => {
-    const screen = await render(Map2d, { name: 'MAP01' });
+    // This suite tests the canvas path — the fallback once GL is the default
+    // (#178) — pinned deliberately, not by default.
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const canvas = screen.container.querySelector('canvas');
     expect(canvas, 'Map2d should render a canvas').not.toBeNull();
     // The same "more than one distinct pixel" assertion the E2E suite uses, so a
@@ -51,7 +53,7 @@ describe('Map2d in the browser tier', () => {
   });
 
   it('exposes its view controls to a caller', async () => {
-    const screen = await render(Map2d, { name: 'MAP01' });
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
     const api = screen.component as unknown as {
       zoomFactor: () => number;

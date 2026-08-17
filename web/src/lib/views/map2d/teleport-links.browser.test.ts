@@ -44,7 +44,9 @@ installMapSizing();
 
 /** The canvas's pixels, once it has painted. */
 async function snapshot(): Promise<string> {
-  const screen = await render(Map2d, { name: 'MAP01' });
+  // This suite tests the canvas path — the fallback once GL is the default
+  // (#178) — pinned deliberately, not by default.
+  const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
   const canvas = screen.container.querySelector('canvas');
   // Assert before casting: without this a missing canvas throws an opaque null
   // dereference inside `painted()` instead of naming what went wrong.
@@ -195,7 +197,7 @@ describe('teleport links', () => {
     mapPrefs.showTeleportLines = false;
     mapPrefs.teleportArcCap = cap;
     payload = MANY_LINKS;
-    const screen = await render(Map2d, { name: 'MAP01' });
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
     expect(await painted(canvas)).toBe(true);
     return linkPixels(canvas);
@@ -218,7 +220,7 @@ describe('teleport links', () => {
     mapPrefs.showTeleportLines = false;
     mapPrefs.teleportArcCap = 'all';
     payload = MANY_LINKS;
-    const screen = await render(Map2d, { name: 'MAP01' });
+    const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
     const canvas = screen.container.querySelector('canvas') as HTMLCanvasElement;
     expect(await painted(canvas)).toBe(true);
     for (let i = 0; i < 2; i++) {

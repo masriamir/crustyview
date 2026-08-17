@@ -240,7 +240,9 @@ interface Mounted {
 }
 
 async function mountPainted(): Promise<Mounted> {
-  const screen = await render(Map2d, { name: 'MAP01' });
+  // This suite tests the canvas path — the fallback once GL is the default
+  // (#178) — pinned deliberately, not by default.
+  const screen = await render(Map2d, { name: 'MAP01', renderer: 'canvas' });
   const canvas = screen.container.querySelector('canvas');
   expect(canvas, 'Map2d should render a canvas').not.toBeNull();
   const el = canvas as HTMLCanvasElement;
