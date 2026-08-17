@@ -23,13 +23,30 @@ export function installMapSizing(): void {
   document.head.append(sizing);
 }
 
-/** Wait for the ResizeObserver -> fit -> rAF draw chain to settle. */
+/**
+ * Wait for the ResizeObserver -> fit -> rAF draw chain to settle.
+ *
+ * Context-agnostic (#175): reads a 2D-bound canvas via getImageData and a
+ * WebGL2-bound canvas via readPixels. The gate skips zero-dimension canvases
+ * (both axes) before any getContext call. It cannot fully prevent early binding: a fresh canvas is
+ * 300×150 before anyone sizes it, and rAF polls can run before the
+ * component's ResizeObserver fires. Harmless for the 2D path (re-requesting
+ * '2d' returns the same context), but it means any WebGL-backed component
+ * must create its context AT MOUNT — before the rAF phase — never inside
+ * its first rAF draw, or this probe's early '2d' request would win the
+ * canvas and force the fallback.
+ *
+ * Reading a WebGL2 canvas across frames additionally requires the context to
+ * hold preserveDrawingBuffer: true — otherwise the buffer is cleared after
+ * each composite and readPixels returns zeros. Test mounts opt into that via
+ * the GL renderer's options; production keeps it off.
+ */
 export async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const ctx = canvas.getContext('2d');
-    if (!ctx || canvas.width === 0) continue;
-    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (canvas.width === 0 || canvas.height === 0) continue;
+    const data = surfacePixels(canvas);
+    if (!data) continue;
     const [r0, g0, b0, a0] = data;
     for (let p = 4; p < data.length; p += 4) {
       if (data[p] !== r0 || data[p + 1] !== g0 || data[p + 2] !== b0 || data[p + 3] !== a0) {
@@ -38,4 +55,17 @@ export async function painted(canvas: HTMLCanvasElement): Promise<boolean> {
     }
   }
   return false;
+}
+
+/** The full RGBA surface of whichever context type the canvas is bound to. */
+function surfacePixels(canvas: HTMLCanvasElement): Uint8ClampedArray | Uint8Array | null {
+  // Zero-dimension reads throw on getImageData and are pointless on readPixels, so guard here.
+  if (canvas.width === 0 || canvas.height === 0) return null;
+  const ctx = canvas.getContext('2d');
+  if (ctx) return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const gl = canvas.getContext('webgl2');
+  if (!gl) return null;
+  const data = new Uint8Array(canvas.width * canvas.height * 4);
+  gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  return data;
 }

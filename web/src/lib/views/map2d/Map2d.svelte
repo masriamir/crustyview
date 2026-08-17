@@ -22,6 +22,7 @@
     type TileSpec,
   } from './tile';
   import { drawGrid, drawMapLayers, resolvePalette, TILE_PAD_PX, type Palette } from './render';
+  import { createGridAnnouncer } from './gridAnnouncer';
 
   interface Props {
     name: string;
@@ -62,33 +63,12 @@
    *  (#127/#128/#131), and this announcement is immediate — a keypress, not a
    *  gesture — so it has nothing to share with it. */
   let arcCapAnnouncement = $state('');
-  /** Debounce for the drawable-state announcement; 0 when none is pending. */
-  let gridAnnounceTimer = 0;
-  /**
-   * The text a pending timer will announce when it fires. Refreshed on every
-   * draw while a timer is pending (not just on a crossing that restarts the
-   * timer), so the callback always announces the latest observed state
-   * rather than a stale snapshot from whichever crossing scheduled it (#127).
-   */
-  let gridAnnounceText = '';
-  /**
-   * Whether the grid was drawable at the previous draw, or `null` when no
-   * baseline is established. `null` suppresses the next comparison, so opening
-   * a map — or re-showing the grid — settles silently instead of announcing.
-   */
-  let gridDrawable: boolean | null = null;
-  /**
-   * The map the announcement baseline belongs to. Plain `let`, like
-   * `gridDrawable` — only ever read and written inside `draw()`.
-   */
-  let announcedFor: string | null = null;
-  /**
-   * Debounce window: collapses a rapid re-crossing of the drawable boundary
-   * (e.g. a pinch that overshoots and corrects) into a single announcement of
-   * wherever the zoom ends up. Ticks that don't cross back don't restart it,
-   * so this does not require the zoom/pinch gesture itself to come to rest.
-   */
-  const GRID_ANNOUNCE_DELAY_MS = 500;
+  // The announcer owns the timer/baseline; this component owns the reactive
+  // sink. dispose() runs in onDestroy and nowhere else in the reactive graph —
+  // NOT the redraw effect's teardown, which re-runs per transform tick (#127).
+  const gridAnnouncer = createGridAnnouncer((text) => {
+    gridAnnouncement = text;
+  });
 
   // `wad.map2d` caches per name behind non-reactive fields, so depend on `phase`
   // explicitly: loading another WAD must re-derive rather than serve a stale map.
@@ -325,62 +305,15 @@
     // (no canvas, no context, or no map/transform) reports "nothing known"
     // rather than leaving a stale value from whatever was drawn last (#76).
     drawnGridSize = gridStep;
-    // A map switch is not a grid transition. `Map2d` is reused across an
-    // in-place switch, so the outgoing map's baseline would otherwise compare
-    // against the incoming map's initial state and report a change that never
-    // happened to the grid — and only from the second map onward, since the
-    // first has no baseline at all. Clearing the live region is load-bearing,
-    // not tidiness: both maps produce the identical "too small" string, so a
-    // stale value would make the next genuine crossing a no-op write that
-    // announces nothing (#131).
-    if (name !== announcedFor) {
-      announcedFor = name;
-      gridDrawable = null;
-      gridAnnouncement = '';
-      gridAnnounceText = '';
-      if (gridAnnounceTimer !== 0) {
-        window.clearTimeout(gridAnnounceTimer);
-        gridAnnounceTimer = 0;
-      }
-    }
+    gridAnnouncer.observeMap(name);
     if (mapPrefs.showGrid) {
-      const drawable = gridStep !== null;
-      const text = `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`;
-      // Only a change from an established baseline announces. The text is
-      // composed HERE rather than in the callback, and refreshed below on every
-      // draw while a timer is pending — not just on a restart — so the text
-      // that survives to fire always describes the most recently observed
-      // state, which is where the zoom actually landed. Only a genuine crossing
-      // restarts the timer itself; a non-crossing refresh never extends the
-      // debounce window. The only other places that touch this timer are the
-      // hide branch below, the immediate press in `adjustGridSize`, and the
-      // unmount cleanup in `onDestroy` — deliberately NOT the redraw effect's
-      // teardown, which re-runs on every transform change and would cancel this
-      // mid-gesture (#127).
-      if (gridDrawable !== null && gridDrawable !== drawable) {
-        gridAnnounceText = text;
-        if (gridAnnounceTimer !== 0) window.clearTimeout(gridAnnounceTimer);
-        gridAnnounceTimer = window.setTimeout(() => {
-          gridAnnounceTimer = 0;
-          gridAnnouncement = gridAnnounceText;
-        }, GRID_ANNOUNCE_DELAY_MS);
-      } else if (gridAnnounceTimer !== 0) {
-        // A non-crossing draw while a timer is pending: refresh the text so the
-        // callback announces the latest state, but leave the timer itself
-        // alone — ordinary zoom ticks must not extend the debounce window.
-        gridAnnounceText = text;
-      }
-      gridDrawable = drawable;
+      gridAnnouncer.observe(
+        true,
+        gridStep !== null,
+        `Grid ${mapPrefs.gridSize}${gridDrawnSuffix(mapPrefs.gridSize, gridStep)}`,
+      );
     } else {
-      // Hidden: there is no drawable state to track, and showing the grid again
-      // re-establishes the baseline silently rather than announcing on toggle.
-      // Hiding also stands down a pending transition: it would land after the
-      // toggle's own announcement, describing a grid that is no longer shown.
-      if (gridAnnounceTimer !== 0) {
-        window.clearTimeout(gridAnnounceTimer);
-        gridAnnounceTimer = 0;
-      }
-      gridDrawable = null;
+      gridAnnouncer.observe(false, false, '');
     }
     if (mapPrefs.showGrid && gridStep !== null)
       drawGrid(ctx, t, width, height, colors.grid, gridStep);
@@ -608,25 +541,20 @@
     const next = stepGridSize(mapPrefs.gridSize, direction);
     const clamped = next === mapPrefs.gridSize;
     mapPrefs.setGridSize(next);
+    // A clamped press still announces — with distinct wording, since
+    // identical live-region text is skipped by both Svelte and screen
+    // readers.
     const limit = clamped ? `, ${direction === 1 ? 'largest' : 'smallest'} size` : '';
     // With no transform there is no view to describe, so say nothing about
     // drawing rather than claim the grid is too small. (Barely reachable: the
     // key only arrives when the canvas has focus, which means a map is drawn.)
-    let shown = '';
     if (transform) {
       const drawn = effectiveGridSize(next, transform.scale);
-      shown = gridDrawnSuffix(next, drawn);
-      // This press announces immediately, so a debounced transition message must
-      // not land on top of it, and the baseline moves to what this describes.
-      if (gridAnnounceTimer !== 0) {
-        window.clearTimeout(gridAnnounceTimer);
-        gridAnnounceTimer = 0;
-      }
-      gridDrawable = drawn !== null;
+      const shown = gridDrawnSuffix(next, drawn);
+      gridAnnouncer.announceNow(`Grid ${next}${limit}${shown}`, drawn !== null);
+    } else {
+      gridAnnouncer.announceNow(`Grid ${next}${limit}`);
     }
-    // A clamped press still announces — with distinct wording, since identical
-    // live-region text is skipped by both Svelte and screen readers.
-    gridAnnouncement = `Grid ${next}${limit}${shown}`;
   }
 
   /** Step the arc cap, turning the overlay on if hidden — adjusting is
@@ -799,10 +727,7 @@
   // tile settle below is armed by a scale change and so lives on exactly the
   // same ticks: it is unmount-only for the same reason (#152).
   onDestroy(() => {
-    if (gridAnnounceTimer !== 0) {
-      window.clearTimeout(gridAnnounceTimer);
-      gridAnnounceTimer = 0;
-    }
+    gridAnnouncer.dispose();
     cancelTileSettle();
     // Sizing to zero releases the backing store immediately rather than
     // waiting on the collector; the tile can be tens of megabytes.
