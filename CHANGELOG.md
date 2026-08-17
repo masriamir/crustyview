@@ -3,6 +3,20 @@
 All notable changes to crustyview are documented here. Versions follow the
 policy in `docs/adr/0004-versioning-and-release-policy.md`.
 
+## [0.3.0] - 2026-08-17
+
+### Documentation
+
+- Record the GPU 2D renderer spike outcome in ADR-0006 (#174)
+
+### Features
+
+- Add a WebGL2 map renderer behind a renderer prop (#180)
+- Make WebGL2 the default 2D map renderer with a canvas fallback (#182)
+
+### Testing
+
+- Port the pixel probe to WebGL2 and extract renderer-agnostic map2d logic (#179)
 ## [0.2.0] - 2026-08-16
 
 ### Bug Fixes
