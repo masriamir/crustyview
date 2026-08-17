@@ -197,6 +197,16 @@ function settleFrame(): void {
 }
 
 describe('Map2d on the WebGL2 backend', () => {
+  it('binds WebGL2 by default when no renderer prop is given (#178)', async () => {
+    const screen = await render(Map2d, { name: 'MAP01', glProbe: true });
+    const canvas = canvasIn(screen.container);
+    expect(await painted(canvas)).toBe(true);
+    expect(
+      canvas.getContext('webgl2'),
+      'the default renderer must be GL, not a silent canvas fallback',
+    ).not.toBeNull();
+  });
+
   it('mounts, sizes itself, and paints more than a background fill', async () => {
     const screen = await render(Map2d, { name: 'MAP01', renderer: 'gl', glProbe: true });
     const canvas = canvasIn(screen.container);

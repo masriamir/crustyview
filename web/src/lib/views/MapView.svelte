@@ -83,6 +83,11 @@
   const rendererOverride: 'gl' | 'canvas' | undefined =
     rendererParam === 'gl' ? 'gl' : rendererParam === 'canvas' ? 'canvas' : undefined;
 
+  // `?glprobe`'s mere presence (no value needed) turns on `preserveDrawingBuffer`
+  // so E2E can read back GL pixels; production leaves the buffer unreadable, so
+  // this stays a query param rather than a UI control.
+  const glProbe = new URLSearchParams(location.search).has('glprobe');
+
   const modeOptions: {
     value: MapMode;
     label: string;
@@ -258,7 +263,7 @@
     {/if}
   </div>
   {#if nav.mapMode === '2d'}
-    <Map2d {name} renderer={rendererOverride} bind:this={map2d} bind:drawnGridSize />
+    <Map2d {name} renderer={rendererOverride} {glProbe} bind:this={map2d} bind:drawnGridSize />
   {:else}
     <div class="placeholder"><p>The 3D viewport arrives with phase 3.</p></div>
   {/if}
