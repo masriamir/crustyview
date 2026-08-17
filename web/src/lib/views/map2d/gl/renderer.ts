@@ -211,14 +211,27 @@ export interface GlFrame {
 
 /** One instanced-quad draw call's worth of GPU state. Colors are
  *  deliberately absent: every pass is colored from `GlFrame.palette` at
- *  draw time, never baked in at load time (see the module doc). */
+ *  draw time, never baked in at load time (see the module doc). The
+ *  instance buffer itself is not kept here — cleanup goes through the
+ *  renderer's `mapBuffers`/`mapVaos` arrays instead, so keeping a second
+ *  reference on the pass would just be a handle nothing ever reads. */
 interface Pass {
   vao: WebGLVertexArrayObject;
-  buffer: WebGLBuffer;
   count: number;
   width: number;
   dash: readonly [number, number, number];
 }
+
+/**
+ * Thrown by shader compilation or program linking, as opposed to no WebGL2
+ * context being available at all. `createGlRenderer` treats the two
+ * differently: no context is an expected, silent fallback (the product
+ * works everywhere); a shader that fails to compile or link is a real bug in
+ * this file and must never look identical to an old browser (design.md,
+ * Error handling summary). The message always carries the driver's own
+ * info-log text, which is what makes it worth a `console.error`.
+ */
+class ShaderError extends Error {}
 
 function createBuffer(gl: WebGL2RenderingContext): WebGLBuffer {
   const buffer = gl.createBuffer();
@@ -232,7 +245,9 @@ function compileShader(gl: WebGL2RenderingContext, type: number, source: string)
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    throw new Error(gl.getShaderInfoLog(shader) ?? 'shader compile failed');
+    const log = gl.getShaderInfoLog(shader) ?? 'shader compile failed';
+    gl.deleteShader(shader);
+    throw new ShaderError(log);
   }
   return shader;
 }
@@ -243,11 +258,19 @@ function compileShader(gl: WebGL2RenderingContext, type: number, source: string)
 function link(gl: WebGL2RenderingContext): WebGLProgram {
   const program = gl.createProgram();
   if (!program) throw new Error('createProgram failed');
-  gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, VERT));
-  gl.attachShader(program, compileShader(gl, gl.FRAGMENT_SHADER, FRAG));
+  const vertShader = compileShader(gl, gl.VERTEX_SHADER, VERT);
+  const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, FRAG);
+  gl.attachShader(program, vertShader);
+  gl.attachShader(program, fragShader);
   gl.linkProgram(program);
+  // Standard cleanup: once a program is linked (or has failed to link), the
+  // compiled shader objects behind it are never needed again — the program
+  // itself is what draw calls use. Skipping this leaks a shader pair per
+  // construction and per context restore.
+  gl.deleteShader(vertShader);
+  gl.deleteShader(fragShader);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(program) ?? 'program link failed');
+    throw new ShaderError(gl.getProgramInfoLog(program) ?? 'program link failed');
   }
   return program;
 }
@@ -473,7 +496,7 @@ export class GlMapRenderer {
     const vao = this.createLineVao(buffer);
     this.mapBuffers.push(buffer);
     this.mapVaos.push(vao);
-    return { vao, buffer, count, width, dash };
+    return { vao, count, width, dash };
   }
 
   /** Full-frame redraw: clear, grid, base kinds, dashed overlays — in
@@ -541,22 +564,26 @@ export class GlMapRenderer {
    * second invalidation problem to solve. Never call `bufferSubData` here:
    * the instance count itself changes every draw.
    *
-   * Bounds mirror `drawGrid` (render.ts): the visible map rect from
-   * `viewportRect`, additionally intersected with the map's own bounds so a
-   * view that hangs off the edge of a small map does not spend instances on
-   * grid lines nothing will ever occupy.
+   * Bounds are exactly `drawGrid`'s (render.ts): the visible map rect from
+   * `viewportRect`, and nothing else. Deliberately NOT intersected with the
+   * map's own bounds — the canvas path never clips the grid to `map.bounds`
+   * either, so a zoomed-out view over a small map gets a grid across the
+   * whole visible viewport on both renderers, not just up to the map's
+   * edge. (An earlier draft of this pass added a bounds intersection the
+   * canvas path does not have; corrected during review — parity with the
+   * shipped renderer governs over the written brief where the two
+   * disagree.)
    */
   private drawGridPass(frame: GlFrame): void {
-    const map = this.currentMap;
     const step = frame.grid;
-    if (map === null || step === null) return;
+    if (step === null) return;
 
-    const view = viewportRect(frame.transform, frame.widthCss, frame.heightCss, 0);
-    const minX = Math.max(view.minX, map.bounds.min_x);
-    const maxX = Math.min(view.maxX, map.bounds.max_x);
-    const minY = Math.max(view.minY, map.bounds.min_y);
-    const maxY = Math.min(view.maxY, map.bounds.max_y);
-    if (minX > maxX || minY > maxY) return;
+    const { minX, maxX, minY, maxY } = viewportRect(
+      frame.transform,
+      frame.widthCss,
+      frame.heightCss,
+      0,
+    );
 
     const segments: number[] = [];
     for (let x = Math.ceil(minX / step) * step; x <= maxX; x += step) {
@@ -644,15 +671,28 @@ export class GlMapRenderer {
   };
 }
 
-/** Non-throwing factory: `null` on any init failure (no WebGL2 context,
- *  shader compile, or program link). */
+/**
+ * Non-throwing factory: `null` on any init failure (no WebGL2 context,
+ * shader compile, or program link).
+ *
+ * The two failure kinds are deliberately not treated the same way. No
+ * WebGL2 context is silent — an old browser or a disabled GPU is an expected
+ * shape of "this device doesn't get the GL path", handled by falling back to
+ * canvas without comment. A `ShaderError` — a compile or link failure in
+ * *this file's own* GLSL — is not expected on any device and must not look
+ * identical to that case, so it is surfaced via `console.error` before
+ * returning `null` (design.md, Error handling summary).
+ */
 export function createGlRenderer(
   canvas: HTMLCanvasElement,
   opts: GlRendererOptions,
 ): GlMapRenderer | null {
   try {
     return new GlMapRenderer(canvas, opts);
-  } catch {
+  } catch (error) {
+    if (error instanceof ShaderError) {
+      console.error('crustyview: WebGL2 shader init failed', error.message);
+    }
     return null;
   }
 }

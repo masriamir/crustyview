@@ -118,6 +118,27 @@ function rowPixels(pixels: Uint8Array, row: number, width: number): Uint8Array {
   return pixels.subarray(row * stride, row * stride + stride);
 }
 
+/** A `w`×`h` sub-rectangle of a top-down `readScreenPixels` buffer, starting
+ *  at screen `(x0, y0)`. Lets a test scope a color search to one corner of
+ *  the canvas instead of the whole frame. */
+function regionPixels(
+  pixels: Uint8Array,
+  x0: number,
+  y0: number,
+  w: number,
+  h: number,
+  canvasWidth: number,
+): Uint8Array {
+  const out = new Uint8Array(w * h * 4);
+  const srcStride = canvasWidth * 4;
+  const dstStride = w * 4;
+  for (let row = 0; row < h; row++) {
+    const srcStart = (y0 + row) * srcStride + x0 * 4;
+    out.set(pixels.subarray(srcStart, srcStart + dstStride), row * dstStride);
+  }
+  return out;
+}
+
 function hexToRgb255(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
@@ -273,6 +294,29 @@ describe('GlMapRenderer grid pass', () => {
 
     renderer.draw(baseFrame({ transform: GRID_T, widthCss: 128, heightCss: 128, grid: null }));
     expect(anyMatch(readScreenPixels(canvas), gridColor)).toBe(false);
+
+    renderer.dispose();
+  });
+
+  it('draws grid lines across the whole visible viewport, not clipped to a small map\'s bounds', () => {
+    // Parity with the canvas drawGrid (render.ts): it clips only to
+    // viewportRect, never to map.bounds, so a view that hangs off the edge
+    // of a small map still gets a full grid. Zoom the same 128x128-bounded
+    // map out into a 256x256 canvas at the same transform — the visible map
+    // rect (viewportRect) becomes x:[0,256], y:[-128,128], well past the
+    // map's own x:[0,128], y:[0,128].
+    const canvas = makeCanvas(256, 256);
+    const renderer = makeRenderer(canvas);
+    renderer.loadMap(GRID_MAP, null);
+    renderer.draw(baseFrame({ transform: GRID_T, widthCss: 256, heightCss: 256, grid: 64 }));
+
+    const pixels = readScreenPixels(canvas);
+    // Screen (186..198, 178..228) sits on the map x = 192 grid line (192 =
+    // 3 * 64, outside bounds.max_x = 128) at map y in about [-100, -50]
+    // (outside bounds.min_y = 0) — doubly outside the map's bounds, so this
+    // band is grid-colored only without a bounds intersection.
+    const region = regionPixels(pixels, 186, 178, 12, 50, 256);
+    expect(countMatching(region, hexToRgb255(PALETTE.grid))).toBeGreaterThan(0);
 
     renderer.dispose();
   });
