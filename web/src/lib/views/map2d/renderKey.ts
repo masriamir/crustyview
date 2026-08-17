@@ -28,10 +28,15 @@ export interface TileKeyInput {
   teleportArcCap: TeleportArcCap;
 }
 
-/** The tile's inputs plus the two the visible canvas draws live. */
+/** The tile's inputs plus the two the visible canvas draws live, plus the
+ *  live GL uniforms that are not baked into the tile but still need to
+ *  schedule a redraw. */
 export interface RenderKeyInput extends TileKeyInput {
   showGrid: boolean;
   gridSize: GridSize;
+  /** Edge anti-aliasing on the GL renderer: a live shader uniform, not baked
+   *  into any tile, so it belongs here and NOT in `TileKeyInput`/`tileKey`. */
+  glFeather: boolean;
 }
 
 /**
@@ -73,5 +78,5 @@ export function tileKey(input: TileKeyInput): string {
  * rather than one that changes everywhere except the cached layer.
  */
 export function renderKey(input: RenderKeyInput): string {
-  return JSON.stringify([tileKey(input), input.showGrid, input.gridSize]);
+  return JSON.stringify([tileKey(input), input.showGrid, input.gridSize, input.glFeather]);
 }

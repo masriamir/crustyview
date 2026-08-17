@@ -19,6 +19,7 @@ const BASE: RenderKeyInput = {
   teleportArcCap: 100,
   showGrid: false,
   gridSize: 32,
+  glFeather: true,
 };
 
 describe('tileKey', () => {
@@ -79,6 +80,23 @@ describe('renderKey', () => {
 
   it('changes when a baked preference changes', () => {
     expect(renderKey({ ...BASE, showSecretSectors: true })).not.toBe(renderKey(BASE));
+  });
+
+  it('changes when glFeather changes', () => {
+    // Feather is a live GL uniform, not baked into any tile, so it belongs
+    // in renderKey (schedules a redraw) but must NOT reach tileKey.
+    expect(renderKey({ ...BASE, glFeather: false })).not.toBe(renderKey(BASE));
+  });
+
+  it('does not add glFeather to tileKey', () => {
+    // tileKey takes the narrower TileKeyInput, which has no glFeather field —
+    // this is a compile-time guarantee (`npm run check`), not something a
+    // runtime assertion here can prove. This test documents the intent: a
+    // RenderKeyInput with glFeather flipped must not change tileKey's output
+    // since tileKey only reads the TileKeyInput-shaped fields it is passed.
+    const featherOn: RenderKeyInput = { ...BASE, glFeather: true };
+    const featherOff: RenderKeyInput = { ...BASE, glFeather: false };
+    expect(tileKey(featherOn)).toBe(tileKey(featherOff));
   });
 
   it('separates its fields so adjacent values cannot collide', () => {

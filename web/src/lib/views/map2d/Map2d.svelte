@@ -693,7 +693,12 @@
   const tileKeyValue = $derived(tileKey(bakedInput));
   /** The tile's identity plus the two layers drawn live. */
   const renderKeyValue = $derived(
-    renderKey({ ...bakedInput, showGrid: mapPrefs.showGrid, gridSize: mapPrefs.gridSize }),
+    renderKey({
+      ...bakedInput,
+      showGrid: mapPrefs.showGrid,
+      gridSize: mapPrefs.gridSize,
+      glFeather: mapPrefs.glFeather,
+    }),
   );
 
   // Redraw on anything the picture depends on. `draw()` runs outside this

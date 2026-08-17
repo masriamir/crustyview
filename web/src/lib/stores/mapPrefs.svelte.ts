@@ -23,6 +23,8 @@ interface StoredMapPrefs {
   gridSize: GridSize;
   showTeleportArcs: boolean;
   teleportArcCap: TeleportArcCap;
+  glMsaa: boolean;
+  glFeather: boolean;
 }
 
 const DEFAULTS: StoredMapPrefs = {
@@ -37,6 +39,8 @@ const DEFAULTS: StoredMapPrefs = {
   gridSize: DEFAULT_GRID_SIZE,
   showTeleportArcs: true,
   teleportArcCap: DEFAULT_TELEPORT_ARC_CAP,
+  glMsaa: false,
+  glFeather: true,
 };
 
 const allVisible = (): Record<ThingCategory, boolean> =>
@@ -62,6 +66,11 @@ export class MapPrefsStore {
   showTeleportArcs = $state(DEFAULTS.showTeleportArcs);
   teleportArcCap = $state<TeleportArcCap>(DEFAULTS.teleportArcCap);
   showCategories = $state<Record<ThingCategory, boolean>>(allVisible());
+  /** WebGL2 renderer preferences (#177): MSAA re-creates the renderer via a
+   *  `{#key}` block rather than redrawing, so it joins neither cache key;
+   *  feather is a live GL uniform and joins the redraw key only. */
+  glMsaa = $state(DEFAULTS.glMsaa);
+  glFeather = $state(DEFAULTS.glFeather);
 
   /** The player-1 arrow draws when things are shown or the always-show pref is on. */
   get showPlayerStart(): boolean {
@@ -101,6 +110,8 @@ export class MapPrefsStore {
     if (typeof v.showTeleportArcs === 'boolean') this.showTeleportArcs = v.showTeleportArcs;
     else if (typeof v.showTeleportLines === 'boolean') this.showTeleportArcs = v.showTeleportLines;
     if (isTeleportArcCap(v.teleportArcCap)) this.teleportArcCap = v.teleportArcCap;
+    if (typeof v.glMsaa === 'boolean') this.glMsaa = v.glMsaa;
+    if (typeof v.glFeather === 'boolean') this.glFeather = v.glFeather;
     if (Array.isArray(v.hiddenThingCategories)) {
       for (const id of v.hiddenThingCategories) {
         // Own-property check: `in` would also accept prototype keys ("toString"),
@@ -162,6 +173,16 @@ export class MapPrefsStore {
     this.#persist();
   }
 
+  toggleGlMsaa(): void {
+    this.glMsaa = !this.glMsaa;
+    this.#persist();
+  }
+
+  toggleGlFeather(): void {
+    this.glFeather = !this.glFeather;
+    this.#persist();
+  }
+
   isCategoryShown(id: ThingCategory): boolean {
     return this.showCategories[id];
   }
@@ -189,6 +210,8 @@ export class MapPrefsStore {
           gridSize: this.gridSize,
           showTeleportArcs: this.showTeleportArcs,
           teleportArcCap: this.teleportArcCap,
+          glMsaa: this.glMsaa,
+          glFeather: this.glFeather,
         } satisfies StoredMapPrefs),
       );
     } catch {
