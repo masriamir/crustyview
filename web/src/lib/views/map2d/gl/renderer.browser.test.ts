@@ -508,6 +508,24 @@ describe('GlMapRenderer teleport link pass', () => {
 
     renderer.dispose();
   });
+
+  it('draws the arrowhead at the destination endpoint', () => {
+    const canvas = makeCanvas();
+    const renderer = makeRenderer(canvas);
+    renderer.loadMap(LINK_MAP, null);
+    renderer.draw(baseFrame({ arcs: ONE_ARC }));
+
+    const pixels = readScreenPixels(canvas);
+
+    // The arrowhead is at the destination (350, 100) with barbs extending
+    // ~7px behind the tip. Probe a 12x12 device-px box centered on the
+    // destination, positioned clear of the ring's radius (the ring is at
+    // from=(50,100), far away).
+    const arrowhead = regionPixels(pixels, 344, 94, 12, 12, WIDTH);
+    expect(countMatching(arrowhead, MARK_COLOR, BLEND_TOLERANCE)).toBeGreaterThanOrEqual(5);
+
+    renderer.dispose();
+  });
 });
 
 describe('GlMapRenderer clear', () => {
