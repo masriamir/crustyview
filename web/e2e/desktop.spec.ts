@@ -76,6 +76,14 @@ test.describe('desktop shell smoke', () => {
     await expect(page.getByRole('region', { name: 'Map E1M1' })).toBeVisible();
     await expectMapCanvasPainted(page);
 
+    // Liveness proof: the suite isn't green on the fallback.
+    expect(
+      await mapCanvas(page).evaluate(
+        (el) => (el as HTMLCanvasElement).getContext('webgl2') !== null,
+      ),
+      'the 2D map must be on the WebGL2 backend — a null here means a silent canvas fallback in the built app',
+    ).toBe(true);
+
     const canvas = mapCanvas(page);
     await expect(canvas).toHaveAccessibleDescription(/arrow keys to pan/);
     const box = await canvas.boundingBox();
