@@ -388,6 +388,14 @@
    * `null` — which the canvas path reads as "no context available" and bails
    * on, drawing nothing and resetting `drawnGridSize`. Deciding the surface up
    * front is what keeps the GL path clear of that guard.
+   *
+   * The fall-through below (GL wanted, no renderer yet) stays closed by
+   * DECLARATION ORDER: the init effect is declared before the redraw effect,
+   * so a mount or a `{#key}` swap re-creates the renderer earlier in the same
+   * flush than any draw the redraw effect schedules. Swapping those two
+   * effects reopens the window, and it would show up as a silent downgrade to
+   * canvas — this line binds the element to 2d, after which GL init on it can
+   * only fail — rather than as anything that looks like a bug.
    */
   function resolveSurface(el: HTMLCanvasElement): DrawSurface | null {
     if (glActive && glRenderer !== null) return { kind: 'gl', renderer: glRenderer };
@@ -460,6 +468,12 @@
     const map = data;
     const t = transform;
     if (!map || !t) {
+      // The canvas path already filled its background above; the GL path has
+      // to fill its own here, because an `alpha: false` drawing buffer that
+      // has never been cleared composites opaque black. Without this, the
+      // frame between mount and the first fit flashes black — against a light
+      // theme, a visible white-black-map flicker on every GL mount.
+      if (surface.kind === 'gl') surface.renderer.clear(glPalette(el).bg);
       drawnGridSize = undefined;
       return;
     }
@@ -885,6 +899,14 @@
    * already in there. Both upload sites go through this so the `game` argument
    * — which decides how every thing is categorized — cannot differ between
    * them.
+   *
+   * The identity guard assumes `game` cannot change without `data` changing.
+   * True today: both come out of one WAD load, and `data` re-derives on
+   * `wad.phase`, so a new WAD always hands over a new `Map2d` object. Note
+   * that the canvas path does NOT rest on that assumption — `game` is a field
+   * of `bakedInput`, so it invalidates the tile and the redraw on its own. If
+   * the store ever lets the game change in place, this is the site that goes
+   * stale.
    */
   function uploadGlMap(instance: GlMapRenderer): void {
     const map = data;

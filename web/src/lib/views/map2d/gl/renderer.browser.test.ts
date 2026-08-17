@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { Map2d } from '../../../format';
 import { LINK_ALPHA, LINK_MARK_ALPHA } from '../linkGeometry';
 import type { Palette } from '../render';
@@ -505,6 +505,92 @@ describe('GlMapRenderer teleport link pass', () => {
     // solid curve.
     expect(litCount).toBeGreaterThan(0);
     expect(litCount).toBeLessThan(chordLength * 0.7);
+
+    renderer.dispose();
+  });
+});
+
+describe('GlMapRenderer clear', () => {
+  const CLEAR_SIDE = 32;
+
+  it('fills the whole buffer with the color it is given, with no map loaded', () => {
+    const canvas = makeCanvas(CLEAR_SIDE, CLEAR_SIDE);
+    const renderer = makeRenderer(canvas);
+    // Deliberately no `loadMap`: the frames `clear` exists for are exactly the
+    // ones before a map or a transform arrives, which `draw` returns early on.
+    const pixelCount = CLEAR_SIDE * CLEAR_SIDE;
+
+    expect(
+      countMatching(readScreenPixels(canvas), [0, 0, 0], 2),
+      'an untouched alpha:false buffer reads back opaque BLACK — the flash this method prevents',
+    ).toBe(pixelCount);
+
+    // A color nothing in this renderer draws and nothing defaults to, so a
+    // matching buffer can only have come from `clear` itself.
+    renderer.clear([1, 0, 1]);
+    expect(countMatching(readScreenPixels(canvas), [255, 0, 255], 2)).toBe(pixelCount);
+
+    renderer.dispose();
+  });
+});
+
+/**
+ * Poll `check` across animation frames rather than timers.
+ *
+ * The restore test below fakes `setTimeout` (see there for why), so anything
+ * waiting on it would wait forever — including, in the failing case, the
+ * runner's own timeout. Animation frames are left real, which makes this a
+ * watchdog that still expires.
+ */
+async function waitFrames(check: () => boolean, frames = 120): Promise<boolean> {
+  for (let i = 0; i < frames; i++) {
+    if (check()) return true;
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  }
+  return check();
+}
+
+describe('GlMapRenderer context restore', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('fires the fallback itself when the rebuild after a restore fails', async () => {
+    const canvas = makeCanvas(32, 32);
+    const renderer = makeRenderer(canvas);
+    renderer.loadMap(ROW_PROBE_MAP, null);
+    const lose = (canvas.getContext('webgl2') as WebGL2RenderingContext).getExtension(
+      'WEBGL_lose_context',
+    );
+    expect(lose, 'headless Chromium must expose WEBGL_lose_context').not.toBeNull();
+
+    let fellBack = false;
+    renderer.onContextLost(() => {
+      fellBack = true;
+    });
+    let lost = false;
+    canvas.addEventListener('webglcontextlost', () => {
+      lost = true;
+    });
+
+    // Fake the grace timer and never advance it, so the ONLY route left to the
+    // fallback is the failed rebuild below. Otherwise this would pass just as
+    // well on the ordinary "no restore ever arrived" path, which is a
+    // different mechanism and already covered by the component's own test.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    (lose as WEBGL_lose_context).loseContext();
+    expect(await waitFrames(() => lost), 'the simulated loss must be delivered').toBe(true);
+
+    // Deny the rebuild its context — what a GPU that is gone for good does.
+    // `initContext` throws, and the restore handler has already cleared the
+    // grace timer by then, so nothing but the handler's own catch can fire.
+    vi.spyOn(canvas, 'getContext').mockReturnValue(null);
+    (lose as WEBGL_lose_context).restoreContext();
+    expect(
+      await waitFrames(() => fellBack),
+      'a failed rebuild leaves a renderer painting nothing — it must hand the caller back',
+    ).toBe(true);
 
     renderer.dispose();
   });

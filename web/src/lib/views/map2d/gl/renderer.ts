@@ -1092,6 +1092,28 @@ export class GlMapRenderer {
   }
 
   /**
+   * Paint the background and nothing else, for a caller's "nothing to draw
+   * yet" frame.
+   *
+   * The canvas is created with `alpha: false`, and a drawing buffer that has
+   * never been cleared composites opaque BLACK — so a GL mount whose first
+   * frame lands before the map has a transform would flash black, which
+   * against a light theme is a visible white-black-map flicker. The canvas
+   * path fills its background before the same bail; this is the GL
+   * equivalent, and deliberately the whole of it.
+   *
+   * Unlike `draw()` this does not require a loaded map: the frames it exists
+   * for are precisely the ones before one arrives.
+   */
+  clear(bg: Rgb): void {
+    if (this.disposed) return;
+    const gl = this.gl;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(bg[0], bg[1], bg[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  /**
    * Frees every GL object this renderer owns and removes the context-loss
    * listeners. Does not touch `WEBGL_lose_context` — that extension
    * simulates a hardware loss for testing; a normal dispose only needs the
@@ -1170,8 +1192,26 @@ export class GlMapRenderer {
     // never runs against them.
     this.mapBuffers = [];
     this.mapVaos = [];
-    this.initContext();
-    if (this.currentMap) this.uploadMap(this.currentMap);
+    try {
+      this.initContext();
+      if (this.currentMap) this.uploadMap(this.currentMap);
+    } catch (error) {
+      // The grace timer was cleared at the top of this handler, so nothing
+      // else can ever fire the fallback: a rebuild that fails has to do it
+      // itself. Without this, the caller keeps a renderer whose `draw()`
+      // passes its own guards against stale handles and paints nothing — and
+      // an `alpha: false` drawing buffer composites opaque black, so the user
+      // gets a permanently black map with no way back to the canvas path.
+      //
+      // Classified exactly as `createGlRenderer` classifies the same two
+      // failures: a compile or link failure in this file's own GLSL is a bug
+      // and gets the driver's log; a context that simply cannot be had again
+      // is the expected, silent fallback.
+      if (error instanceof ShaderError) {
+        console.error('crustyview: WebGL2 shader init failed after context restore', error.message);
+      }
+      this.lostCallback?.();
+    }
   };
 }
 
