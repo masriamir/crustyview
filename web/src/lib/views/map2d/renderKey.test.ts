@@ -89,11 +89,10 @@ describe('renderKey', () => {
   });
 
   it('does not add glFeather to tileKey', () => {
-    // tileKey takes the narrower TileKeyInput, which has no glFeather field —
-    // this is a compile-time guarantee (`npm run check`), not something a
-    // runtime assertion here can prove. This test documents the intent: a
-    // RenderKeyInput with glFeather flipped must not change tileKey's output
-    // since tileKey only reads the TileKeyInput-shaped fields it is passed.
+    // tileKey accepts a wider object at runtime due to TypeScript structural
+    // typing, so this assertion is a real runtime guard that extra RenderKey-only
+    // fields — glFeather here — never leak into tileKey's output. TypeScript's
+    // narrower TileKeyInput type enforces the compile-time half of the guarantee.
     const featherOn: RenderKeyInput = { ...BASE, glFeather: true };
     const featherOff: RenderKeyInput = { ...BASE, glFeather: false };
     expect(tileKey(featherOn)).toBe(tileKey(featherOff));
