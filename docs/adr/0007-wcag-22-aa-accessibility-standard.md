@@ -105,7 +105,8 @@ minimum is comfortably met); reduced motion is honored; mobile and dark theme ru
 ### Canvas equivalence — what the standard means for the map (2D now, 3D before it exists)
 
 WCAG's success criteria evaluate DOM; a canvas is one opaque element to them. The policy that
-makes "equivalent experience" concrete here, distilled from what #35 onward already practice:
+makes "equivalent experience" concrete here, distilled from what #35 onward already
+practices:
 
 1. **Every map interaction has a keyboard equivalent.** Pan (arrows), zoom (`+`/`-`), fit
    (`0`), grid (`[`/`]`), arc cap (`,`/`.`) all hold today; anything new arrives with its key.

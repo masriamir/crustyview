@@ -109,8 +109,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 
 ## UI conventions
 - **WCAG 2.2 AA is the accessibility design target** (ADR-0007): every new control ships with
-  a keyboard path, every visual state change updates an accessible name or announces through a
-  live region, and text/non-text contrast holds 4.5:1 / 3:1 in both themes. The full
+  a keyboard path, every visual state change either updates an accessible name or is announced
+  through a live region, and text/non-text contrast holds 4.5:1 / 3:1 in both themes. The full
   canvas-equivalence and shell-focus policy lives in the ADR; violations found in shipped UI
   are `accessibility`-labeled defects, not polish.
 - **A control's accessible name must contain its visible label — but a value readout in that
