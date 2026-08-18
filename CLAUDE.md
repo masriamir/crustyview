@@ -108,6 +108,11 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   one tag `v<version>`, one root `CHANGELOG.md`, cut locally by `just release` via git-cliff.
 
 ## UI conventions
+- **WCAG 2.2 AA is the accessibility design target** (ADR-0007): every new control ships with
+  a keyboard path, every visual state change updates an accessible name or announces through a
+  live region, and text/non-text contrast holds 4.5:1 / 3:1 in both themes. The full
+  canvas-equivalence and shell-focus policy lives in the ADR; violations found in shipped UI
+  are `accessibility`-labeled defects, not polish.
 - **A control's accessible name must contain its visible label — but a value readout in that
   label is not part of the label.** The 2D map's Grid button shows `Grid · 32→128` while its
   name is `Show grid, 32, drawn as 128`: the label is "Grid", and `· 32→128` is a value. Putting
@@ -117,8 +122,8 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   third label state where the divergent part is a whole phrase, not just punctuation and a
   number: visible `Grid · 32 · zoom in` against the name `Show grid, 32, too small to draw at
   this zoom` — a harder sell under 2.5.3, and the case a future reader is more likely to stumble
-  on than the coarsened case above. Recorded by #74's audit; #51's accessibility ADR may absorb
-  it.
+  on than the coarsened case above. Recorded by #74's audit; adopted as policy by ADR-0007,
+  which keeps this entry as the worked example.
 - **American English spelling everywhere** — identifiers, comments, docs, user-visible copy,
   commit messages. Take the American form of every `-ise`/`-ize`, `-our`/`-or`, `-re`/`-er` and
   `-ae`/`-e` pair: `initialize`, `honor`, `center`, `artifact`, `color`, `behavior`, `analyze`.

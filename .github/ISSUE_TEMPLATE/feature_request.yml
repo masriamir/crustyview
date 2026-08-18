@@ -16,3 +16,12 @@ body:
       description: Describe the desired behavior or API.
     validations:
       required: true
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Accessibility
+      description: >-
+        For UI-facing features (ADR-0007, WCAG 2.2 AA): what is the keyboard path, what gets
+        announced or renamed on state changes, and does contrast hold in both themes?
+    validations:
+      required: false

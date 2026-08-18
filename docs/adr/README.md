@@ -45,3 +45,6 @@ choices don't need an ADR.
   with a measured WebGL2 renderer recorded as its successor (spike #157; amends
   ADR-0002's GPU line) (successor shipped via #175 — WebGL2 is the default since
   #178; canvas 2D is the fallback)
+- [ADR-0007](0007-wcag-22-aa-accessibility-standard.md) — Adopt WCAG 2.2 AA as the
+  accessibility design target, with a canvas-equivalence policy and tiered
+  enforcement (spike #51)
