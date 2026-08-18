@@ -154,6 +154,19 @@ rows/cells behind these two browsers, and both must stay responsive on phones.
   > offsets, coordinates) remain on `--font-ui` / `--font-mono` as decided
   > above.
 
+  > **Amendment (2026-08-18, #183):** qualifies the "single accent color"
+  > clause. The accent is still one hue, but it is now carried by two tokens
+  > with different jobs: `--accent` for surfaces, tints, borders and focus
+  > rings, and `--nav-current` for the current nav item's *text*. They were one
+  > token until the selected sidebar item — accent ink on a background mixed
+  > from that same accent — measured 4.03:1 against SC 1.4.3's 4.5:1 minimum
+  > (ADR-0007; the #51 audit's only strict AA failure). Untinted, that ink still
+  > tops out at 4.97:1 on the light sidebar, so no adjustment to the tint could
+  > have fixed it — the ink had to darken on its own. **Do not collapse the two
+  > back into one token:** the clause above constrains the hue, not the number
+  > of tokens carrying it, and `nav-contrast.browser.test.ts` goes red if they
+  > are re-merged.
+
 ### Mobile — compact width is a first-class layout
 
 Below the compact breakpoint (~768 px), the shell swaps — not shrinks:
