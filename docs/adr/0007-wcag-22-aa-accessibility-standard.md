@@ -1,6 +1,6 @@
 # ADR-0007: Adopt WCAG 2.2 AA, with a canvas-equivalence policy and tiered enforcement
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-18
 - **Deciders:** Amir Masri
 - **Tracking issue / PR:** [#51](https://github.com/masriamir/crustyview/issues/51)
