@@ -49,7 +49,7 @@
     cursor: pointer;
   }
   button[aria-current='page'] {
-    color: var(--accent);
+    color: var(--nav-current);
   }
   button:disabled {
     color: color-mix(in srgb, var(--text-muted) 50%, transparent);
