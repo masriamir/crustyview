@@ -17,8 +17,30 @@
  * region, nothing announced. A wasm init failure left a sighted user with a bare
  * line of text and a screen-reader user with a silent blank page.
  */
+/**
+ * A human-readable description of an arbitrary rejection value.
+ *
+ * `String(err)` alone renders `[object Object]` for a plain-object rejection,
+ * which is the least useful thing this screen could say: its entire job is to
+ * give someone something to paste into a bug report. Anything JSON can
+ * serialize is shown as JSON instead; the `String` fallback still covers
+ * circular structures (where `JSON.stringify` throws) and values it returns
+ * `undefined` for, such as functions and `undefined` itself.
+ */
+function messageOf(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try {
+    const json = JSON.stringify(err);
+    if (typeof json === 'string') return json;
+  } catch {
+    // Circular or otherwise unserializable — fall through to String().
+  }
+  return String(err);
+}
+
 export function renderStartupFailure(target: HTMLElement, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = messageOf(err);
   const alert = document.createElement('p');
   alert.setAttribute('role', 'alert');
   // Replaces the mount point's contents: this is terminal, and whatever was

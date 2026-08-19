@@ -56,13 +56,53 @@ describe('renderStartupFailure', () => {
     );
   });
 
-  it('stringifies a non-Error rejection instead of rendering [object Object]', () => {
+  it('passes a string rejection through unchanged', () => {
     renderStartupFailure(target, 'plain string rejection');
     vi.runAllTimers();
 
     expect(target.querySelector('[role="alert"]')?.textContent).toBe(
       'Failed to start: plain string rejection',
     );
+  });
+
+  it('serializes an object rejection instead of rendering [object Object]', () => {
+    // The case this whole helper exists for: a fatal screen whose only job is
+    // to give someone something to paste into a bug report must not reduce the
+    // cause to `[object Object]`. Caught as a suppressed review comment on
+    // #196 — the original test claimed this behavior while passing a string,
+    // which `String()` already handles, so it never exercised this path.
+    renderStartupFailure(target, { code: 'ENOENT', path: '/wasm' });
+    vi.runAllTimers();
+
+    expect(target.querySelector('[role="alert"]')?.textContent).toBe(
+      'Failed to start: {"code":"ENOENT","path":"/wasm"}',
+    );
+  });
+
+  it('falls back to String() when the rejection cannot be serialized', () => {
+    // `JSON.stringify` throws on a circular structure; the fallback keeps the
+    // screen rendering rather than turning a startup failure into a second one.
+    const circular: Record<string, unknown> = { code: 'LOOP' };
+    circular.self = circular;
+
+    renderStartupFailure(target, circular);
+    vi.runAllTimers();
+
+    expect(target.querySelector('[role="alert"]')?.textContent).toBe(
+      'Failed to start: [object Object]',
+    );
+  });
+
+  it('renders undefined and null rejections as words rather than blanks', () => {
+    // `JSON.stringify(undefined)` returns undefined, not a string — without the
+    // `typeof json === 'string'` guard this would render an empty message.
+    renderStartupFailure(target, undefined);
+    vi.runAllTimers();
+    expect(target.querySelector('[role="alert"]')?.textContent).toBe('Failed to start: undefined');
+
+    renderStartupFailure(target, null);
+    vi.runAllTimers();
+    expect(target.querySelector('[role="alert"]')?.textContent).toBe('Failed to start: null');
   });
 
   it('replaces whatever was in the mount point', () => {
