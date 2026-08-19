@@ -62,6 +62,28 @@ function exposedSectionNavs(root: ParentNode): Element[] {
   return [...root.querySelectorAll('nav[aria-label="Sections"]')].filter(exposed);
 }
 
+/** Sectioning content — a `<footer>` inside any of these is scoped to it. */
+const SECTIONING = new Set(['ARTICLE', 'ASIDE', 'NAV', 'SECTION']);
+
+/**
+ * The `<footer>` elements that actually map to the `contentinfo` landmark.
+ *
+ * Per HTML-AAM a `<footer>` is `contentinfo` only when its nearest sectioning
+ * ancestor is the document body — nested inside `<article>` or `<section>` it is
+ * a scoped footer with no landmark role at all. Counting `<footer>` tags instead
+ * would fail the moment a future view legitimately added a nested one, which is
+ * a false positive rather than a caught regression. Raised as a suppressed
+ * review comment on #196.
+ */
+function contentinfoFooters(root: ParentNode & Node): Element[] {
+  return [...root.querySelectorAll('footer')].filter((el) => {
+    for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
+      if (SECTIONING.has(n.tagName)) return false;
+    }
+    return true;
+  });
+}
+
 beforeEach(async () => {
   resetWadMock();
   // `empty` so `Shell` renders `EmptyState` (the drop zone) rather than a view,
@@ -103,8 +125,23 @@ describe('shell semantics', () => {
     // The whole point of the change: the build string was outside every
     // landmark, which is what axe's `region` rule reported.
     expect(footer?.querySelector('.build')).not.toBeNull();
-    // Exactly one contentinfo — a second footer would create a competing one.
-    expect(screen.container.querySelectorAll('footer')).toHaveLength(1);
+    // Exactly one *landmark* footer. Scoped footers nested in sectioning content
+    // carry no role and are free to appear later without failing this.
+    expect(contentinfoFooters(screen.container)).toHaveLength(1);
+  });
+
+  it('does not count a scoped footer as a second contentinfo', async () => {
+    const screen = await render(Shell);
+
+    // A nested footer inside sectioning content is not a landmark, so adding one
+    // must not trip the uniqueness assertion above. Without the HTML-AAM rule in
+    // `contentinfoFooters`, a bare tag count goes red here.
+    const article = document.createElement('article');
+    article.append(document.createElement('footer'));
+    screen.container.querySelector('main')?.append(article);
+
+    expect(screen.container.querySelectorAll('footer')).toHaveLength(2);
+    expect(contentinfoFooters(screen.container)).toHaveLength(1);
   });
 
   it('makes the drop zone a real button rather than a div with a button role', async () => {
