@@ -85,7 +85,7 @@
     transition: border-color var(--transition);
     /* Button resets: a UA button brings its own font and background, and this
        used to be a div. Without these the copy shrinks to the UA button size
-       and the dashed box picks up a grey fill. */
+       and the dashed box picks up a gray fill. */
     font: inherit;
     background: none;
   }
