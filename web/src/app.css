@@ -22,6 +22,13 @@
   --border: #d8d5cf;
   --accent: #bf3a1e; /* PLAYPAL red-orange range */
   --accent-contrast: #ffffff;
+  /* Ink for the current nav item, deliberately NOT --accent (#183). The
+     selected sidebar item draws on a background mixed from the accent itself,
+     which lifts the ground toward the ink: --accent on that tint measures
+     4.03:1, under SC 1.4.3's 4.5:1. Even untinted it only reaches 4.97:1, so
+     there is no headroom to buy by thinning the mix — the ink has to be darker.
+     This one is 5.2:1 on the tint and 7.0:1 on --bg-raised. ADR-0007. */
+  --nav-current: #a33017;
   --danger: #c22a1e;
   --checker-a: #ffffff;
   --checker-b: #cccccc;
@@ -63,6 +70,12 @@
   --border: #3a3d42;
   --accent: #ff6a33;
   --accent-contrast: #1d1c1a;
+  /* Dark needs no separate ink: light-on-dark does not lose contrast to the
+     tint the way dark-on-light does, and the accent already measures 5.2:1
+     selected and 5.5:1 on the bottom nav. Aliased rather than omitted so the
+     token resolves in both themes and `nav-contrast.browser.test.ts` measures
+     a real value here. */
+  --nav-current: var(--accent);
   --danger: #ff5f4d;
   --checker-a: #2a2d31;
   --checker-b: #43474d;

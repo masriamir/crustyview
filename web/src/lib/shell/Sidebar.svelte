@@ -109,7 +109,7 @@
   }
   button[aria-current='page'] {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
-    color: var(--accent);
+    color: var(--nav-current);
     font-weight: 600;
   }
   .disclosure .chevron {
