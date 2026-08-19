@@ -7,6 +7,14 @@
   const hasMaps = $derived(wad.phase === 'loaded' && wad.mapNames.length > 0);
 </script>
 
+<!-- Shares the name "Sections" with `BottomNav`'s landmark on purpose. The two
+     are exact complements, never both exposed: this one is `display: none` at
+     or below 48rem and that one is `display: none` above it, and `display: none`
+     removes a subtree from the accessibility tree entirely. Naming the mobile
+     one for its position ("Sections bottom bar") would describe where it sits
+     rather than what it does, and buy nothing. `shell-semantics.browser.test.ts`
+     pins the invariant at both viewports, so a future breakpoint that exposed
+     both would go red rather than silently shipping two identical landmarks. -->
 <nav class="sidebar" aria-label="Sections">
   <ul>
     <li>
