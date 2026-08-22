@@ -221,6 +221,14 @@ jobs:
       # starts first warms the cache for the other. No `restore-keys` — a partial
       # match restores a different browser build that Playwright re-downloads
       # anyway, so a clean miss beats a misleading hit.
+      #
+      # Expect one of the two jobs to log `Failed to save: Unable to reserve
+      # cache with key ..., another job may be creating this cache` on a cold
+      # key. That is the documented outcome of a shared key when both jobs miss
+      # concurrently, it is a warning rather than an error, and the job still
+      # passes — measured on this change's own first run, where
+      # `web-browser-test` saved 282 MB and `web-e2e` lost the race and carried
+      # on. One save is all the next run needs.
       - name: Resolve the Playwright version
         id: playwright
         working-directory: web
