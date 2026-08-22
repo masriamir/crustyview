@@ -22,7 +22,12 @@
   const build = formatBuild(version(), BUILD_SHA);
 </script>
 
-<div class="status-bar">
+<!-- `<footer>`, not a `<div>` (#188). Its only sectioning ancestors are plain
+     divs (`.shell`, `#app`), so this scopes to the document and is a genuine
+     `contentinfo` landmark — which puts the build string below inside one.
+     Previously it sat outside every landmark, which is what axe's `region` rule
+     reported in #51's audit. There is no other footer, so no second contentinfo. -->
+<footer class="status-bar">
   <!-- The live region is an inner element, not the bar itself: the build string
        is static and must not be swept into load announcements. -->
   <div class="live" role="status">
@@ -56,7 +61,7 @@
     <span class="visually-hidden">Build {build}</span>
     <span class="build-text" aria-hidden="true">{build}</span>
   </span>
-</div>
+</footer>
 
 <style>
   .stats {

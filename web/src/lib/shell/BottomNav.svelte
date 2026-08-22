@@ -15,6 +15,8 @@
   }
 </script>
 
+<!-- Same name as `Sidebar`'s landmark, deliberately — see the note there for why
+     that is not a duplicate-landmark defect and where the invariant is pinned. -->
 <nav class="bottom-nav" aria-label="Sections">
   {#each items as item (item.section)}
     <button

@@ -11,10 +11,17 @@
   {#if wad.phase === 'loaded' && wad.fileName}<span class="file">{wad.fileName}</span>{/if}
   <span class="spacer"></span>
   <button type="button" class="open" title="Open a WAD file — replaces the one currently loaded" onclick={() => input.click()}>Open</button>
+  <!-- `hidden` is `display: none`, so this input is neither focusable nor in the
+       accessibility tree and the name below is inert today — the adjacent Open
+       button is what users reach. It is here as defense in depth: swapping
+       `hidden` for the `.visually-hidden` clip (the usual way to make a file
+       input keyboard-reachable) would expose an unlabeled control the moment the
+       attribute changed, and that change would not look like an a11y edit. -->
   <input
     bind:this={input}
     type="file"
     accept=".wad,.WAD"
+    aria-label="Choose a WAD file to open"
     hidden
     onchange={(e) => {
       const file = e.currentTarget.files?.[0];
