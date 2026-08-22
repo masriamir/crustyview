@@ -36,6 +36,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The browser set the Playwright jobs install, and the same value that selects
+# their cache entry. Declared once because the two MUST agree: a cache key that
+# does not name its contents is how you get a job silently restoring an entry
+# that lacks the browser it needs and re-downloading on every run behind a green
+# check. The Playwright version in the key covers the browser *revision*
+# (playwright-core pins it), so only the set needs stating here.
+env:
+  PLAYWRIGHT_BROWSERS: chromium
+
 jobs:
   fmt:
     runs-on: ubuntu-latest
@@ -214,21 +223,34 @@ jobs:
         run: |
           npm ci
           npm run build
-      # Cache the browser binaries (#194). Keyed on the RESOLVED playwright-core
-      # version rather than a lockfile hash: a hash busts on every unrelated
-      # dependency bump, which is exactly when a Dependabot PR would still eat
-      # the uncached download. Both Playwright jobs share this key, so whichever
-      # starts first warms the cache for the other. No `restore-keys` — a partial
-      # match restores a different browser build that Playwright re-downloads
-      # anyway, so a clean miss beats a misleading hit.
+      # Cache the browser binaries (#194).
       #
-      # Expect one of the two jobs to log `Failed to save: Unable to reserve
-      # cache with key ..., another job may be creating this cache` on a cold
-      # key. That is the documented outcome of a shared key when both jobs miss
-      # concurrently, it is a warning rather than an error, and the job still
-      # passes — measured on this change's own first run, where
-      # `web-browser-test` saved 282 MB and `web-e2e` lost the race and carried
-      # on. One save is all the next run needs.
+      # The key names its contents: platform, arch, browser set, and the RESOLVED
+      # playwright-core version. That is the whole design — an entry is shared by
+      # the two Playwright jobs precisely as long as they want the same thing, and
+      # the moment one of them installs a different browser set its key changes and
+      # it gets its own entry. Nothing has to be remembered or kept in sync by hand,
+      # which matters because the failure it prevents is invisible: a job restoring
+      # an entry that lacks its browser would re-download on every single run,
+      # forever, behind a green check.
+      #
+      # `PLAYWRIGHT_BROWSERS` (workflow-level) feeds both this key and the install
+      # command below, so the two cannot drift apart. The browser *revision* needs
+      # no separate component: playwright-core pins it, so the version covers it.
+      #
+      # Version rather than `hashFiles(package-lock.json)`: a lockfile hash busts on
+      # every unrelated dependency bump, which is exactly when a Dependabot PR would
+      # still eat the uncached download. No `restore-keys` either — a partial match
+      # restores a different browser build that Playwright re-downloads anyway, so a
+      # clean miss beats a misleading hit.
+      #
+      # On a COLD key both jobs miss and race to save it, and one will log
+      # `Failed to save: Unable to reserve cache with key ..., another job may be
+      # creating this cache`. That is benign: an atomic reservation, one winner,
+      # identical contents either way, and the loser's job still passes with no
+      # annotation. Measured on this change's first run — `web-browser-test` saved
+      # 282 MB, `web-e2e` lost the race, both green — and on the second, where both
+      # hit and skipped the download entirely. One save is all the next run needs.
       - name: Resolve the Playwright version
         id: playwright
         working-directory: web
@@ -245,13 +267,13 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.PLAYWRIGHT_BROWSERS }}-${{ steps.playwright.outputs.version }}
       # Unchanged on purpose: with the cache restored this detects the browser is
       # already present and skips the download, leaving only the apt-get half of
       # `--with-deps`. A conditional install would buy nothing and add a branch.
       - name: Install Playwright Chromium
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps "$PLAYWRIGHT_BROWSERS"
       - name: Run E2E smoke
         working-directory: web
         run: npx playwright test
@@ -286,8 +308,9 @@ jobs:
       - name: Install dependencies
         working-directory: web
         run: npm ci
-      # Same browser cache as `web-e2e` — see the rationale there. The shared key
-      # means whichever of the two jobs starts first warms it for the other.
+      # Same browser cache as `web-e2e` — see the rationale there. Identical key,
+      # so whichever job runs first warms the entry for the other; if this job's
+      # browser set ever diverges, `PLAYWRIGHT_BROWSERS` changes the key with it.
       - name: Resolve the Playwright version
         id: playwright
         working-directory: web
@@ -304,13 +327,13 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ env.PLAYWRIGHT_BROWSERS }}-${{ steps.playwright.outputs.version }}
       # Unchanged on purpose: with the cache restored this detects the browser is
       # already present and skips the download, leaving only the apt-get half of
       # `--with-deps`. A conditional install would buy nothing and add a branch.
       - name: Install Playwright Chromium
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps "$PLAYWRIGHT_BROWSERS"
       - name: Run browser test tier
         working-directory: web
         run: npm run test:browser
