@@ -23,6 +23,7 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # This job used to be gated on `github.event.repository.visibility == 'public'`,
     # because code scanning needs GitHub Advanced Security, which a private personal
     # repository does not get. The repo went public on 2026-08-10 and the guard became

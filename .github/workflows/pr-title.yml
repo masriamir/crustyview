@@ -21,6 +21,7 @@ permissions:
 jobs:
   pr-title:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       # TWO checkouts, because two different questions are being asked (#101).
       #
