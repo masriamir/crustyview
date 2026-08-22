@@ -232,7 +232,16 @@ jobs:
       - name: Resolve the Playwright version
         id: playwright
         working-directory: web
-        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+        # Assigned first rather than substituted inline: an inline `$(...)` inside
+        # echo/printf discards the command's exit status, so a failing `node -p`
+        # would write an empty value, pass the step, and yield the plausible-looking
+        # key `playwright-Linux-` — caching the wrong thing silently, forever. The
+        # assignment propagates the failure to `bash -e` instead. `printf` over
+        # `echo` for the usual reason: no escape or leading-dash interpretation.
+        run: |
+          version=$(node -p "require('playwright-core/package.json').version")
+          [ -n "$version" ] || { echo "::error::could not resolve the playwright-core version"; exit 1; }
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
@@ -282,7 +291,16 @@ jobs:
       - name: Resolve the Playwright version
         id: playwright
         working-directory: web
-        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+        # Assigned first rather than substituted inline: an inline `$(...)` inside
+        # echo/printf discards the command's exit status, so a failing `node -p`
+        # would write an empty value, pass the step, and yield the plausible-looking
+        # key `playwright-Linux-` — caching the wrong thing silently, forever. The
+        # assignment propagates the failure to `bash -e` instead. `printf` over
+        # `echo` for the usual reason: no escape or leading-dash interpretation.
+        run: |
+          version=$(node -p "require('playwright-core/package.json').version")
+          [ -n "$version" ] || { echo "::error::could not resolve the playwright-core version"; exit 1; }
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
