@@ -33,6 +33,7 @@ import { gotoApp, haveFixtures, loadJunk, loadWad } from './helpers';
  * defect to fix or a decision to record, never an entry in an ignore list.
  */
 
+
 /** A violation carrying any of these fails. ADR-0007: WCAG 2.2 Level AA. */
 const BLOCKING_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
