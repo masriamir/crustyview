@@ -99,6 +99,37 @@ async function scanBothThemes(page: Page, testInfo: TestInfo, state: string): Pr
   await withDarkTheme(page, () => scan(page, testInfo, state, 'dark'));
 }
 
+/**
+ * Scan with animations off, which the app already honors: `app.css` sets
+ * `--transition: 0ms` under `prefers-reduced-motion: reduce`.
+ *
+ * Without this the scan races the theme toggle. Flipping the palette leaves chip
+ * and button backgrounds mid-blend for `--transition` (150ms), and axe reads
+ * whatever composite exists at that instant — so a pairing that passes in both
+ * settled palettes can fail against the intermediate color. It surfaced as an
+ * intermittent `color-contrast` failure on `.chip > .count` in CI that never
+ * reproduced locally.
+ *
+ * Confirmed rather than guessed: raising `--transition` to 3000ms reproduces it
+ * on demand (desktop map view, dark, on the tool buttons and segmented control),
+ * and with this setting the same 3000ms transition scans clean — the emulation
+ * defeats it at the source rather than sleeping long enough to miss it.
+ *
+ * Reduced motion changes only timing here, never a color, so nothing about the
+ * audit's subject is altered by running under it.
+ *
+ * Applied with an explicit `emulateMedia` call rather than
+ * `test.use({ reducedMotion: 'reduce' })`, because the latter did not take
+ * effect here — measured, not assumed: a probe reported
+ * `matchMedia('(prefers-reduced-motion: reduce)').matches === false` under
+ * `test.use`, and `true` with `--transition` resolving to `0ms` immediately
+ * after calling `emulateMedia`. A silently inert option is worse than none, so
+ * the call stays where it can be seen.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+});
+
 test.describe('accessibility scan', () => {
   test('empty shell and load error have no WCAG violations', async ({ page }, testInfo) => {
     // Neither state needs a WAD, so this one runs without the fixtures.
