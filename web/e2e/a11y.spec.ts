@@ -140,10 +140,16 @@ test.describe('accessibility scan', () => {
     await expect(page.getByRole('region', { name: 'Map E1M1' })).toBeVisible();
     await scanBothThemes(page, testInfo, 'map view');
 
+    // Every scan waits for its view to actually be on screen first. Without it
+    // the scan can race the navigation and audit the previous state, which fails
+    // in the worse direction: a stale-but-clean view reports a pass for a state
+    // that was never examined.
     await page.getByRole('navigation').getByRole('button', { name: 'Textures' }).click();
+    await expect(page.getByRole('region', { name: 'Textures' })).toBeVisible();
     await scanBothThemes(page, testInfo, 'textures');
 
     await page.getByRole('navigation').getByRole('button', { name: 'Lumps' }).click();
+    await expect(page.getByRole('region', { name: 'Lumps' })).toBeVisible();
     await scanBothThemes(page, testInfo, 'lumps');
   });
 });
