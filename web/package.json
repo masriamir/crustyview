@@ -11,11 +11,13 @@
     "test:browser": "vitest run --project browser"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tsconfig/svelte": "^5.0.0",
     "@vitest/browser": "^4.1.10",
     "@vitest/browser-playwright": "^4.1.10",
+    "axe-core": "~4.13.0",
     "happy-dom": "^20.11.1",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
