@@ -7,9 +7,9 @@ Single source of truth for two gates that must agree but see different strings:
   * the `pr-title` CI workflow, which checks the PR title.
 
 Only the second one reaches `main`. PRs squash-merge, so the PR title becomes the
-sole commit message on `main` and is what git-cliff parses for changelog inclusion,
-section, and version bump (ADR-0004 policy item 5). Keeping one regex here means a
-title that satisfies CI cannot be one lefthook would have rejected, or vice versa.
+sole commit message on `main` and is what the changelog/version tooling parses for
+inclusion, section, and version bump. Keeping one validator means a title that
+satisfies CI cannot be one lefthook would have rejected, or vice versa.
 
 Reads stdin and considers only its first line, so a whole commit-message file can be
 redirected in as readily as a bare PR title is piped in. Callers do not need to slice
@@ -33,8 +33,8 @@ TYPES = (
     "test",
 )
 
-# Mirrors cliff.toml's `conventional_commits = true` parsing: lowercase type, an
-# optional parenthesized scope, an optional `!` breaking marker, then `: ` and a
+# Conventional Commits as the tooling parses it: lowercase type, an optional
+# parenthesized scope, an optional `!` breaking marker, then `: ` and a
 # description.
 #
 # The description is `.*\S`, not `.+`: `.+` would accept `feat:  `, since the literal

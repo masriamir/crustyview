@@ -46,7 +46,7 @@ valid 'style: rustfmt'
 valid 'test: cover the blockmap arm'
 
 # Breaking marker, with and without a scope — the only channel for a breaking change,
-# since the squash body is BLANK (ADR-0004 policy item 5).
+# since the squash body is BLANK by policy.
 valid 'feat!: drop the legacy loader'
 valid 'feat(map2d)!: change the textureRgba contract'
 
