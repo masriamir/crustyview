@@ -60,7 +60,7 @@ jobs:
   # match their pinned canonical sources in masriamir/.github — see
   # .meta-manifest.toml; run locally with `just meta-check`.
   meta-check:
-    uses: masriamir/.github/.github/workflows/meta-check.yml@efdd25a9a97804a493fa54f9bb716289fb425d7e # main
+    uses: masriamir/.github/.github/workflows/meta-check.yml@efdd25a9a97804a493fa54f9bb716289fb425d7e # main branch pin
 
   clippy:
     runs-on: ubuntu-latest
