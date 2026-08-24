@@ -1,3 +1,5 @@
+# Canonical lefthook config for Rust repositories (masriamir/.github,
+# templates/rust/lefthook.yml — synced whole-file via meta-check).
 pre-push:
   commands:
     branch-name:
@@ -20,7 +22,7 @@ pre-commit:
 
 commit-msg:
   commands:
-    # Shares its regex with the `pr-title` CI workflow, which checks the PR title —
-    # the string squash-merge actually puts on `main`. See the script's docstring.
+    # Shares its validator with the `pr-title` CI workflow, which checks the PR
+    # title — the string squash-merge actually puts on `main`.
     conventional-commits:
       run: python3 scripts/check-conventional-subject.py < "{1}"

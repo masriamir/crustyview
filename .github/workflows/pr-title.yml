@@ -1,18 +1,23 @@
 name: PR Title
 
-# PRs squash-merge, so the PR title becomes the only commit message on `main` and is
-# the string git-cliff parses for changelog inclusion, section, and version bump
+# PRs squash-merge, so the PR title becomes the only commit on `main` and is the
+# string git-cliff parses for changelog inclusion, section, and version bump
 # (ADR-0004 policy item 5). Nothing else checks it: lefthook's `commit-msg` hook
-# validates the branch commits, which are exactly what squash-merge discards.
+# validates branch commits, which are exactly what squash-merge discards.
 #
-# This is a **required** status check in the `Main Branch` ruleset, so a red X here
-# genuinely blocks the merge rather than asking nicely. It was advisory until the repo
-# went public on 2026-08-10 — rulesets are unavailable on a private repo on a free plan,
-# which is also why a workflow used to request Copilot review (#106).
+# Calls the shared reusable workflow from masriamir/.github, which self-tests and
+# then runs the vendored validator in scripts/ — kept identical to the canonical
+# copy by the meta-check drift gate. This supersedes the earlier two-checkout
+# scheme (#101's base-judges/PR-exercised split): the trust trade-offs of running
+# PR-head code are documented in the reusable workflow's header.
+#
+# Required-check note: the check context is now `pr-title / pr-title` (caller
+# job / reusable job); the `Main Branch` ruleset must require that context
+# instead of the old bare `pr-title`.
 on:
   pull_request:
-    # `edited` catches a retitle; `synchronize` re-attaches the check to each new head
-    # SHA, so a push can't leave the latest commit without this signal.
+    # `edited` catches a retitle; `synchronize` re-attaches the check to each new
+    # head SHA, so a push can't leave the latest commit without this signal.
     types: [opened, edited, reopened, ready_for_review, synchronize]
 
 permissions:
@@ -20,44 +25,4 @@ permissions:
 
 jobs:
   pr-title:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      # TWO checkouts, because two different questions are being asked (#101).
-      #
-      # `base` is the validator that JUDGES this PR. Checking out the PR's own merge ref
-      # — the default for a `pull_request` event, and what this job used to do — means a
-      # PR supplies the code that grades it, so it can relax the regex and go green.
-      # That was defensible while `pr-title` was advisory: any PR could be merged over a
-      # red X, so a bypass needed no validator edit at all and hardening this protected
-      # nothing. It became a required check on 2026-08-10, which closed that door and
-      # made this one worth closing too.
-      - name: Check out the base commit (the validator that judges this PR)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: base
-      # `pr` exists only so a PR that CHANGES the validator still gets its new copy
-      # exercised. Pinning to base alone would have quietly removed that: the proposed
-      # validator would run nowhere in CI, land on `main` unverified, and first fail on
-      # somebody else's PR — and in lefthook's commit-msg hook for every contributor.
-      - name: Check out the pull request (to exercise any change it makes)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          path: pr
-      # The validator gates branch commits and PR titles alike, so a regression in it
-      # disarms both gates at once. Both suites locate their validator relative to their
-      # own directory, so each tests the copy sitting beside it.
-      - name: Self-test the base validator
-        run: base/scripts/test-conventional-subject.sh
-      - name: Self-test the PR's validator
-        run: pr/scripts/test-conventional-subject.sh
-      - name: Validate PR title
-        env:
-          # Via the environment, never interpolated into the script: a PR title is
-          # attacker-controlled text.
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        # Deliberately the BASE copy. A PR that legitimately tightens the rules is
-        # therefore judged by the old ones until it merges — correct, not a bug: the
-        # rules a PR must satisfy are the ones already agreed on `main`.
-        run: printf '%s\n' "$PR_TITLE" | python3 base/scripts/check-conventional-subject.py
+    uses: masriamir/.github/.github/workflows/pr-title.yml@efdd25a9a97804a493fa54f9bb716289fb425d7e # main branch pin

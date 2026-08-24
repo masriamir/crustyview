@@ -276,3 +276,14 @@ test-browser: web-wasm
 # One-time: install the Playwright Chromium browser for the Vitest browser tier
 test-browser-install:
     cd web && npx playwright install chromium
+
+# Check vendored shared files against their pinned canonical sources
+# (.meta-manifest.toml). Network-dependent (fetches raw.githubusercontent.com),
+# so deliberately NOT part of `just ci`; CI runs it as the meta-check job.
+meta-check:
+    python3 scripts/meta_sync.py check
+
+# Rewrite vendored shared files from their pinned canonical sources. Bump a
+# ref in .meta-manifest.toml first to adopt a canonical change.
+meta-sync:
+    python3 scripts/meta_sync.py sync
