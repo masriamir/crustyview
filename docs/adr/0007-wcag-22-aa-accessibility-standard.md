@@ -165,7 +165,7 @@ practices:
 4. **The feature-request template asks the question:** an optional "Accessibility" field
    prompting for the keyboard path, announcements, and contrast story of proposed UI —
    shipped with this ADR.
-5. **A AGENTS.md design principle** makes the target ambient for every future session —
+5. **An AGENTS.md design principle** makes the target ambient for every future session —
    shipped with this ADR.
 6. **Human passes at a cadence:** a VoiceOver smoke walk (#189 is the first) repeated per
    release or when shell semantics change. Screen-reader experience is the one thing no

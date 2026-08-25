@@ -119,9 +119,15 @@ The shared readiness policy is in `AGENTS.md`; the crustyview-specific mechanics
     userIds: [], union: false}) { clientMutationId } }"
   gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers \
     -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+  # then confirm the request is pending (prints copilot-pull-request-reviewer, else nothing):
+  gh api graphql -F owner=masriamir -F name=crustyview -F pr=<N> -f query='
+    query($owner:String!, $name:String!, $pr:Int!) { repository(owner:$owner, name:$name) {
+      pullRequest(number:$pr) { reviewRequests(first:100) { nodes {
+        requestedReviewer { ... on Bot { login } } } } } } }' \
+    --jq '.data.repository.pullRequest.reviewRequests.nodes[] | .requestedReviewer.login // empty'
   ```
-  Then confirm with the GraphQL `reviewRequests` query above (the clear alone leaves no pending
-  request — the POST is what re-requests). A genuine re-issue shows as `review_request_removed`
+  The clear mutation alone leaves no pending request — the POST is what re-requests, and the query
+  confirms it (match the login, not a count). A genuine re-issue shows as `review_request_removed`
   then `review_requested` in the timeline;
   reviews have been observed taking up to ~14 minutes normally, so give it time before
   concluding it is stuck.
