@@ -1,67 +1,10 @@
+@AGENTS.md
+
 # CLAUDE.md — crustyview
 
-Web-based Doom WAD reader/viewer built on crustywad (separate repo, pinned dependency).
-
-## Dependency rule (load-bearing)
-- Depend on a **pinned crustywad release** (`crustywad = "0.9"`). Do not path-depend on a local checkout.
-- API friction / bugs → file an **issue on crustywad**, fix on its `main`, bump here on release.
-- When the crustywad pin bumps, mirror its `rust-version` in `[workspace.package]` — CI's
-  `MSRV matches crustywad` step (in the `clippy` job) fails on drift.
-- Urgent fixes only: uncomment the `[patch.crates-io]` git-main override in the root `Cargo.toml`.
-
-## Layout
-- `crates/crustyview-core/src/{summary,probe,error,map2d}.rs` — native-testable summarization, probes, load-error messages, and 2D map flattening (no web deps).
-- `crates/crustyview-web/src/wad_document.rs` — the `WadDocument` wasm-bindgen handle (wasm32-only); `src/lib.rs` re-exports it.
-- `crates/crustyview-native/src/main.rs` — the portability-proving skeleton binary.
-- `web/` — the top-level Svelte + Vite + TypeScript browser host app (`just dev`); it consumes
-  `crustyview-web`'s wasm-bindgen `--target web` output (built into `web/src/wasm`, gitignored).
-
-## Workflow
-- Branch `<type>/<slug>`; Conventional Commits (lefthook enforces both).
-- `just lint` / `just test` before pushing; PRs into `main`, Copilot review + green checks.
-- Every change is tracked by a GitHub **issue** on the board (see Project tracking); branch
-  by issue number where one exists (`<type>/<###>-<slug>`).
-- **PRs squash-merge, so the PR title _is_ the changelog entry and the version bump** — it
-  becomes the only commit on `main`, and git-cliff parses it, never the branch's commits.
-  Write it as a real Conventional Commit describing the shipped outcome: the type decides
-  inclusion (`chore:`/`ci:`/`build:` are skipped) and the bump, so a `chore:`-titled feature
-  is silently dropped from `CHANGELOG.md` and skips the minor. Declare breaking changes with
-  `!` in the **title** — the squash body is `BLANK` by policy and carries nothing, so a
-  `BREAKING CHANGE:` footer written on a branch commit is discarded at merge (ADR-0004,
-  policy item 5). Never `gh pr create --fill`: it derives the title from the branch name.
-- The title's **form** is checked by CI's `pr-title` job, which shares one regex with
-  lefthook's `commit-msg` hook — `scripts/check-conventional-subject.py` is the single source
-  of truth for both, so the gate on the PR title and the gate on branch commits cannot drift
-  apart. It is a **required** check in the `Main Branch` ruleset, so a red `pr-title` blocks the
-  merge outright. It validates form only: whether the chosen **type** is the right one for the
-  change remains a human judgement no parser can make.
-- The **type** gets a heuristic second opinion from CI's `pr-type` job, which warns when a title
-  whose type is `skip = true` in `cliff.toml` ships a diff touching `crates/*/src/**`,
-  `crates/*/tests/**` or `web/src/**` — the exact shape that vanishes from `CHANGELOG.md` and
-  skips the bump. It **never fails a build**, because a real chore can legitimately touch source;
-  read the annotation and decide. The skipped types are read out of `cliff.toml`, so the warning
-  cannot drift from what git-cliff does.
-- **Releases are cut locally**, never in CI: `just release` (`--dry-run` to preview) bumps
-  `[workspace.package].version` from Conventional Commits, regenerates `CHANGELOG.md`, commits,
-  and tags `v<version>`; push with `git push --follow-tags`. `chore:`/`ci:`/`build:` are
-  `skip = true` in `cliff.toml`, so a run with only those refuses rather than re-tagging.
-  release-plz is deliberately **not** used — see ADR-0004.
-- **Every `uses:` in `.github/workflows/` is pinned to a 40-character commit SHA**, with the
-  human-readable ref preserved in a trailing comment
-  (`actions/checkout@3d3c42e5… # v7`). A tag or branch ref is mutable, so an unpinned action
-  is an unreviewed third party with write access to the CI that gates `main`. Mirrors
-  crustywad. Three details that are easy to get wrong:
-  - **Branch refs get pinned too**, and say so: `dtolnay/rust-toolchain@4360b525… # stable
-    branch pin`. This freezes the *action*, not the Rust toolchain — the action still
-    installs whatever `stable` resolves to at run time.
-  - **`taiki-e/install-action`'s ref is the tool name**, so its comment must be the tool
-    (`# cargo-deny`), not a version. The same action appears at several SHAs, one per tool,
-    and the comment is the only thing that says which is which.
-  - **Never hand-write a SHA.** Resolve it — `gh api repos/<owner>/<repo>/commits/<ref>
-    --jq .sha` — and keep the comment matching the ref you resolved, or the next reader
-    cannot tell what the pin was meant to track. Bumps are Dependabot's job
-    (`.github/dependabot.yml`, weekly), not something to do by hand while editing a workflow
-    for other reasons.
+Claude-only operating notes for this repo. The shared, tool-neutral guidance (dependency rule,
+layout, conventions, workflow, testing) lives in [`AGENTS.md`](AGENTS.md), imported above; this
+file adds only what is specific to Claude driving the work here.
 
 ## Project tracking
 
@@ -73,225 +16,29 @@ Work is tracked on the shared **[Crustywad GitHub Project #5](https://github.com
 
 **Epics** (`epic` label) use native GitHub sub-issues for progress rollup: **#7 viewer shell & UI**, **#8 3D renderer**. Attach each new feature issue as a sub-issue of its epic. An epic moves to `In progress` when its first sub-issue starts and to `Done` (board-automated) only when all its sub-issues close; set the epic's aggregate Status by hand, since GitHub doesn't roll Status up.
 
-**Labels** mirror crustywad's general-purpose taxonomy (`epic`, `spike`, `testing`, `chore`, `maintenance`, `security`, `performance`, `release`, plus triage labels) with three crustyview domain labels: `renderer` (wgpu/3D viewport), `web-ui` (Svelte/TS shell),
-and `accessibility` (a11y work across the shell and map views).
+**Labels** mirror crustywad's general-purpose taxonomy (`epic`, `spike`, `testing`, `chore`, `maintenance`, `security`, `performance`, `release`, plus triage labels) with three crustyview domain labels: `renderer` (wgpu/3D viewport), `web-ui` (Svelte/TS shell), and `accessibility` (a11y work across the shell and map views).
 
 ### Issue status transitions (agent-driven)
 
-Move the board yourself and **announce each change** (don't ask first) — board edits are internal and reversible:
+<!-- >>> meta:board-transitions -->
+Move the GitHub Project board yourself as work progresses and **announce each change** in your reply ("moved #201 → In progress") rather than asking first — board edits are internal and easily reversed.
 
 | Transition | Trigger |
 |---|---|
-| `Backlog → Ready` | the user says they want to start an issue |
-| `Ready → In progress` | you begin planning it — before any branch or code |
+| `Backlog → Ready` | the user says they want to start work on an issue |
+| `Ready → In progress` | you begin brainstorming or drafting a plan — **before** any branch or code |
 | `In progress → In review` | the PR opens |
-| `In review → Done` | PR merges/closes — **board-automated**, don't set it by hand |
+| `In review → Done` | the PR merges/closes — **board-automated**, not manual |
+
+`In review` holds through the entire review loop, until human review and merge. Transitions apply only to an issue that is on the board; if one exists but isn't on the board, add it first. Epics carry an **aggregate** Status: `In progress` when their first sub-issue starts work, and `Done` (board-automated) only when every sub-issue closes — set the epic's Status yourself and announce it, since GitHub rolls up completion progress but not the Status field.
+<!-- <<< meta:board-transitions -->
 
 The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with crustywad — Project #5's fields are project-level, identical for crustyview items.
 
-## Decisions
-- Architectural / hard-to-reverse decisions are recorded as ADRs in
-  [`docs/adr/`](../docs/adr/) — lightweight (structure mirrors crustywad, without the
-  library-publishing ceremony). See [`docs/adr/README.md`](../docs/adr/README.md) for the
-  process; [ADR-0001](../docs/adr/0001-consume-crustywad-via-pinned-wasm.md) records the
-  pinned-release WASM-consumer decision, and
-  [ADR-0002](../docs/adr/0002-hybrid-portable-core-svelte-shell.md) records the hybrid UI
-  architecture — a portable Rust/`wgpu` core (`crustyview-core`) behind a Svelte + TypeScript
-  shell (`crustyview-web`), with `crustyview-native` proving portability; wgpu = 3D only,
-  everything 2D/DOM in TypeScript.
-  [ADR-0003](../docs/adr/0003-viewer-ui-ux-sidebar-shell.md) records the viewer UI/UX —
-  a sidebar shell (header · tree · main view · status bar) with state-driven navigation
-  (no URL router), domain stores (`wad`/`nav`/`theme`), tokened light/dark theming, and a
-  first-class compact layout (bottom nav + push navigation below 48rem).
-  [ADR-0004](../docs/adr/0004-versioning-and-release-policy.md) records versioning and
-  releases — one product version in `[workspace.package]` inherited by all three crates,
-  one tag `v<version>`, one root `CHANGELOG.md`, cut locally by `just release` via git-cliff.
-
-## UI conventions
-- **WCAG 2.2 AA is the accessibility design target** (ADR-0007): every new control ships with
-  a keyboard path, every visual state change either updates an accessible name or is announced
-  through a live region, and text/non-text contrast holds 4.5:1 / 3:1 in both themes. The full
-  canvas-equivalence and shell-focus policy lives in the ADR; violations found in shipped UI
-  are `accessibility`-labeled defects, not polish.
-- **A control's accessible name must contain its visible label — but a value readout in that
-  label is not part of the label.** The 2D map's Grid button shows `Grid · 32→128` while its
-  name is `Show grid, 32, drawn as 128`: the label is "Grid", and `· 32→128` is a value. Putting
-  it in the name verbatim would speak "middle dot" and "right arrow" and make the announcement
-  worse, so the name states the same value in words instead. Controls whose name comes from
-  their contents (the map chips) cannot diverge and need no thought here. The same button has a
-  third label state where the divergent part is a whole phrase, not just punctuation and a
-  number: visible `Grid · 32 · zoom in` against the name `Show grid, 32, too small to draw at
-  this zoom` — a harder sell under 2.5.3, and the case a future reader is more likely to stumble
-  on than the coarsened case above. Recorded by #74's audit; adopted as policy by ADR-0007,
-  which keeps this entry as the worked example.
-- **American English spelling everywhere** — identifiers, comments, docs, user-visible copy,
-  commit messages. Take the American form of every `-ise`/`-ize`, `-our`/`-or`, `-re`/`-er` and
-  `-ae`/`-e` pair: `initialize`, `honor`, `center`, `artifact`, `color`, `behavior`, `analyze`.
-  The codebase is already uniform (`CLASSIC_THING_COLORS`, `color:` throughout); #74 shipped two
-  spelling slips into tooltip copy before review caught them, both because the strings were
-  authored upstream and copied verbatim — so check spelling when *writing* copy, not only when
-  reviewing it.
-- **Exception: third-party API values, status strings, and library identifiers keep their own
-  spelling.** GitHub Actions' job-status literal is `cancelled` (British) — that string appears
-  verbatim in `ci.yml` and must not be "corrected", since doing so would describe a status value
-  that does not exist. This rule governs our own prose and identifiers, not other people's
-  vocabularies.
-- **Why this section states the pattern instead of listing the forbidden spellings:** a rule that
-  quotes its own counter-examples necessarily contains the very words it forbids, which makes it
-  uniquely vulnerable to the sweep it prescribes. crustywad's identical rule, once phrased that
-  way, was corrupted by its own first sweep into `"honor" not "honor"` — the counter-example
-  silently destroyed and replaced with the correct word twice. So this section states the pattern
-  rather than the wrong word; after that change, none of its own examples is a forbidden
-  spelling, so a future sweep skipping backticked code spans (the literals the exception above
-  protects) will find nothing here to correct.
-
-## Testing
-- `crates/crustyview-core/tests/wad_sweep.rs` sweeps a local WAD collection, gated by
-  `CRUSTYVIEW_WAD_DIR` (prefer an **absolute** path — cargo runs tests with CWD
-  set to the package root, so a relative value resolves against that, rarely what
-  you intend; the `just sweep` recipe absolutizes it for you). It skips (passes)
-  when the variable is unset, since commercial IWADs are never committed.
-- `just sweep /abs/path` runs the native sweep (`cargo test -p crustyview-core --test
-  wad_sweep`); `just sweep-wasm /abs/path` runs the headless wasm sweep, driving the
-  real `WadDocument` wasm exports via `scripts/wasm-sweep.cjs` (builds the
-  `crustyview-web` nodejs bundle first with `--target nodejs`).
-- `just fetch-freedoom` fetches the GPL Freedoom WADs for local use.
-- CI runs the sweep automatically (`sweep-freedoom` job) against fetched Freedoom;
-  commercial IWADs stay local-only.
-- **E2E smoke:** Playwright specs in `web/e2e/` drive the built app in headless Chromium at
-  desktop and mobile viewports (`just e2e`; one-time `just e2e-install` + `just fetch-freedoom`).
-  The fixture-driven specs skip when the `.freedoom/` fixtures are absent. CI runs them in the `web-e2e` job
-  (fetches Freedoom itself); the job is a smoke signal, not a merge gate.
-- **Coverage:** the `coverage` job uploads `lcov.info` (`cargo llvm-cov --workspace
-  --all-features`) to Codecov with `fail_ci_if_error: true` and no `continue-on-error` — a
-  rejected upload turns CI **red** rather than passing silently. Both are load-bearing: the
-  action exits 0 on upload failure by default, so removing `continue-on-error` alone would not
-  surface it.
-- **What coverage does NOT measure — read this before trusting the percentage.**
-  `cargo llvm-cov` runs on the **host** target, and `crustyview-web` gates its entire body on
-  `#[cfg(target_arch = "wasm32")]`, so it compiles to nothing there and has nothing to
-  instrument. The report covers **7 files** — six in `crustyview-core` plus
-  `crustyview-native/src/main.rs` — and **zero** in `crustyview-web`. That is 119 lines and all
-  seven browser-API methods (`load`, `summary`, `map_names`, `map2d`, `map_stats`,
-  `texture_meta`, `texture_rgba`) outside the number. The headline percentage means "of what
-  llvm-cov could see", not "of the repo". This is the same structural blind spot that let CI's
-  clippy pass on unlinted code until #115; here it cannot be fixed the same way, because
-  llvm-cov cannot instrument a wasm32 target.
-  - **The compensating control is `wasm-test`**, a required check running
-    `wasm-pack test --node`. `crates/crustyview-web/tests/web.rs` holds six
-    `#[wasm_bindgen_test]`s that exercise all seven methods. The browser API is tested; it is
-    just not line-counted. Treat a change there as needing a wasm test, since no coverage
-    number will notice its absence.
-  - **`codecov/patch` is blind on that crate too**, which matters because it is a required
-    merge gate: a PR touching only `wad_document.rs` contributes zero coverable lines and
-    passes trivially.
-  - Deliberately **not** solved with an `ignore:` entry in `codecov.yml`. The omission is
-    structural rather than chosen, and an `ignore:` would also silence genuinely measurable
-    code added to that crate later — turning a visible gap into a permanent one.
-- **The second structural blind spot now has a compensating tier: `npm run test:browser`.**
-  `svelte-check` proves types line up, `npm test` (the `happy-dom` tier) covers pure modules, and
-  Playwright drives the built app — none of them observes reactivity wiring at unit granularity;
-  Playwright can drive it, but only through the whole built app, never a component in isolation.
-  Reproducing a lifecycle bug needs a real canvas 2D context, which `happy-dom` implements none
-  of, *and* fake timers, together — the combination no earlier tier offered. `web/vite.config.ts`
-  now defines a second Vitest project (`browser`) that runs `web/src/**/*.browser.test.ts` under
-  real headless Chromium via `@vitest/browser-playwright`; CI runs it as the `web-browser-test` job.
-  Run it locally with `just test-browser` (one-time browser install: `just test-browser-install`,
-  mirroring the `e2e`/`e2e-install` pair — `just setup` installs no browsers). Tracked by **#129**.
-  - **Three defects passed a fully green gate** in two consecutive PRs, all caught by review
-    rather than by a check, and none of which reached `main`: a label that could render an
-    impossible `Grid · 64→32` (synchronous pref update racing an rAF draw, #128); a failed map
-    keeping the *previous* map's label (an early return skipping an assignment, #128); and a
-    live-region announcement canceled mid-gesture (its debounce cleanup was wired to the redraw
-    `$effect`, which tracks `transform` and so re-runs on every wheel tick — Svelte runs a
-    cleanup before each re-run, so the announcement was lost rather than delayed, #127). The
-    first two were fixed before #128 merged; the third, before #127's PR opened. All three
-    predate the browser tier; it exists because of them.
-  - **Reach for the browser tier when the bug is about *when* something happens, not what it
-    computes:** effect wiring, cleanup timing, rAF-driven draws. `grid-announcement.browser.test.ts`
-    is the worked example — it zooms out until the grid crosses below its 8px drawable floor,
-    keeps zooming, and asserts the debounced announcement still arrives; verified to fail when
-    #127's original (buggy) wiring is restored. `map2d-mount.browser.test.ts` is the template to
-    crib a new test from — it mounts the real `Map2d` against a mocked `wad` store, sizes it, and
-    asserts both that it paints more than a background fill and that the fit actually resolved.
-  - **Reach for extraction first when the logic is pure** — it stays the first thing to try
-    because it is the only option that also improves the code it tests, and it is cheaper than a
-    browser test: no Chromium boot, and it lands in the fast `happy-dom` tier instead. `gridLabel`'s
-    tests caught the #128 stale-value regression, and `gridDrawnSuffix` in
-    `web/src/lib/views/map2d/grid.ts` was written test-first for the same reason — its
-    implementation passed on the first attempt, so extraction *prevented* a regression there
-    rather than catching one. **Prefer a pure function over a component-local `$derived` whenever
-    the logic is worth a test; reach for the browser tier only once the bug genuinely depends on
-    real timing or a real canvas.**
-  - **What the browser tier still does not cover:** it only sees what someone writes a test for,
-    and the specific gap is the *mounting shape* — both #128 defects are boundary bugs
-    (`drawnGridSize` flowing up to `MapView`; a map switch that keeps the `MapView` instance
-    alive), not single-component ones. Every example on this branch mounts one component with
-    fixed props and never rerenders or mounts a parent, so `rerender` and parent-mounting are
-    unproven in this tier — the next person to need either hits it cold. It is not a net that
-    acquires coverage on its own — the three defects above all shipped before it existed and were
-    caught by review, not by any check, and a differently-shaped lifecycle bug can slip through
-    the same way today if nobody thinks to write a `*.browser.test.ts` for it.
-  - **The #128 stale-label defect is now cheap to reproduce, without a fixture.** `render()` from
-    `vitest-browser-svelte` returns a `rerender` function, so a mocked `wad` store returning a
-    good map for `MAP01` and an error for `MAP02`, plus `rerender({ name: 'MAP02' })`, reproduces
-    it directly — no PWAD, no built app. Reach for that first; fall back to the E2E harness below
-    only for what the browser tier genuinely cannot reach (a real WAD, a real sidebar).
-  - **Reach for the E2E harness before concluding something is untestable — but check what a
-    fixture actually reproduces before citing it as evidence.** `web/e2e/helpers.ts` has
-    `loadBrokenMapWad`, a PWAD whose `MAP01` is missing `VERTEXES` — a real failed-assembly
-    fixture, but not, on its own, a test for the stale-label defect above. `openWad` calls
-    `nav.reset()` before loading (`web/src/lib/stores/open.ts:11`), which unmounts `MapView` and
-    destroys its `drawnGridSize` state, so no label survives a WAD switch; and the fixture's one
-    map fails on a fresh load, so there is never a previous map's label to keep. Reproducing that
-    defect through the full app needs a **two-map** PWAD (one good, one missing `VERTEXES`) and an
-    **in-place sidebar map switch** — which keeps the `MapView` instance alive — performed
-    *within* one WAD, since `openWad` resets navigation on every load. `loadBrokenMapWad` is a
-    fine template for building that fixture; it is not itself the test, and the browser-tier route
-    above is the cheaper path to the same defect.
-  - **The tier now also carries the GL renderer suites (#175).**
-    `gl/renderer.browser.test.ts` exercises the raw WebGL2 canvas renderer directly;
-    `gl-mount.browser.test.ts` mounts the real `Map2d` component against it. The nine
-    canvas-path suites (`map2d-mount`, `culling`, `grid-announcement`,
-    `map-switch-announcement`, `start-markers`, `teleport-arc-keys`, `teleport-links`,
-    `tile-cache`, `tile-zoom`) are pinned to `renderer: 'canvas'` deliberately — WebGL2 is now
-    the default (ADR-0006), so an unpinned mount would silently stop testing the fallback path
-    those suites exist to cover.
-  - **`painted()` (`browser-test-helpers.ts`) is dual-context**, reading a 2D-bound canvas via
-    `getImageData` and a WebGL2-bound canvas via `readPixels`. `toDataURL()` on a GL canvas
-    without `preserveDrawingBuffer` is a documented false green — the browser clears the
-    drawing buffer right after composite, so a before/after comparison compares blank to blank
-    and passes vacuously. The E2E tier avoids the same trap by hashing pixels instead:
-    `mapCanvasPixelHash` (`web/e2e/helpers.ts`) reads whichever context the canvas is bound to
-    and folds it to an FNV-1a hash, gated behind `gotoApp`'s `?glprobe=1`, which turns on
-    `preserveDrawingBuffer` for the test session only.
-- **The `CODECOV_TOKEN` secret is not load-bearing.** Verified 2026-08-10 (#109) by running a
-  throwaway PR with `token: ''`: the upload succeeded and `codecov/patch` posted. Tokenless
-  upload works on this public repo, so runs that receive no Actions secrets — **Dependabot PRs**
-  (this repo has no Dependabot secrets) and **fork PRs** — degrade gracefully instead of failing
-  a required check. The token is kept because an authenticated upload avoids whatever rate
-  limiting and report-spoofing exposure the tokenless path carries, not because anything breaks
-  without it.
-
-  Reading the results:
-  - `codecov/patch` (80% of the diff, per `codecov.yml`) arrives on a PR as a **check run**
-    (so `gh pr checks` sees it) and on `main` as a **commit status**
-    (`gh api repos/masriamir/crustyview/commits/<sha>/status`). It is a **required** check in
-    the `Main Branch` ruleset as of #108 (app `codecov`, integration id 254). It posts even on
-    a PR that changes no Rust — "Coverage not affected" — so requiring it does not wedge
-    non-Rust work. The trade-off is deliberate: if Codecov stops reporting, PRs block instead
-    of merging with a silently absent coverage signal, which is exactly what went unnoticed
-    for three merges during the 2026-08-10 deactivation (#109). Use the admin bypass if that
-    ever happens.
-  - `codecov/project` is configured (`target: auto`, `threshold: 1%`) but has never been seen
-    posting on this repo — don't block on it. **Re-checked 2026-08-10 after reactivation and
-    it still does not post**, so #103's guess that it would resolve on a public plan is
-    disproven; neither the plan nor the deactivation explains it (#99).
-  - The `codecov[bot]` **PR comment** carries the missing-lines table the review loop gates on,
-    but `require_changes: true` suppresses it when coverage is unchanged: a PR touching no Rust
-    correctly gets **no comment**. Only a missing comment on a Rust-touching PR is a red flag.
-
 ## Copilot review loop
+
+The shared readiness policy is in `AGENTS.md`; the crustyview-specific mechanics are below.
+
 - Copilot review is requested by the **`Main Branch` ruleset**, not by a workflow. The ruleset
   existed from the start but was inert while the repo was private on a free plan; it activated
   when the repo went public (2026-08-10), and `.github/workflows/copilot-review.yml` — which had
@@ -306,12 +53,14 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
 - The ruleset also requires 13 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
   `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`,
   `codecov/patch`, `analyze`, and `web-browser-test`. Merges are squash-only by ruleset as
-  well as by repo setting (#97).
+  well as by repo setting (#97). The shared enforcement wiring also produces `pr-title / pr-title`
+  and `meta-check / meta-check`; verify against the live ruleset (recipe below) whether they are
+  yet required contexts rather than assuming — read the ruleset, not this inventory, when the
+  count matters.
 
   **This list drifts, and it drifted silently once already.** `analyze` became required when
   #112 removed the guard that had deferred it, and this inventory went on calling it excluded
-  until #140 noticed — a doc claiming a job is not a merge gate when it is. Read the ruleset,
-  not this paragraph, when the answer matters:
+  until #140 noticed. Read the ruleset, not this paragraph, when the answer matters:
   `gh api repos/masriamir/crustyview/rulesets/20409829 --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'`
 
   Two things about the required list that are easy to get wrong:
@@ -327,35 +76,23 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
     absent entirely when no analysis uploads — so requiring *that* one blocks rather than
     silently passes. The ruleset requires `analyze`.
 
-  What is deliberately **excluded**, and why — re-affirmed by the #108 audit and again by #140:
-  - **`web-e2e`** — a documented smoke signal, not a merge gate. Permanent, unlike the two
-    deferrals above, both of which have now been resolved into requirements.
-  - **`pr-type`** — advisory by construction; it can never fail, so requiring it would gate
-    on nothing.
+  What is deliberately **excluded**: `web-e2e` (a documented smoke signal, not a merge gate) and
+  `pr-type` (advisory by construction; it can never fail, so requiring it would gate on nothing).
 
-  `web-browser-test` joined the list in #140, on the reasoning that a compensating control
-  which cannot block a merge is not a control: it is to Svelte timing and lifecycle bugs what
-  `wasm-test` is to the wasm blind spot. The precondition was that it run green for a while,
-  checked before requiring it — 35 successes and no failures across the 40 most recent CI
-  runs (the 5 non-successes were concurrency cancellations). If it ever does flake, look
-  first at `map2d-mount.browser.test.ts`'s `painted()` helper, which polls up to 60 animation
-  frames for a first paint and is the one timeout in the tier.
 - Three ruleset parameters that look like defaults but are decisions (#108):
   - **`bypass_actors`: admin, mode `always`** — load-bearing, do not narrow. `just release`
     pushes the release commit **directly to `main`** with `git push --follow-tags` (ADR-0004),
-    which the `pull_request` rule would otherwise reject; both `chore(release)` commits
-    reached `main` with no PR. Bypass mode `pull_request` only bypasses inside a PR, so it
-    would break releases.
+    which the `pull_request` rule would otherwise reject.
   - **`strict_required_status_checks_policy: true`** — a PR must be up to date with `main`
-    before merging. Costs an update-branch round-trip; kept because it prevents a green PR
-    merging against a base it was never tested with.
+    before merging; kept because it prevents a green PR merging against a base it was never
+    tested with.
   - **`required_approving_review_count: 0`** — Copilot is requested by the ruleset but
     **cannot approve**, and there is no second human. Any value above 0 would make merging
     impossible. Unresolved threads are what actually block, via
     `required_review_thread_resolution`.
-- Copilot renders **differently on every surface** — mixing them up breaks scripts. Every row below
-  was measured against PR #147 on 2026-08-14 (`.user.id` is `175728472` throughout, so these are
-  one identity wearing five names, not five accounts):
+- Copilot renders **differently on every surface** — mixing them up breaks scripts. Measured
+  against PR #147 on 2026-08-14 (`.user.id` is `175728472` throughout, so these are one identity
+  wearing five names, not five accounts):
 
   | Surface | Rendering |
   |---|---|
@@ -366,58 +103,36 @@ The `gh` recipes (project id, Status/Horizon field + option IDs) are shared with
   | GraphQL — `reviewRequests`, review author, thread-comment author | `copilot-pull-request-reviewer`, always a **`Bot`** node |
   | REST `requested_reviewers` | **never appears at all** — the field lists Users only |
 
-  Two traps live in that table:
-  - **REST is not internally consistent.** `pulls/N/reviews` and `pulls/N/comments` are the same
-    bot on adjacent endpoints and disagree on its login. A filter written against one silently
-    matches nothing on the other.
-  - **A login mismatch is silent and fails toward "nothing is there."** `--jq
-    'select(.user.login=="…")'` yields an empty list rather than an error, so a review-poll reads
-    an already-submitted review as *not yet submitted* and waits out its stall timeout. That is
-    exactly what happened on #147 (#149): five reviews existed and the poll reported none.
-
-  **So: match on GraphQL, which uses one login everywhere, or on `.user.id`/`.user.type == "Bot"`,
-  which no surface varies.** If you must match a REST login, use
-  `startswith("copilot-pull-request-reviewer")` and know it does not cover the `Copilot` spelling
-  on review comments.
-
-- **Never confirm a request from `requested_reviewers` or from the POST's response.** That field
-  cannot hold a bot, and the POST answers 200 with an empty `requested_reviewers` array whether
-  or not the request took — a request for a login that does not exist returns the same body.
-  GraphQL is the only surface that knows:
+  **Match on GraphQL, which uses one login everywhere, or on `.user.id`/`.user.type == "Bot"`,
+  which no surface varies.** A login mismatch is silent and fails toward "nothing is there": a
+  `--jq 'select(.user.login=="…")'` miss yields an empty list, so a review-poll reads an
+  already-submitted review as *not yet submitted* and waits out its stall timeout (happened on
+  #147 / #149: five reviews existed, the poll reported none). Confirm a request via GraphQL
+  `reviewRequests` (matching the login, not counting — `totalCount` counts every pending reviewer),
+  never from `requested_reviewers` or the POST's 200 response.
+- **A pending request cannot be re-kicked.** A second POST returns 200, emits no
+  `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot
+  (422). To unstick one, clear the whole reviewer set with GraphQL, then re-POST the request:
   ```sh
+  PRID=$(gh api repos/masriamir/crustyview/pulls/<N> --jq .node_id)
+  gh api graphql -f query="mutation { requestReviews(input: {pullRequestId: \"$PRID\",
+    userIds: [], union: false}) { clientMutationId } }"
+  gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers \
+    -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
+  # then confirm the request is pending (prints copilot-pull-request-reviewer, else nothing):
   gh api graphql -F owner=masriamir -F name=crustyview -F pr=<N> -f query='
     query($owner:String!, $name:String!, $pr:Int!) { repository(owner:$owner, name:$name) {
       pullRequest(number:$pr) { reviewRequests(first:100) { nodes {
         requestedReviewer { ... on Bot { login } } } } } } }' \
     --jq '.data.repository.pullRequest.reviewRequests.nodes[] | .requestedReviewer.login // empty'
   ```
-  Prints `copilot-pull-request-reviewer` when a request is pending, nothing otherwise. Match the
-  login rather than counting: `totalCount` counts **every** pending reviewer, so a waiting human
-  would read as a waiting Copilot.
-- Manual (re-)request — rarely needed now that `review_on_push` covers the normal case:
-  `gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`, then verify with the query above.
-- **A pending request cannot be re-kicked.** A second POST returns 200, emits no
-  `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot
-  (422, *"Could not resolve to User node"*). To unstick one, clear the whole reviewer set with
-  GraphQL and request again:
-  ```sh
-  PRID=$(gh api repos/masriamir/crustyview/pulls/<N> --jq .node_id)
-  gh api graphql -f query="mutation { requestReviews(input: {pullRequestId: \"$PRID\",
-    userIds: [], union: false}) { clientMutationId } }"
-  ```
-  A genuine re-issue shows as `review_request_removed` then `review_requested` in the timeline;
+  The clear mutation alone leaves no pending request — the POST is what re-requests, and the query
+  confirms it (match the login, not a count). A genuine re-issue shows as `review_request_removed`
+  then `review_requested` in the timeline;
   reviews have been observed taking up to ~14 minutes normally, so give it time before
   concluding it is stuck.
-- Work the comments with the personal `resolving-bot-pr-reviews` skill across as many rounds
-  as needed. CI command: `just ci` — a fast **subset** of the CI jobs (fmt, clippy native
-  *and* wasm, test, wasm build, deny), not a mirror: it does not run `wasm-test`,
-  `web-build`, `coverage`, `sweep-freedoom`, `web-e2e`, or `web-browser-test`, so a green
-  `just ci` is necessary but not sufficient. `gh pr checks` remains the source of truth. Owner/repo:
-  `masriamir/crustyview`.
-- A PR is ready for human review only when **all** Copilot threads are resolved **and** all
-  CI checks pass (`gh pr checks`). The ruleset now enforces both — unresolved threads and the
-  required checks block the merge — so this is no longer discipline alone. Two things still
-  are, because they are outside the ruleset: the codecov comment's missing-lines table, and the
+- Beyond the ruleset-enforced gates (threads + required checks), two things stay judgment calls
+  because they are outside the ruleset: the codecov comment's missing-lines table, and the
   advisory `pr-type` warning.
 
 ## Dependabot PRs
@@ -445,38 +160,26 @@ They are `chore(deps)`, which `cliff.toml` marks `skip = true` — they never re
 Three failures that actually happened, and one thing they should not be taken to prove:
 
 - **`gh pr update-branch` fails on a workflow-touching PR without a `workflow` token scope**,
-  and says so: *"refusing to allow an OAuth App to create or update workflow
-  .github/workflows/ci.yml without workflow scope"*. Not fatal — `recreate` rebuilds from
-  current `main` anyway — but it is easy to skim past. The signal that actually matters is
-  `mergeStateStatus` reading **`CLEAN`** rather than `BEHIND`, which under the strict policy is
-  precisely the up-to-date proof. Observed on #137.
+  and says so. Not fatal — `recreate` rebuilds from current `main` anyway — but it is easy to
+  skim past. The signal that actually matters is `mergeStateStatus` reading **`CLEAN`** rather
+  than `BEHIND`, which under the strict policy is precisely the up-to-date proof. Observed on #137.
 - **A green CI run does not always exercise the bumped action.** Both `upload-artifact` uses in
   `ci.yml` are `if: failure()`, so a passing run never invokes them and #136's three-major bump
-  proved only that the YAML parsed — a break would have surfaced later, while debugging some
-  *other* failure, with no report artifact. Read the action's inputs at the pinned SHA instead:
+  proved only that the YAML parsed. Read the action's inputs at the pinned SHA instead:
   ```sh
   gh api "repos/actions/upload-artifact/contents/action.yml?ref=<sha>" --jq .content | base64 -d
   ```
   Quote the URL — zsh globs the `?` and the call fails with `no matches found`.
 - **Dependabot can propose half a change.** `github/codeql-action/init` and `.../analyze` are
   two dependencies to it but one version to CodeQL, so #135 bumped only `init` and CodeQL
-  failed with *"Loaded a configuration file for version '4.37.7', but running version
-  '3.37.6'"*. **Before merging any action bump, check whether that action appears more than
-  once in the workflows.** #169 fixed this pair with a `groups:` entry in
-  `.github/dependabot.yml`; a future multi-path action will need the same treatment, and
+  failed. **Before merging any action bump, check whether that action appears more than once in
+  the workflows.** #169 fixed this pair with a `groups:` entry in `.github/dependabot.yml`;
   `taiki-e/install-action` must **not** get it — its several SHAs are one per *tool*, not one
-  per release, and grouping them would collapse pins meant to differ.
+  per release.
 - **What made that one survivable was the shape of its failure, not the process.** CodeQL
-  errored outright, and `analyze` is a required check, so the PR blocked. A mismatch that
-  *degraded* rather than errored — scanning fewer queries, say — would have left every
-  required check green. So the "does this action appear twice?" question above is the control;
-  a red check is luck.
+  errored outright and `analyze` is required, so the PR blocked. A mismatch that *degraded*
+  rather than errored would have left every required check green. So the "does this action
+  appear twice?" question is the control; a red check is luck.
 
 Dependabot PRs also receive no repository secrets, which is fine here: the tokenless Codecov
-upload works on this public repo, so `codecov/patch` still posts (see the Testing section).
-
-## Not yet built (tracked on the board)
-- The virtualized texture and lump browsers (need the `textureRgba(name)` contract change
-  and a lump-directory query) and the wgpu 3D viewport — decided (ADR-0002/ADR-0003), staged
-  across epics #7/#8 and milestones `Viewer shell` / `2D map` / `3D viewport`.
-- Publishing / hosted deployment.
+upload works on this public repo, so `codecov/patch` still posts.

@@ -138,7 +138,7 @@ describe('arcCapLabel', () => {
 describe('arcCapName', () => {
   it('speaks values as words, never punctuation', () => {
     // The visible label's `·` and thousands separator must not reach a screen
-    // reader (CLAUDE.md, from #74's audit).
+    // reader (AGENTS.md, from #74's audit).
     expect(arcCapName(100, 1668)).toBe('Show teleport links, 100 of 1668 drawn');
     expect(arcCapName(100, 40)).toBe('Show teleport links, cap 100');
     expect(arcCapName('all', 1668)).toBe('Show teleport links, all drawn');

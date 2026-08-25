@@ -12,7 +12,7 @@
 # The compensating control is the required `wasm-test` job: six wasm-bindgen tests in
 # crates/crustyview-web/tests/web.rs exercise all seven browser-API methods. A change to
 # that crate needs a wasm test, because no coverage number here will notice its absence.
-# See CLAUDE.md ("What coverage does NOT measure") and #109.
+# See AGENTS.md (Testing → "Coverage measures the host target only") and #109.
 coverage:
   status:
     project:
