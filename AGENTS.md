@@ -176,11 +176,15 @@ Resolved threads over a red required check — or unaddressed missing coverage �
 Crustyview specifics: `just ci` is a fast **subset** of CI (fmt, clippy native *and* wasm, test,
 wasm build, deny) — it does not run `wasm-test`, `web-build`, `coverage`, `sweep-freedoom`,
 `web-e2e`, or `web-browser-test`, so a green `just ci` is necessary but not sufficient;
-`gh pr checks` is the source of truth. The `Main Branch` ruleset requests the review and enforces
-thread resolution + the required checks; the operational detail (ruleset internals, the required
-check list, Copilot's per-surface rendering, and the re-request recipe) lives in `CLAUDE.md`.
+`gh pr checks` is the source of truth. On the codecov readiness item above: `codecov.yml` sets
+`require_changes: true`, so a PR that changes no coverable Rust correctly gets **no** codecov
+comment — a missing comment is a red flag only on a Rust-touching PR. The `Main Branch` ruleset
+requests the review and enforces thread resolution + the required checks; the *mechanics for
+driving* the loop that Claude needs (the exact required-check list, Copilot's per-surface identity,
+the clear-and-re-request recipe) are in `CLAUDE.md` — a reviewer needs only the readiness policy
+above, not those.
 
-## Not yet built (tracked on the board)
+## Not yet built (tracked on the shared [Crustywad project board](https://github.com/users/masriamir/projects/5))
 - The virtualized texture and lump browsers (need the `textureRgba(name)` contract change
   and a lump-directory query) and the wgpu 3D viewport — decided (ADR-0002/ADR-0003), staged
   across epics #7/#8 and milestones `Viewer shell` / `2D map` / `3D viewport`.
