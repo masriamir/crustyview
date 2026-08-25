@@ -39,7 +39,7 @@ and a `chore:`-titled feature is silently dropped from the changelog and skips t
 release-plz is deliberately **not** used (ADR-0004). The PR-title **form** is checked by CI's
 `pr-title` job, which shares `scripts/check-conventional-subject.py` with lefthook's `commit-msg`
 hook (one source of truth, so the two gates cannot drift); it is a **required** check. Whether the
-chosen **type** fits the change is a human judgement, given a heuristic second opinion by the
+chosen **type** fits the change is a human judgment, given a heuristic second opinion by the
 advisory `pr-type` job (warns when a `skip = true` title touches `crates/*/src/**`,
 `crates/*/tests/**` or `web/src/**`; never fails a build).
 

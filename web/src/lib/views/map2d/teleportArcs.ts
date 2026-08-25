@@ -107,7 +107,7 @@ export function arcCapLabel(cap: TeleportArcCap, total: number | null): string {
 /**
  * The button's accessible name. States the same value in words: the visible
  * label's `·` separator and thousands separator would otherwise be spoken as
- * punctuation, making the announcement worse than the label (CLAUDE.md, #74).
+ * punctuation, making the announcement worse than the label (AGENTS.md, #74).
  * Contains the visible label "Links", as WCAG 2.5.3 requires.
  *
  * See `arcCapLabel` for why `null` total is handled before the zero check and

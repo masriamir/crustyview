@@ -13,7 +13,7 @@ and the E2E suite locates almost everything by ARIA role and accessible name. Wh
 never had is an adopted standard: no named conformance target, no baseline audit, and no
 enforcement beyond review discipline. That discipline has been load-bearing — the a11y defect
 history (#125, #127, #128, #131) was caught entirely by review, and #74's audit produced the
-label-in-name analysis now recorded in CLAUDE.md — but discipline is not a standard, and the
+label-in-name analysis now recorded in AGENTS.md — but discipline is not a standard, and the
 3D viewport (epic #8) will pose every canvas question again, harder. Spike #51 asked: which
 standard and level, what "equivalent experience" means for a canvas-rendered map, what the
 app-shell owes in a router-less UI, and how any of it is enforced.
@@ -139,11 +139,11 @@ practices:
   page-load announcements.
 - **Live regions exist at every width.** Hiding a visual bar is styling; unmounting its
   semantics is a defect (#185).
-- **Label in Name (2.5.3), as recorded in CLAUDE.md:** a control's accessible name contains
+- **Label in Name (2.5.3), as recorded in AGENTS.md:** a control's accessible name contains
   its visible label; a value readout inside the visible label is a value, not label text,
   and the name restates it in words rather than speaking punctuation (`Grid · 32→128` →
   "Show grid, 32, drawn as 128"). This ADR is now the durable home of that policy;
-  CLAUDE.md's UI-conventions entry stays as the worked example.
+  AGENTS.md's UI-conventions entry stays as the worked example.
 
 ### Enforcement — tiered, cheapest tier first
 
@@ -165,7 +165,7 @@ practices:
 4. **The feature-request template asks the question:** an optional "Accessibility" field
    prompting for the keyboard path, announcements, and contrast story of proposed UI —
    shipped with this ADR.
-5. **A CLAUDE.md design principle** makes the target ambient for every future session —
+5. **A AGENTS.md design principle** makes the target ambient for every future session —
    shipped with this ADR.
 6. **Human passes at a cadence:** a VoiceOver smoke walk (#189 is the first) repeated per
    release or when shell semantics change. Screen-reader experience is the one thing no
@@ -224,7 +224,7 @@ practices:
 The full audit evidence — the axe state matrix, the manual contrast probe values, and the
 tab-cycle capture — is recorded in the spike assessment on
 [#51](https://github.com/masriamir/crustyview/issues/51). Related: ADR-0003 (the shell and
-navigation model this ADR adds policy to), CLAUDE.md's UI-conventions section (the 2.5.3
+navigation model this ADR adds policy to), AGENTS.md's UI-conventions section (the 2.5.3
 worked example, now backed by this ADR), #61 (the axe tier this ADR scopes), #181 and
 #183–#189 (the punch list).
 

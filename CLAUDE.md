@@ -53,8 +53,10 @@ The shared readiness policy is in `AGENTS.md`; the crustyview-specific mechanics
 - The ruleset also requires 13 status checks: `fmt`, `clippy`, `test`, `wasm-build`,
   `security-deny`, `pr-title`, `coverage`, `wasm-test`, `web-build`, `sweep-freedoom`,
   `codecov/patch`, `analyze`, and `web-browser-test`. Merges are squash-only by ruleset as
-  well as by repo setting (#97). Note: adopting the shared enforcement wiring adds
-  `pr-title / pr-title` and `meta-check / meta-check` as the required-context names.
+  well as by repo setting (#97). The shared enforcement wiring also produces `pr-title / pr-title`
+  and `meta-check / meta-check`; verify against the live ruleset (recipe below) whether they are
+  yet required contexts rather than assuming — read the ruleset, not this inventory, when the
+  count matters.
 
   **This list drifts, and it drifted silently once already.** `analyze` became required when
   #112 removed the guard that had deferred it, and this inventory went on calling it excluded
@@ -110,16 +112,20 @@ The shared readiness policy is in `AGENTS.md`; the crustyview-specific mechanics
   never from `requested_reviewers` or the POST's 200 response.
 - **A pending request cannot be re-kicked.** A second POST returns 200, emits no
   `review_requested` timeline event and changes nothing, and REST `DELETE` cannot remove a bot
-  (422). To unstick one, clear the whole reviewer set with GraphQL and request again:
+  (422). To unstick one, clear the whole reviewer set with GraphQL, then re-POST the request:
   ```sh
   PRID=$(gh api repos/masriamir/crustyview/pulls/<N> --jq .node_id)
   gh api graphql -f query="mutation { requestReviews(input: {pullRequestId: \"$PRID\",
     userIds: [], union: false}) { clientMutationId } }"
+  gh api --method POST repos/masriamir/crustyview/pulls/<N>/requested_reviewers \
+    -f 'reviewers[]=copilot-pull-request-reviewer[bot]'
   ```
-  A genuine re-issue shows as `review_request_removed` then `review_requested` in the timeline;
+  Then confirm with the GraphQL `reviewRequests` query above (the clear alone leaves no pending
+  request — the POST is what re-requests). A genuine re-issue shows as `review_request_removed`
+  then `review_requested` in the timeline;
   reviews have been observed taking up to ~14 minutes normally, so give it time before
   concluding it is stuck.
-- Beyond the ruleset-enforced gates (threads + required checks), two things stay judgement calls
+- Beyond the ruleset-enforced gates (threads + required checks), two things stay judgment calls
   because they are outside the ruleset: the codecov comment's missing-lines table, and the
   advisory `pr-type` warning.
 
