@@ -177,8 +177,10 @@ Crustyview specifics: `just ci` is a fast **subset** of CI (fmt, clippy native *
 wasm build, deny) — it does not run `wasm-test`, `web-build`, `coverage`, `sweep-freedoom`,
 `web-e2e`, or `web-browser-test`, so a green `just ci` is necessary but not sufficient;
 `gh pr checks` is the source of truth. On the codecov readiness item above: `codecov.yml` sets
-`require_changes: true`, so a PR that changes no coverable Rust correctly gets **no** codecov
-comment — a missing comment is a red flag only on a Rust-touching PR. The `Main Branch` ruleset
+`require_changes: false` (from the shared policy), so the codecov comment is posted on **every**
+PR, including one that changes no coverable Rust — a missing comment is always worth chasing, not
+just on a Rust-touching PR. Note also that `codecov/project` is never published on this account's
+Codecov plan, so `codecov/patch` is the status that actually gates; see #99. The `Main Branch` ruleset
 requests the review and enforces thread resolution + the required checks; the *mechanics for
 driving* the loop that Claude needs (the exact required-check list, Copilot's per-surface identity,
 the clear-and-re-request recipe) are in `CLAUDE.md` — a reviewer needs only the readiness policy
